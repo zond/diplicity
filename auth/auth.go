@@ -18,6 +18,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	"github.com/gorilla/mux"
 	. "github.com/zond/goaeoas"
@@ -176,7 +177,10 @@ func encodeToken(ctx context.Context, userInfo *oauth2service.Userinfoplus) (str
 	if err != nil {
 		return "", err
 	}
-	plain, err := json.Marshal(userInfo)
+	plain, err := json.Marshal(User{
+		UserInfo:   userInfo,
+		ValidUntil: time.Now().Add(time.Hour * 24),
+	})
 	if err != nil {
 		return "", err
 	}
@@ -296,20 +300,23 @@ func tokenFilter(w ResponseWriter, r Request) error {
 			return nil
 		}
 
-		userInfo := &oauth2service.Userinfoplus{}
-		if err := json.Unmarshal(plain, userInfo); err != nil {
+		user := &User{}
+		if err := json.Unmarshal(plain, user); err != nil {
 			return err
 		}
-		r.Values()["user"] = userInfo
-		if r.Media() == "text/html" {
-			r.DecorateLinks(func(l *Link, u *url.URL) error {
-				if l.Rel != "logout" {
-					q := u.Query()
-					q.Set("token", token)
-					u.RawQuery = q.Encode()
-				}
-				return nil
-			})
+		log.Infof(ctx, "user: %+v", user)
+		if user.ValidUntil.After(time.Now()) {
+			r.Values()["user"] = user.UserInfo
+			if r.Media() == "text/html" {
+				r.DecorateLinks(func(l *Link, u *url.URL) error {
+					if l.Rel != "logout" {
+						q := u.Query()
+						q.Set("token", token)
+						u.RawQuery = q.Encode()
+					}
+					return nil
+				})
+			}
 		}
 	}
 	return nil
