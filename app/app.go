@@ -5,10 +5,10 @@ import (
 	"net/url"
 
 	"github.com/gorilla/mux"
-
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/diplicity/game"
+
 	. "github.com/zond/goaeoas"
-	oauth2service "google.golang.org/api/oauth2/v1"
 )
 
 var (
@@ -20,11 +20,11 @@ func preflight(w http.ResponseWriter, r *http.Request) {
 }
 
 type Diplicity struct {
-	User *oauth2service.Userinfoplus
+	User *auth.User
 }
 
 func handleIndex(w ResponseWriter, r Request) error {
-	user, _ := r.Values()["user"].(*oauth2service.Userinfoplus)
+	user, _ := r.Values()["user"].(*auth.User)
 
 	index := NewItem(Diplicity{
 		User: user,
@@ -72,5 +72,6 @@ func init() {
 	router.Methods("OPTIONS").HandlerFunc(preflight)
 	Handle(router, "/", []string{"GET"}, "index", handleIndex)
 	auth.SetupRouter(router)
+	game.SetupRouter(router)
 	http.Handle("/", router)
 }

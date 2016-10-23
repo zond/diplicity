@@ -12,15 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	"golang.org/x/crypto/nacl/secretbox"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
 
-	"github.com/gorilla/mux"
 	. "github.com/zond/goaeoas"
 	oauth2service "google.golang.org/api/oauth2/v1"
 )
@@ -34,6 +33,7 @@ const (
 )
 
 const (
+	UserKind  = "User"
 	naClKind  = "NaCl"
 	oAuthKind = "OAuth"
 	prodKey   = "prod"
@@ -52,8 +52,37 @@ type configuration struct {
 }
 
 type User struct {
-	UserInfo   *oauth2service.Userinfoplus
-	ValidUntil time.Time
+	Email         string
+	FamilyName    string
+	Gender        string
+	GivenName     string
+	Hd            string
+	Id            string
+	Link          string
+	Locale        string
+	Name          string
+	Picture       string
+	VerifiedEmail bool
+	ValidUntil    time.Time
+}
+
+func infoToUser(ui *oauth2service.Userinfoplus) *User {
+	u := &User{
+		Email:      ui.Email,
+		FamilyName: ui.FamilyName,
+		Gender:     ui.Gender,
+		GivenName:  ui.GivenName,
+		Hd:         ui.Hd,
+		Id:         ui.Id,
+		Link:       ui.Link,
+		Locale:     ui.Locale,
+		Name:       ui.Name,
+		Picture:    ui.Picture,
+	}
+	if ui.VerifiedEmail != nil {
+		u.VerifiedEmail = *ui.VerifiedEmail
+	}
+	return u
 }
 
 type naCl struct {
@@ -172,15 +201,12 @@ func handleLogin(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func encodeToken(ctx context.Context, userInfo *oauth2service.Userinfoplus) (string, error) {
+func encodeToken(ctx context.Context, user *User) (string, error) {
 	nacl, err := getNaCl(ctx)
 	if err != nil {
 		return "", err
 	}
-	plain, err := json.Marshal(User{
-		UserInfo:   userInfo,
-		ValidUntil: time.Now().Add(time.Hour * 24),
-	})
+	plain, err := json.Marshal(user)
 	if err != nil {
 		return "", err
 	}
@@ -216,8 +242,13 @@ func handleOAuth2Callback(w ResponseWriter, r Request) error {
 	if err != nil {
 		return err
 	}
+	user := infoToUser(userInfo)
+	user.ValidUntil = time.Now().Add(time.Hour * 24)
+	if _, err := datastore.Put(ctx, datastore.NewKey(ctx, UserKind, user.Id, 0, nil), user); err != nil {
+		return err
+	}
 
-	userToken, err := encodeToken(ctx, userInfo)
+	userToken, err := encodeToken(ctx, user)
 	if err != nil {
 		return err
 	}
@@ -304,9 +335,8 @@ func tokenFilter(w ResponseWriter, r Request) error {
 		if err := json.Unmarshal(plain, user); err != nil {
 			return err
 		}
-		log.Infof(ctx, "user: %+v", user)
 		if user.ValidUntil.After(time.Now()) {
-			r.Values()["user"] = user.UserInfo
+			r.Values()["user"] = user
 			if r.Media() == "text/html" {
 				r.DecorateLinks(func(l *Link, u *url.URL) error {
 					if l.Rel != "logout" {
