@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/nacl/secretbox"
 	"golang.org/x/net/context"
@@ -28,6 +29,11 @@ var (
 	prodNaCl      *NaCl
 	prodNaClLock  = sync.RWMutex{}
 )
+
+type User struct {
+	UserInfo   *oauth2service.Userinfoplus
+	ValidUntil time.Time
+}
 
 type NaCl struct {
 	Secret []byte
