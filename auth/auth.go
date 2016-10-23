@@ -315,17 +315,11 @@ func tokenFilter(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func handleRedirect(w ResponseWriter, r Request) error {
-	http.Redirect(w, r.Req(), r.Vars()["redirect-to"], 303)
-	return nil
-}
-
 func SetupRouter(r *mux.Router) {
 	router = r
 	Handle(router, "/auth/_configure", []string{"POST"}, AuthConfigureRoute, handleConfigure)
 	Handle(router, "/auth/login", []string{"GET"}, LoginRoute, handleLogin)
 	Handle(router, "/auth/logout", []string{"GET"}, LogoutRoute, handleLogout)
-	Handle(router, "/auth/redirect", []string{"GET"}, RedirectRoute, handleRedirect)
 	Handle(router, "/auth/oauth2callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
 	AddFilter(tokenFilter)
 }
