@@ -1,16 +1,12 @@
 package app
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 
 	"github.com/gorilla/mux"
-	"golang.org/x/net/context"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/datastore"
 
+	"github.com/zond/diplicity/auth"
 	. "github.com/zond/goaeoas"
 	oauth2service "google.golang.org/api/oauth2/v1"
 )
@@ -18,10 +14,6 @@ import (
 var (
 	router = mux.NewRouter()
 )
-
-type configuration struct {
-	OAuth OAuth
-}
 
 func preflight(w http.ResponseWriter, r *http.Request) {
 	CORSHeaders(w)
@@ -58,7 +50,7 @@ func handleIndex(w ResponseWriter, r Request) error {
 	if user == nil {
 		index.AddLink(r.NewLink(Link{
 			Rel:   "login",
-			Route: "login",
+			Route: auth.LoginRoute,
 			QueryParams: url.Values{
 				"redirect-to": []string{"/"},
 			},
@@ -66,7 +58,7 @@ func handleIndex(w ResponseWriter, r Request) error {
 	} else {
 		index.AddLink(r.NewLink(Link{
 			Rel:   "logout",
-			Route: "logout",
+			Route: auth.LogoutRoute,
 			QueryParams: url.Values{
 				"redirect-to": []string{"/"},
 			},
@@ -76,41 +68,9 @@ func handleIndex(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func handleRedirect(w ResponseWriter, r Request) error {
-	http.Redirect(w, r.Req(), r.Vars()["redirect-to"], 303)
-	return nil
-}
-
-func handleConfigure(w ResponseWriter, r Request) error {
-	ctx := appengine.NewContext(r.Req())
-
-	conf := &configuration{}
-	if err := json.NewDecoder(r.Req().Body).Decode(conf); err != nil {
-		return err
-	}
-	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		current := &OAuth{}
-		if err := datastore.Get(ctx, getOAuthKey(ctx), current); err == nil {
-			return fmt.Errorf("OAuth already configured")
-		}
-		if _, err := datastore.Put(ctx, getOAuthKey(ctx), &conf.OAuth); err != nil {
-			return err
-		}
-		return nil
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
-		return err
-	}
-	return nil
-}
-
 func init() {
 	router.Methods("OPTIONS").HandlerFunc(preflight)
 	Handle(router, "/", []string{"GET"}, "index", handleIndex)
-	Handle(router, "/_configure", []string{"POST"}, "_configure", handleConfigure)
-	Handle(router, "/login", []string{"GET"}, "login", handleLogin)
-	Handle(router, "/logout", []string{"GET"}, "logout", handleLogout)
-	Handle(router, "/redirect", []string{"GET"}, "redirect", handleRedirect)
-	Handle(router, "/oauth2callback", []string{"GET"}, "oauth2callback", handleOAuth2Callback)
-	AddFilter(tokenFilter)
+	auth.SetupRouter(router)
 	http.Handle("/", router)
 }

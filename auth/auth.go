@@ -1,4 +1,4 @@
-package app
+package auth
 
 import (
 	"crypto/rand"
@@ -19,31 +19,51 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
+	"github.com/gorilla/mux"
 	. "github.com/zond/goaeoas"
 	oauth2service "google.golang.org/api/oauth2/v1"
 )
 
-var (
-	prodOAuth     *OAuth
-	prodOAuthLock = sync.RWMutex{}
-	prodNaCl      *NaCl
-	prodNaClLock  = sync.RWMutex{}
+const (
+	AuthConfigureRoute  = "AuthConfigure"
+	LoginRoute          = "Login"
+	LogoutRoute         = "Logout"
+	RedirectRoute       = "Redirect"
+	OAuth2CallbackRoute = "OAuth2Callback"
 )
+
+const (
+	naClKind  = "NaCl"
+	oAuthKind = "OAuth"
+	prodKey   = "prod"
+)
+
+var (
+	prodOAuth     *oAuth
+	prodOAuthLock = sync.RWMutex{}
+	prodNaCl      *naCl
+	prodNaClLock  = sync.RWMutex{}
+	router        *mux.Router
+)
+
+type configuration struct {
+	OAuth oAuth
+}
 
 type User struct {
 	UserInfo   *oauth2service.Userinfoplus
 	ValidUntil time.Time
 }
 
-type NaCl struct {
+type naCl struct {
 	Secret []byte
 }
 
 func getNaClKey(ctx context.Context) *datastore.Key {
-	return datastore.NewKey(ctx, "NaCl", "prod", 0, nil)
+	return datastore.NewKey(ctx, naClKind, prodKey, 0, nil)
 }
 
-func getNaCl(ctx context.Context) (*NaCl, error) {
+func getNaCl(ctx context.Context) (*naCl, error) {
 	// check if in memory
 	prodNaClLock.RLock()
 	if prodNaCl != nil {
@@ -54,7 +74,7 @@ func getNaCl(ctx context.Context) (*NaCl, error) {
 	// nope, check if in datastore
 	prodNaClLock.Lock()
 	defer prodNaClLock.Unlock()
-	prodNaCl = &NaCl{}
+	prodNaCl = &naCl{}
 	if err := datastore.Get(ctx, getNaClKey(ctx), prodNaCl); err == nil {
 		return prodNaCl, nil
 	} else if err != datastore.ErrNoSuchEntity {
@@ -82,16 +102,16 @@ func getNaCl(ctx context.Context) (*NaCl, error) {
 	return prodNaCl, nil
 }
 
-type OAuth struct {
+type oAuth struct {
 	ClientID string
 	Secret   string
 }
 
 func getOAuthKey(ctx context.Context) *datastore.Key {
-	return datastore.NewKey(ctx, "OAuth", "prod", 0, nil)
+	return datastore.NewKey(ctx, oAuthKind, prodKey, 0, nil)
 }
 
-func getOAuth(ctx context.Context) (*OAuth, error) {
+func getOAuth(ctx context.Context) (*oAuth, error) {
 	prodOAuthLock.RLock()
 	if prodOAuth != nil {
 		defer prodOAuthLock.RUnlock()
@@ -100,7 +120,7 @@ func getOAuth(ctx context.Context) (*OAuth, error) {
 	prodOAuthLock.RUnlock()
 	prodOAuthLock.Lock()
 	defer prodOAuthLock.Unlock()
-	prodOAuth = &OAuth{}
+	prodOAuth = &oAuth{}
 	if err := datastore.Get(ctx, getOAuthKey(ctx), prodOAuth); err != nil {
 		return nil, err
 	}
@@ -112,10 +132,12 @@ func getOAuth2Config(ctx context.Context, r Request) (*oauth2.Config, error) {
 	if r.Req().TLS != nil {
 		scheme = "https"
 	}
-	redirectURL, err := url.Parse(fmt.Sprintf("%s://%s/oauth2callback", scheme, r.Req().Host))
+	redirectURL, err := router.Get(OAuth2CallbackRoute).URL()
 	if err != nil {
 		return nil, err
 	}
+	redirectURL.Scheme = scheme
+	redirectURL.Host = r.Req().Host
 
 	oauth, err := getOAuth(ctx)
 	if err != nil {
@@ -214,6 +236,28 @@ func handleLogout(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func handleConfigure(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	conf := &configuration{}
+	if err := json.NewDecoder(r.Req().Body).Decode(conf); err != nil {
+		return err
+	}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		current := &oAuth{}
+		if err := datastore.Get(ctx, getOAuthKey(ctx), current); err == nil {
+			return fmt.Errorf("OAuth already configured")
+		}
+		if _, err := datastore.Put(ctx, getOAuthKey(ctx), &conf.OAuth); err != nil {
+			return err
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func tokenFilter(w ResponseWriter, r Request) error {
 	token := r.Req().URL.Query().Get("token")
 	if token == "" {
@@ -269,4 +313,19 @@ func tokenFilter(w ResponseWriter, r Request) error {
 		}
 	}
 	return nil
+}
+
+func handleRedirect(w ResponseWriter, r Request) error {
+	http.Redirect(w, r.Req(), r.Vars()["redirect-to"], 303)
+	return nil
+}
+
+func SetupRouter(r *mux.Router) {
+	router = r
+	Handle(router, "/auth/_configure", []string{"POST"}, AuthConfigureRoute, handleConfigure)
+	Handle(router, "/auth/login", []string{"GET"}, LoginRoute, handleLogin)
+	Handle(router, "/auth/logout", []string{"GET"}, LogoutRoute, handleLogout)
+	Handle(router, "/auth/redirect", []string{"GET"}, RedirectRoute, handleRedirect)
+	Handle(router, "/auth/oauth2callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
+	AddFilter(tokenFilter)
 }
