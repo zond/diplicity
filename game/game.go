@@ -1,7 +1,6 @@
 package game
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -21,9 +20,12 @@ const (
 )
 
 const (
-	OpenGamesRoute     = "OpenGames"
-	ClosedGamesRoute   = "ClosedGames"
-	FinishedGamesRoute = "FinishedGames"
+	OpenGamesRoute       = "OpenGames"
+	ClosedGamesRoute     = "ClosedGames"
+	FinishedGamesRoute   = "FinishedGames"
+	MyOpenGamesRoute     = "MyOpenGames"
+	MyClosedGamesRoute   = "MyClosedGames"
+	MyFinishedGamesRoute = "MyFinishedGames"
 )
 
 const (
@@ -36,16 +38,37 @@ var GameResource = &Resource{
 	Create: createGame,
 }
 
+type Games []Game
+
+func (g Games) Item(r Request, name string, desc []string, route string) *Item {
+	gameItems := make(List, len(g))
+	for index, game := range g {
+		gameItems[index] = game.Item(r)
+	}
+	return NewItem(gameItems).SetName(name).SetDesc([][]string{
+		desc,
+	}).AddLink(r.NewLink(Link{
+		Rel:   "self",
+		Route: route,
+	}))
+}
+
 type Game struct {
-	ID        *datastore.Key
-	State     int
-	Desc      string
-	NMembers  int
-	CreatedAt time.Time
+	ID             *datastore.Key
+	State          int
+	Desc           string `methods:"POST,UPDATE"`
+	NMembers       int
+	NextDeadlineAt time.Time
+	CreatedAt      time.Time
 }
 
 func (g *Game) Item(r Request) *Item {
-	return NewItem(g).SetDesc([][]string{[]string{g.Desc}}).AddLink(r.NewLink(GameResource.Link("self", Load, g.ID.Encode())))
+	return NewItem(g).SetName(g.Desc).AddLink(r.NewLink(GameResource.Link("self", Load, g.ID.Encode())))
+}
+
+type Member struct {
+	ID   string
+	Game Game
 }
 
 func createGame(w ResponseWriter, r Request) (*Game, error) {
@@ -56,7 +79,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	}
 
 	game := &Game{}
-	err := json.NewDecoder(r.Req().Body).Decode(game)
+	err := Copy(game, r.Req().Body, "POST")
 	if err != nil {
 		return nil, err
 	}
@@ -72,17 +95,15 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 			return err
 		}
 		member := &Member{
-			UserID:    user.Id,
-			GameID:    game.ID,
-			GameState: game.State,
+			ID:   user.Id,
+			Game: *game,
 		}
-		_, err := datastore.Put(ctx, datastore.NewKey(ctx, memberKind, member.UserID, 0, game.ID), member)
+		_, err := datastore.Put(ctx, datastore.NewKey(ctx, memberKind, member.ID, 0, game.ID), member)
 		return err
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
 
-	return game, nil
 	return game, nil
 }
 
@@ -114,8 +135,7 @@ func (g *Game) UpdateMembers(ctx context.Context) error {
 		return err
 	}
 	for index, member := range members {
-		member.GameID = g.ID
-		member.GameState = g.State
+		member.Game = *g
 		if _, err := datastore.Put(ctx, ids[index], member); err != nil {
 			return err
 		}
@@ -123,87 +143,101 @@ func (g *Game) UpdateMembers(ctx context.Context) error {
 	return nil
 }
 
-func handleFinishedGames(w ResponseWriter, r Request) error {
+type gamesHandler struct {
+	query *datastore.Query
+	name  string
+	desc  []string
+	route string
+}
+
+func (h gamesHandler) handlePublic(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
-	finishedGames := []Game{}
-	if _, err := datastore.NewQuery(gameKind).Filter("State=", FinishedState).Order("CreatedAt").GetAll(ctx, &finishedGames); err != nil {
+	games := Games{}
+	ids, err := h.query.GetAll(ctx, &games)
+	if err != nil {
 		return err
 	}
-	gameItems := make(List, len(finishedGames))
-	for index, game := range finishedGames {
-		gameItems[index] = game.Item(r)
+	for index, id := range ids {
+		games[index].ID = id
 	}
-	content := NewItem(gameItems).SetName("finished-games").SetDesc([][]string{
-		[]string{
-			"Finished games",
-			"Unjoinable, finished games, sorted with oldest first.",
-		},
-	}).AddLink(r.NewLink(Link{
-		Rel:   "self",
-		Route: FinishedGamesRoute,
-	}))
-	w.SetContent(content)
+	w.SetContent(games.Item(r, h.name, h.desc, h.route))
 	return nil
 }
 
-func handleClosedGames(w ResponseWriter, r Request) error {
+func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		http.Error(w, "unauthorized", 401)
+		return nil
+	}
+
 	ctx := appengine.NewContext(r.Req())
 
-	closedGames := []Game{}
-	if _, err := datastore.NewQuery(gameKind).Filter("State=", ClosedState).Order("CreatedAt").GetAll(ctx, &closedGames); err != nil {
+	memberKeys, err := h.query.Filter("ID=", user.Id).KeysOnly().GetAll(ctx, nil)
+	if err != nil {
 		return err
 	}
-	gameItems := make(List, len(closedGames))
-	for index, game := range closedGames {
-		gameItems[index] = game.Item(r)
+	gameKeys := make([]*datastore.Key, len(memberKeys))
+	for index, key := range memberKeys {
+		gameKeys[index] = key.Parent()
 	}
-	content := NewItem(gameItems).SetName("closed-games").SetDesc([][]string{
-		[]string{
-			"Closed games",
-			"Unjoinable, unfinished games, sorted with oldest first.",
-		},
-	}).AddLink(r.NewLink(Link{
-		Rel:   "self",
-		Route: ClosedGamesRoute,
-	}))
-	w.SetContent(content)
+	games := make(Games, len(memberKeys))
+	if err := datastore.GetMulti(ctx, gameKeys, games); err != nil {
+		return err
+	}
+	for index, id := range gameKeys {
+		games[index].ID = id
+	}
+	w.SetContent(games.Item(r, h.name, h.desc, h.route))
 	return nil
 }
 
-func handleOpenGames(w ResponseWriter, r Request) error {
-	ctx := appengine.NewContext(r.Req())
-
-	openGames := []Game{}
-	if _, err := datastore.NewQuery(gameKind).Filter("State=", OpenState).Order("-NMembers").Order("CreatedAt").GetAll(ctx, &openGames); err != nil {
-		return err
+var (
+	finishedGamesHandler = gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("State=", FinishedState).Order("CreatedAt"),
+		name:  "finished-games",
+		desc:  []string{"Finished games", "Unjoinable, finished games, sorted with oldest first."},
+		route: FinishedGamesRoute,
 	}
-	gameItems := make(List, len(openGames))
-	for index, game := range openGames {
-		gameItems[index] = game.Item(r)
+	closedGamesHandler = gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("State=", ClosedState).Order("CreatedAt"),
+		name:  "closed-games",
+		desc:  []string{"Closed games", "Unjoinable, unfinished games, sorted with oldest first."},
+		route: ClosedGamesRoute,
 	}
-	content := NewItem(gameItems).SetName("open-games").SetDesc([][]string{
-		[]string{
-			"Open games",
-			"Joinable, unfinished games, sorted with fullest and oldest first.",
-		},
-	}).AddLink(r.NewLink(Link{
-		Rel:   "self",
-		Route: OpenGamesRoute,
-	}))
-	w.SetContent(content)
-	return nil
-}
-
-type Member struct {
-	UserID    string
-	GameID    *datastore.Key
-	GameState int
-}
+	openGamesHandler = gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("State=", OpenState).Order("-NMembers").Order("CreatedAt"),
+		name:  "open-games",
+		desc:  []string{"Open games", "Joinable, unfinished games, sorted with fullest and oldest first."},
+		route: OpenGamesRoute,
+	}
+	myFinishedGamesHandler = gamesHandler{
+		query: datastore.NewQuery(memberKind).Filter("Game.State=", FinishedState).Order("Game.CreatedAt"),
+		name:  "my-finished-games",
+		desc:  []string{"My finished games", "My unjoinable, finished games, sorted with oldest first."},
+		route: MyFinishedGamesRoute,
+	}
+	myClosedGamesHandler = gamesHandler{
+		query: datastore.NewQuery(memberKind).Filter("Game.State=", ClosedState).Order("Game.NextDeadlineAt"),
+		name:  "my-closed-games",
+		desc:  []string{"My closed games", "My unjoinable, unfinished games, sorted with closest deadline first."},
+		route: MyClosedGamesRoute,
+	}
+	myOpenGamesHandler = gamesHandler{
+		query: datastore.NewQuery(memberKind).Filter("Game.State=", OpenState).Order("-Game.NMembers").Order("Game.CreatedAt"),
+		name:  "my-open-games",
+		desc:  []string{"My open games", "My joinable, unfinished games, sorted with fullest and oldest first."},
+		route: MyClosedGamesRoute,
+	}
+)
 
 func SetupRouter(r *mux.Router) {
 	HandleResource(r, GameResource)
-	Handle(r, "/games/open", []string{"GET"}, OpenGamesRoute, handleOpenGames)
-	Handle(r, "/games/closed", []string{"GET"}, ClosedGamesRoute, handleClosedGames)
-	Handle(r, "/games/finished", []string{"GET"}, FinishedGamesRoute, handleFinishedGames)
+	Handle(r, "/games/open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handlePublic)
+	Handle(r, "/games/closed", []string{"GET"}, ClosedGamesRoute, closedGamesHandler.handlePublic)
+	Handle(r, "/games/finished", []string{"GET"}, FinishedGamesRoute, finishedGamesHandler.handlePublic)
+	Handle(r, "/games/my/open", []string{"GET"}, MyOpenGamesRoute, myOpenGamesHandler.handlePrivate)
+	Handle(r, "/games/my/closed", []string{"GET"}, MyClosedGamesRoute, myClosedGamesHandler.handlePrivate)
+	Handle(r, "/games/my/finished", []string{"GET"}, MyFinishedGamesRoute, myFinishedGamesHandler.handlePrivate)
 }

@@ -21,3 +21,23 @@ indexes:
   - name: NMembers
     direction: desc
   - name: CreatedAt
+
+- kind: Member
+  properties:
+  - name: Game.State
+  - name: ID
+  - name: Game.CreatedAt
+
+- kind: Member
+  properties:
+  - name: Game.State
+  - name: ID
+  - name: Game.NMembers
+    direction: desc
+  - name: Game.CreatedAt
+
+- kind: Member
+  properties:
+  - name: Game.State
+  - name: ID
+  - name: Game.NextDeadlineAt
