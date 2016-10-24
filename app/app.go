@@ -15,6 +15,10 @@ var (
 	router = mux.NewRouter()
 )
 
+const (
+	indexRoute = "Index"
+)
+
 func preflight(w http.ResponseWriter, r *http.Request) {
 	CORSHeaders(w)
 }
@@ -45,7 +49,16 @@ func handleIndex(w ResponseWriter, r Request) error {
 		},
 	}).AddLink(r.NewLink(Link{
 		Rel:   "self",
-		Route: "index",
+		Route: indexRoute,
+	})).AddLink(r.NewLink(Link{
+		Rel:   "open-games",
+		Route: game.OpenGamesRoute,
+	})).AddLink(r.NewLink(Link{
+		Rel:   "closed-games",
+		Route: game.ClosedGamesRoute,
+	})).AddLink(r.NewLink(Link{
+		Rel:   "finished-games",
+		Route: game.FinishedGamesRoute,
 	}))
 	if user == nil {
 		index.AddLink(r.NewLink(Link{
@@ -70,7 +83,7 @@ func handleIndex(w ResponseWriter, r Request) error {
 
 func init() {
 	router.Methods("OPTIONS").HandlerFunc(preflight)
-	Handle(router, "/", []string{"GET"}, "index", handleIndex)
+	Handle(router, "/", []string{"GET"}, indexRoute, handleIndex)
 	auth.SetupRouter(router)
 	game.SetupRouter(router)
 	http.Handle("/", router)
