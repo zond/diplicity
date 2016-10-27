@@ -85,7 +85,7 @@ func handleIndex(w ResponseWriter, r Request) error {
 		})).AddLink(r.NewLink(Link{
 			Rel:   "my-finished-games",
 			Route: game.MyFinishedGamesRoute,
-		})).AddLink(game.GameResource.Link("create-game", Create, nil))
+		})).AddLink(r.NewLink(game.GameResource.Link("create-game", Create, nil)))
 	}
 	w.SetContent(index)
 	return nil

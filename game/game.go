@@ -64,8 +64,8 @@ type GameData struct {
 }
 
 type Game struct {
-	GameData
-	Members []Member
+	GameData `methods:"POST"`
+	Members  []Member
 }
 
 func (g *Game) Item(r Request) *Item {
