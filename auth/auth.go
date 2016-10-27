@@ -327,7 +327,7 @@ func tokenFilter(w ResponseWriter, r Request) error {
 
 		plain, ok := secretbox.Open([]byte{}, b[24:], &nonceAry, &secretAry)
 		if !ok {
-			http.Error(w, "badly decrypted token", 403)
+			http.Error(w, "badly encrypted token", 403)
 			return nil
 		}
 

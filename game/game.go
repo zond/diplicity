@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
@@ -42,8 +42,8 @@ type Games []Game
 
 func (g Games) Item(r Request, name string, desc []string, route string) *Item {
 	gameItems := make(List, len(g))
-	for index, game := range g {
-		gameItems[index] = game.Item(r)
+	for index := range g {
+		gameItems[index] = g[index].Item(r)
 	}
 	return NewItem(gameItems).SetName(name).SetDesc([][]string{
 		desc,
@@ -53,25 +53,54 @@ func (g Games) Item(r Request, name string, desc []string, route string) *Item {
 	}))
 }
 
-type Game struct {
+type GameData struct {
 	ID             *datastore.Key
 	State          int
-	Desc           string `methods:"POST,UPDATE"`
-	NMembers       int
+	Desc           string `methods:"POST"`
+	Variant        string `methods:"POST"`
 	NextDeadlineAt time.Time
+	NMembers       int
 	CreatedAt      time.Time
 }
 
-func (g *Game) Item(r Request) *Item {
-	return NewItem(g).SetName(g.Desc).AddLink(r.NewLink(GameResource.Link("self", Load, g.ID.Encode())))
+type Game struct {
+	GameData
+	Members []Member
 }
 
-type Member struct {
-	ID   string
-	Game Game
+func (g *Game) Item(r Request) *Item {
+	gameItem := NewItem(g).SetName(g.Desc).AddLink(r.NewLink(GameResource.Link("self", Load, []string{"id", g.ID.Encode()})))
+	if len(g.Members) < len(variants.Variants[g.Variant].Nations) {
+		user, ok := r.Values()["user"].(*auth.User)
+		if ok {
+			already := false
+			for _, member := range g.Members {
+				if member.User.Id == user.Id {
+					already = true
+					break
+				}
+			}
+			if !already {
+				gameItem.AddLink(MemberResource.Link("join", Create, []string{"game_id", g.ID.Encode()}))
+			}
+		}
+	}
+	return gameItem
+}
+
+func (g *Game) Save(ctx context.Context) error {
+	var err error
+	if g.ID == nil {
+		g.ID = datastore.NewKey(ctx, gameKind, "", 0, nil)
+	}
+	g.NMembers = len(g.Members)
+	g.ID, err = datastore.Put(ctx, g.ID, g)
+	return err
 }
 
 func createGame(w ResponseWriter, r Request) (*Game, error) {
+	ctx := appengine.NewContext(r.Req())
+
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
 		http.Error(w, "unauthorized", 401)
@@ -79,27 +108,30 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	}
 
 	game := &Game{}
-	err := Copy(game, r.Req().Body, "POST")
+	err := Copy(game, r, "POST")
 	if err != nil {
 		return nil, err
 	}
+	if _, found := variants.Variants[game.Variant]; !found {
+		http.Error(w, "unknown variant", 400)
+		return nil, nil
+	}
 	game.State = OpenState
-	game.NMembers = 1
 	game.CreatedAt = time.Now()
 
-	ctx := appengine.NewContext(r.Req())
-
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		game.ID, err = datastore.Put(ctx, datastore.NewKey(ctx, gameKind, "", 0, nil), game)
-		if err != nil {
+		if err := game.Save(ctx); err != nil {
 			return err
 		}
 		member := &Member{
-			ID:   user.Id,
-			Game: *game,
+			User:     *user,
+			GameData: game.GameData,
 		}
-		_, err := datastore.Put(ctx, datastore.NewKey(ctx, memberKind, member.ID, 0, game.ID), member)
-		return err
+		if err := member.Save(ctx); err != nil {
+			return err
+		}
+		game.Members = []Member{*member}
+		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
@@ -126,118 +158,4 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 
 	game.ID = id
 	return game, nil
-}
-
-func (g *Game) UpdateMembers(ctx context.Context) error {
-	members := []Member{}
-	ids, err := datastore.NewQuery(memberKind).Ancestor(g.ID).GetAll(ctx, &members)
-	if err != nil {
-		return err
-	}
-	for index, member := range members {
-		member.Game = *g
-		if _, err := datastore.Put(ctx, ids[index], member); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type gamesHandler struct {
-	query *datastore.Query
-	name  string
-	desc  []string
-	route string
-}
-
-func (h gamesHandler) handlePublic(w ResponseWriter, r Request) error {
-	ctx := appengine.NewContext(r.Req())
-
-	games := Games{}
-	ids, err := h.query.GetAll(ctx, &games)
-	if err != nil {
-		return err
-	}
-	for index, id := range ids {
-		games[index].ID = id
-	}
-	w.SetContent(games.Item(r, h.name, h.desc, h.route))
-	return nil
-}
-
-func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
-	user, ok := r.Values()["user"].(*auth.User)
-	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil
-	}
-
-	ctx := appengine.NewContext(r.Req())
-
-	memberKeys, err := h.query.Filter("ID=", user.Id).KeysOnly().GetAll(ctx, nil)
-	if err != nil {
-		return err
-	}
-	gameKeys := make([]*datastore.Key, len(memberKeys))
-	for index, key := range memberKeys {
-		gameKeys[index] = key.Parent()
-	}
-	games := make(Games, len(memberKeys))
-	if err := datastore.GetMulti(ctx, gameKeys, games); err != nil {
-		return err
-	}
-	for index, id := range gameKeys {
-		games[index].ID = id
-	}
-	w.SetContent(games.Item(r, h.name, h.desc, h.route))
-	return nil
-}
-
-var (
-	finishedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("State=", FinishedState).Order("CreatedAt"),
-		name:  "finished-games",
-		desc:  []string{"Finished games", "Unjoinable, finished games, sorted with oldest first."},
-		route: FinishedGamesRoute,
-	}
-	closedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("State=", ClosedState).Order("CreatedAt"),
-		name:  "closed-games",
-		desc:  []string{"Closed games", "Unjoinable, unfinished games, sorted with oldest first."},
-		route: ClosedGamesRoute,
-	}
-	openGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("State=", OpenState).Order("-NMembers").Order("CreatedAt"),
-		name:  "open-games",
-		desc:  []string{"Open games", "Joinable, unfinished games, sorted with fullest and oldest first."},
-		route: OpenGamesRoute,
-	}
-	myFinishedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("Game.State=", FinishedState).Order("Game.CreatedAt"),
-		name:  "my-finished-games",
-		desc:  []string{"My finished games", "My unjoinable, finished games, sorted with oldest first."},
-		route: MyFinishedGamesRoute,
-	}
-	myClosedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("Game.State=", ClosedState).Order("Game.NextDeadlineAt"),
-		name:  "my-closed-games",
-		desc:  []string{"My closed games", "My unjoinable, unfinished games, sorted with closest deadline first."},
-		route: MyClosedGamesRoute,
-	}
-	myOpenGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("Game.State=", OpenState).Order("-Game.NMembers").Order("Game.CreatedAt"),
-		name:  "my-open-games",
-		desc:  []string{"My open games", "My joinable, unfinished games, sorted with fullest and oldest first."},
-		route: MyClosedGamesRoute,
-	}
-)
-
-func SetupRouter(r *mux.Router) {
-	HandleResource(r, GameResource)
-	Handle(r, "/games/open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handlePublic)
-	Handle(r, "/games/closed", []string{"GET"}, ClosedGamesRoute, closedGamesHandler.handlePublic)
-	Handle(r, "/games/finished", []string{"GET"}, FinishedGamesRoute, finishedGamesHandler.handlePublic)
-	Handle(r, "/games/my/open", []string{"GET"}, MyOpenGamesRoute, myOpenGamesHandler.handlePrivate)
-	Handle(r, "/games/my/closed", []string{"GET"}, MyClosedGamesRoute, myClosedGamesHandler.handlePrivate)
-	Handle(r, "/games/my/finished", []string{"GET"}, MyFinishedGamesRoute, myFinishedGamesHandler.handlePrivate)
 }
