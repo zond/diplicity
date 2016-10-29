@@ -84,20 +84,34 @@ type Game struct {
 	Members  []Member
 }
 
+func (g *Game) HasMember(userID string) bool {
+	for _, member := range g.Members {
+		if member.User.Id == userID {
+			return true
+		}
+	}
+	return false
+}
+
+func (g GameData) Leavable() bool {
+	return !g.Started
+}
+
+func (g GameData) Joinable() bool {
+	return !g.Closed && g.NMembers < len(variants.Variants[g.Variant].Nations)
+}
+
 func (g *Game) Item(r Request) *Item {
 	gameItem := NewItem(g).SetName(g.Desc).AddLink(r.NewLink(GameResource.Link("self", Load, []string{"id", g.ID.Encode()})))
-	if len(g.Members) < len(variants.Variants[g.Variant].Nations) {
-		user, ok := r.Values()["user"].(*auth.User)
-		if ok {
-			already := false
-			for _, member := range g.Members {
-				if member.User.Id == user.Id {
-					already = true
-					break
-				}
+	user, ok := r.Values()["user"].(*auth.User)
+	if ok {
+		if g.HasMember(user.Id) {
+			if g.Leavable() {
+				gameItem.AddLink(r.NewLink(MemberResource.Link("leave", Delete, []string{"game_id", g.ID.Encode(), "user_id", user.Id})))
 			}
-			if !already {
-				gameItem.AddLink(MemberResource.Link("join", Create, []string{"game_id", g.ID.Encode()}))
+		} else {
+			if g.Joinable() {
+				gameItem.AddLink(r.NewLink(MemberResource.Link("join", Create, []string{"game_id", g.ID.Encode()})))
 			}
 		}
 	}
