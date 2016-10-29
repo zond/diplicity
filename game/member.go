@@ -10,6 +10,7 @@ import (
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
+	"github.com/zond/godip/variants"
 )
 
 var MemberResource = &Resource{
@@ -38,15 +39,6 @@ func MemberID(ctx context.Context, gameID *datastore.Key, userID string) (*datas
 
 func (m *Member) ID(ctx context.Context) (*datastore.Key, error) {
 	return MemberID(ctx, m.GameData.ID, m.User.Id)
-}
-
-func (m *Member) Save(ctx context.Context) error {
-	key, err := m.ID(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = datastore.Put(ctx, key, m)
-	return err
 }
 
 func deleteMember(w ResponseWriter, r Request) (*Member, error) {
@@ -80,11 +72,11 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 		if !member.GameData.Leavable() {
 			return fmt.Errorf("game not leavable")
 		}
-		game := &Game{}
-		if err := datastore.Get(ctx, memberID.Parent(), game); err != nil {
+		if err := datastore.Delete(ctx, memberID); err != nil {
 			return err
 		}
-		if err := datastore.Delete(ctx, memberID); err != nil {
+		game := &Game{}
+		if err := datastore.Get(ctx, memberID.Parent(), game); err != nil {
 			return err
 		}
 		newMembers := []Member{}
@@ -162,14 +154,28 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 			User:     *user,
 			GameData: game.GameData,
 		}
-		if err := member.Save(ctx); err != nil {
-			return err
-		}
 		game.Members = append(game.Members, *member)
+		if len(game.Members) == len(variants.Variants[game.Variant].Nations) {
+			if err := game.Start(ctx); err != nil {
+				return err
+			}
+		}
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
 
 	return member, nil
+}
+
+func (g *Game) Start(ctx context.Context) error {
+	variant := variants.Variants[g.Variant]
+	s, err := variant.Start()
+	if err != nil {
+		return err
+	}
+	phase := NewPhase(s, g.ID, 0)
+	g.Started = true
+	g.Closed = true
+	return phase.Save(ctx)
 }

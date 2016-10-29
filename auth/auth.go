@@ -336,6 +336,17 @@ func tokenFilter(w ResponseWriter, r Request) error {
 			return err
 		}
 		if user.ValidUntil.After(time.Now()) {
+			if fakeID := r.Req().URL.Query().Get("fake-id"); appengine.IsDevAppServer() && fakeID != "" {
+				user.Id = fakeID
+				r.DecorateLinks(func(l *Link, u *url.URL) error {
+					if l.Rel != "logout" {
+						q := u.Query()
+						q.Set("fake-id", fakeID)
+						u.RawQuery = q.Encode()
+					}
+					return nil
+				})
+			}
 			r.Values()["user"] = user
 			if r.Media() == "text/html" {
 				r.DecorateLinks(func(l *Link, u *url.URL) error {

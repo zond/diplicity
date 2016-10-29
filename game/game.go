@@ -27,6 +27,7 @@ const (
 const (
 	gameKind   = "Game"
 	memberKind = "Member"
+	phaseKind  = "Phase"
 )
 
 var GameResource = &Resource{
@@ -52,7 +53,7 @@ func (g Games) Item(r Request, cursor *datastore.Cursor, limit int, name string,
 		},
 		[]string{
 			"Filters",
-			"To show only games with variant V, add a `variant` query parameter.",
+			"To show only games with a given variant, add a `variant` query parameter.",
 		},
 	}).AddLink(r.NewLink(Link{
 		Rel:   "self",
@@ -131,6 +132,18 @@ func (g *Game) Save(ctx context.Context) error {
 	} else {
 		_, err = datastore.Put(ctx, g.ID, g)
 	}
+	if err != nil {
+		return err
+	}
+	memberIDs := make([]*datastore.Key, len(g.Members))
+	for index, member := range g.Members {
+		g.Members[index].GameData = g.GameData
+		memberIDs[index], err = member.ID(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	_, err = datastore.PutMulti(ctx, memberIDs, g.Members)
 	return err
 }
 
@@ -158,14 +171,11 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		if err := game.Save(ctx); err != nil {
 			return err
 		}
-		member := &Member{
+		member := Member{
 			User:     *user,
 			GameData: game.GameData,
 		}
-		if err := member.Save(ctx); err != nil {
-			return err
-		}
-		game.Members = []Member{*member}
+		game.Members = []Member{member}
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
