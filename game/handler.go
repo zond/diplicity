@@ -141,40 +141,40 @@ func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
 
 var (
 	finishedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("State=", FinishedState).Order("-CreatedAt"),
+		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-CreatedAt"),
 		name:  "finished-games",
-		desc:  []string{"Finished games", "Unjoinable, finished games, sorted with oldest first."},
+		desc:  []string{"Finished games", "Finished games, sorted with newest first."},
 		route: FinishedGamesRoute,
 	}
-	closedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("State=", ClosedState).Order("CreatedAt"),
-		name:  "closed-games",
-		desc:  []string{"Closed games", "Unjoinable, unfinished games, sorted with oldest first."},
-		route: ClosedGamesRoute,
+	startedGamesHandler = gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Started=", true).Order("CreatedAt"),
+		name:  "started-games",
+		desc:  []string{"Started games", "Started games, sorted with oldest first."},
+		route: StartedGamesRoute,
 	}
 	openGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("State=", OpenState).Order("-NMembers").Order("CreatedAt"),
+		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("-NMembers").Order("CreatedAt"),
 		name:  "open-games",
-		desc:  []string{"Open games", "Joinable, unfinished games, sorted with fullest and oldest first."},
+		desc:  []string{"Open games", "Open games, sorted with fullest and oldest first."},
 		route: OpenGamesRoute,
 	}
 	myFinishedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("GameData.State=", FinishedState).Order("-GameData.CreatedAt"),
+		query: datastore.NewQuery(memberKind).Filter("GameData.Finished=", true).Order("-GameData.CreatedAt"),
 		name:  "my-finished-games",
-		desc:  []string{"My finished games", "Unjoinable, finished games I'm a member of, sorted with oldest first."},
+		desc:  []string{"My finished games", "Finished games I'm a member of, sorted with newest first."},
 		route: MyFinishedGamesRoute,
 	}
-	myClosedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("GameData.State=", ClosedState).Order("GameData.NextDeadlineAt"),
-		name:  "my-closed-games",
-		desc:  []string{"My closed games", "Unjoinable, unfinished games I'm a member of, sorted with closest deadline first."},
-		route: MyClosedGamesRoute,
+	myStartedGamesHandler = gamesHandler{
+		query: datastore.NewQuery(memberKind).Filter("GameData.Started=", true).Order("GameData.NextDeadlineAt"),
+		name:  "my-started-games",
+		desc:  []string{"My started games", "Started games I'm a member of, sorted with closest deadline first."},
+		route: MyStartedGamesRoute,
 	}
-	myOpenGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("GameData.State=", OpenState).Order("-GameData.NMembers").Order("GameData.CreatedAt"),
-		name:  "my-open-games",
-		desc:  []string{"My open games", "Joinable, unfinished games I'm a member of, sorted with fullest and oldest first."},
-		route: MyOpenGamesRoute,
+	myStagingGamesHandler = gamesHandler{
+		query: datastore.NewQuery(memberKind).Filter("GameData.Started=", false).Order("-GameData.NMembers").Order("GameData.CreatedAt"),
+		name:  "my-staging-games",
+		desc:  []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
+		route: MyStagingGamesRoute,
 	}
 )
 
@@ -182,9 +182,9 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	Handle(r, "/games/open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handlePublic)
-	Handle(r, "/games/closed", []string{"GET"}, ClosedGamesRoute, closedGamesHandler.handlePublic)
+	Handle(r, "/games/started", []string{"GET"}, StartedGamesRoute, startedGamesHandler.handlePublic)
 	Handle(r, "/games/finished", []string{"GET"}, FinishedGamesRoute, finishedGamesHandler.handlePublic)
-	Handle(r, "/games/my/open", []string{"GET"}, MyOpenGamesRoute, myOpenGamesHandler.handlePrivate)
-	Handle(r, "/games/my/closed", []string{"GET"}, MyClosedGamesRoute, myClosedGamesHandler.handlePrivate)
+	Handle(r, "/games/my/staging", []string{"GET"}, MyStagingGamesRoute, myStagingGamesHandler.handlePrivate)
+	Handle(r, "/games/my/started", []string{"GET"}, MyStartedGamesRoute, myStartedGamesHandler.handlePrivate)
 	Handle(r, "/games/my/finished", []string{"GET"}, MyFinishedGamesRoute, myFinishedGamesHandler.handlePrivate)
 }

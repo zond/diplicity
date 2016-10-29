@@ -97,8 +97,8 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		if len(game.Members) >= len(variants.Variants[game.Variant].Nations) {
 			return fmt.Errorf("too many members")
 		}
-		if game.State != OpenState {
-			return fmt.Errorf("game not open")
+		if game.Closed {
+			return fmt.Errorf("game is closed")
 		}
 		for _, member := range game.Members {
 			if member.User.Id == user.Id {

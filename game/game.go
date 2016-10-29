@@ -16,17 +16,11 @@ import (
 )
 
 const (
-	OpenState = iota
-	ClosedState
-	FinishedState
-)
-
-const (
 	OpenGamesRoute       = "OpenGames"
-	ClosedGamesRoute     = "ClosedGames"
+	StartedGamesRoute    = "StartedGames"
 	FinishedGamesRoute   = "FinishedGames"
-	MyOpenGamesRoute     = "MyOpenGames"
-	MyClosedGamesRoute   = "MyClosedGames"
+	MyStagingGamesRoute  = "MyStagingGames"
+	MyStartedGamesRoute  = "MyStartedGames"
 	MyFinishedGamesRoute = "MyFinishedGames"
 )
 
@@ -75,7 +69,9 @@ func (g Games) Item(r Request, cursor *datastore.Cursor, limit int, name string,
 
 type GameData struct {
 	ID             *datastore.Key
-	State          int
+	Started        bool   // Game has started.
+	Closed         bool   // Game is no longer joinable..
+	Finished       bool   // Game has reached its end.
 	Desc           string `methods:"POST"`
 	Variant        string `methods:"POST"`
 	NextDeadlineAt time.Time
@@ -136,7 +132,6 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		http.Error(w, "unknown variant", 400)
 		return nil, nil
 	}
-	game.State = OpenState
 	game.CreatedAt = time.Now()
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {

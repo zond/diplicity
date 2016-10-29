@@ -12,6 +12,24 @@ indexes:
 
 - kind: Game
   properties:
+  - name: Closed
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: CreatedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: Started
+  - name: CreatedAt
+
+- kind: Game
+  properties:
   - name: State
   - name: CreatedAt
 
@@ -21,6 +39,27 @@ indexes:
   - name: NMembers
     direction: desc
   - name: CreatedAt
+
+- kind: Member
+  properties:
+  - name: GameData.Finished
+  - name: User.Id
+  - name: GameData.CreatedAt
+    direction: desc
+
+- kind: Member
+  properties:
+  - name: GameData.Started
+  - name: User.Id
+  - name: GameData.NMembers
+    direction: desc
+  - name: GameData.CreatedAt
+
+- kind: Member
+  properties:
+  - name: GameData.Started
+  - name: User.Id
+  - name: GameData.NextDeadlineAt
 
 - kind: Member
   properties:

@@ -68,11 +68,11 @@ func handleIndex(w ResponseWriter, r Request) error {
 				"redirect-to": []string{"/"},
 			},
 		})).AddLink(r.NewLink(Link{
-			Rel:   "my-open-games",
-			Route: game.MyOpenGamesRoute,
+			Rel:   "my-staging-games",
+			Route: game.MyStagingGamesRoute,
 		})).AddLink(r.NewLink(Link{
-			Rel:   "my-closed-games",
-			Route: game.MyClosedGamesRoute,
+			Rel:   "my-started-games",
+			Route: game.MyStartedGamesRoute,
 		})).AddLink(r.NewLink(Link{
 			Rel:   "my-finished-games",
 			Route: game.MyFinishedGamesRoute,
@@ -80,8 +80,8 @@ func handleIndex(w ResponseWriter, r Request) error {
 			Rel:   "open-games",
 			Route: game.OpenGamesRoute,
 		})).AddLink(r.NewLink(Link{
-			Rel:   "closed-games",
-			Route: game.ClosedGamesRoute,
+			Rel:   "started-games",
+			Route: game.StartedGamesRoute,
 		})).AddLink(r.NewLink(Link{
 			Rel:   "finished-games",
 			Route: game.FinishedGamesRoute,
