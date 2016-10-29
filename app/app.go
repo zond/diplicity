@@ -50,15 +50,6 @@ func handleIndex(w ResponseWriter, r Request) error {
 	}).AddLink(r.NewLink(Link{
 		Rel:   "self",
 		Route: indexRoute,
-	})).AddLink(r.NewLink(Link{
-		Rel:   "open-games",
-		Route: game.OpenGamesRoute,
-	})).AddLink(r.NewLink(Link{
-		Rel:   "closed-games",
-		Route: game.ClosedGamesRoute,
-	})).AddLink(r.NewLink(Link{
-		Rel:   "finished-games",
-		Route: game.FinishedGamesRoute,
 	}))
 
 	if user == nil {
@@ -85,6 +76,15 @@ func handleIndex(w ResponseWriter, r Request) error {
 		})).AddLink(r.NewLink(Link{
 			Rel:   "my-finished-games",
 			Route: game.MyFinishedGamesRoute,
+		})).AddLink(r.NewLink(Link{
+			Rel:   "open-games",
+			Route: game.OpenGamesRoute,
+		})).AddLink(r.NewLink(Link{
+			Rel:   "closed-games",
+			Route: game.ClosedGamesRoute,
+		})).AddLink(r.NewLink(Link{
+			Rel:   "finished-games",
+			Route: game.FinishedGamesRoute,
 		})).AddLink(r.NewLink(game.GameResource.Link("create-game", Create, nil)))
 	}
 	w.SetContent(index)

@@ -1,7 +1,9 @@
 package game
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/zond/diplicity/auth"
@@ -40,17 +42,35 @@ var GameResource = &Resource{
 
 type Games []Game
 
-func (g Games) Item(r Request, name string, desc []string, route string) *Item {
+func (g Games) Item(r Request, cursor *datastore.Cursor, limit int, name string, desc []string, route string) *Item {
 	gameItems := make(List, len(g))
 	for index := range g {
 		gameItems[index] = g[index].Item(r)
 	}
-	return NewItem(gameItems).SetName(name).SetDesc([][]string{
+	gamesItem := NewItem(gameItems).SetName(name).SetDesc([][]string{
 		desc,
+		[]string{
+			"Cursor and limit",
+			fmt.Sprintf("The list contains at most %d games.", maxLimit),
+			"If there are additional matching games, a 'next' link will be available with a 'cursor' parameter.",
+			"Use the 'next' link to list the next batch of matching games.",
+			fmt.Sprintf("To list fewer games than %d, add an explicit 'limit' parameter.", maxLimit),
+		},
 	}).AddLink(r.NewLink(Link{
 		Rel:   "self",
 		Route: route,
 	}))
+	if cursor != nil {
+		gamesItem.AddLink(r.NewLink(Link{
+			Rel:   "next",
+			Route: route,
+			QueryParams: url.Values{
+				"cursor": []string{cursor.String()},
+				"limit":  []string{fmt.Sprint(limit)},
+			},
+		}))
+	}
+	return gamesItem
 }
 
 type GameData struct {
