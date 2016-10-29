@@ -141,7 +141,7 @@ func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
 
 var (
 	finishedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("State=", FinishedState).Order("CreatedAt"),
+		query: datastore.NewQuery(gameKind).Filter("State=", FinishedState).Order("-CreatedAt"),
 		name:  "finished-games",
 		desc:  []string{"Finished games", "Unjoinable, finished games, sorted with oldest first."},
 		route: FinishedGamesRoute,
@@ -159,7 +159,7 @@ var (
 		route: OpenGamesRoute,
 	}
 	myFinishedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("GameData.State=", FinishedState).Order("GameData.CreatedAt"),
+		query: datastore.NewQuery(memberKind).Filter("GameData.State=", FinishedState).Order("-GameData.CreatedAt"),
 		name:  "my-finished-games",
 		desc:  []string{"My finished games", "Unjoinable, finished games I'm a member of, sorted with oldest first."},
 		route: MyFinishedGamesRoute,
