@@ -123,12 +123,14 @@ func (g *Game) Item(r Request) *Item {
 }
 
 func (g *Game) Save(ctx context.Context) error {
+	g.NMembers = len(g.Members)
+
 	var err error
 	if g.ID == nil {
-		g.ID = datastore.NewKey(ctx, gameKind, "", 0, nil)
+		g.ID, err = datastore.Put(ctx, datastore.NewIncompleteKey(ctx, gameKind, nil), g)
+	} else {
+		_, err = datastore.Put(ctx, g.ID, g)
 	}
-	g.NMembers = len(g.Members)
-	g.ID, err = datastore.Put(ctx, g.ID, g)
 	return err
 }
 
