@@ -46,9 +46,13 @@ func (g Games) Item(r Request, cursor *datastore.Cursor, limit int, name string,
 		[]string{
 			"Cursor and limit",
 			fmt.Sprintf("The list contains at most %d games.", maxLimit),
-			"If there are additional matching games, a 'next' link will be available with a 'cursor' parameter.",
+			"If there are additional matching games, a 'next' link will be available with a 'cursor' query parameter.",
 			"Use the 'next' link to list the next batch of matching games.",
-			fmt.Sprintf("To list fewer games than %d, add an explicit 'limit' parameter.", maxLimit),
+			fmt.Sprintf("To list fewer games than %d, add an explicit 'limit' query parameter.", maxLimit),
+		},
+		[]string{
+			"Filters",
+			"To show only games with variant V, add a `variant` query parameter.",
 		},
 	}).AddLink(r.NewLink(Link{
 		Rel:   "self",

@@ -70,6 +70,10 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request) (*gamesReq, error) {
 		q = q.Filter("User.Id=", user.Id).KeysOnly()
 	}
 
+	if variantFilter := r.Req().URL.Query().Get("variant"); variantFilter != "" {
+		q = q.Filter("GameData.Variant=", variantFilter)
+	}
+
 	cursor := r.Req().URL.Query().Get("cursor")
 	if cursor == "" {
 		req.iter = q.Run(req.ctx)
