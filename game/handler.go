@@ -71,7 +71,11 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request) (*gamesReq, error) {
 	}
 
 	if variantFilter := r.Req().URL.Query().Get("variant"); variantFilter != "" {
-		q = q.Filter("GameData.Variant=", variantFilter)
+		if h.private {
+			q = q.Filter("GameData.Variant=", variantFilter)
+		} else {
+			q = q.Filter("Variant=", variantFilter)
+		}
 	}
 
 	cursor := r.Req().URL.Query().Get("cursor")
@@ -158,50 +162,56 @@ func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
 
 var (
 	finishedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-CreatedAt"),
-		name:  "finished-games",
-		desc:  []string{"Finished games", "Finished games, sorted with newest first."},
-		route: FinishedGamesRoute,
+		query:   datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-CreatedAt"),
+		name:    "finished-games",
+		desc:    []string{"Finished games", "Finished games, sorted with newest first."},
+		route:   FinishedGamesRoute,
+		private: false,
 	}
 	startedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", true).Order("CreatedAt"),
-		name:  "started-games",
-		desc:  []string{"Started games", "Started games, sorted with oldest first."},
-		route: StartedGamesRoute,
+		query:   datastore.NewQuery(gameKind).Filter("Started=", true).Order("CreatedAt"),
+		name:    "started-games",
+		desc:    []string{"Started games", "Started games, sorted with oldest first."},
+		route:   StartedGamesRoute,
+		private: false,
 	}
 	openGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("-NMembers").Order("CreatedAt"),
-		name:  "open-games",
-		desc:  []string{"Open games", "Open games, sorted with fullest and oldest first."},
-		route: OpenGamesRoute,
+		query:   datastore.NewQuery(gameKind).Filter("Closed=", false).Order("-NMembers").Order("CreatedAt"),
+		name:    "open-games",
+		desc:    []string{"Open games", "Open games, sorted with fullest and oldest first."},
+		route:   OpenGamesRoute,
+		private: false,
 	}
 	myFinishedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("GameData.Finished=", true).Order("-GameData.CreatedAt"),
-		name:  "my-finished-games",
-		desc:  []string{"My finished games", "Finished games I'm a member of, sorted with newest first."},
-		route: MyFinishedGamesRoute,
+		query:   datastore.NewQuery(memberKind).Filter("GameData.Finished=", true).Order("-GameData.CreatedAt"),
+		name:    "my-finished-games",
+		desc:    []string{"My finished games", "Finished games I'm a member of, sorted with newest first."},
+		route:   MyFinishedGamesRoute,
+		private: true,
 	}
 	myStartedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("GameData.Started=", true).Order("GameData.NextDeadlineAt"),
-		name:  "my-started-games",
-		desc:  []string{"My started games", "Started games I'm a member of, sorted with closest deadline first."},
-		route: MyStartedGamesRoute,
+		query:   datastore.NewQuery(memberKind).Filter("GameData.Started=", true).Order("GameData.NextDeadlineAt"),
+		name:    "my-started-games",
+		desc:    []string{"My started games", "Started games I'm a member of, sorted with closest deadline first."},
+		route:   MyStartedGamesRoute,
+		private: true,
 	}
 	myStagingGamesHandler = gamesHandler{
-		query: datastore.NewQuery(memberKind).Filter("GameData.Started=", false).Order("-GameData.NMembers").Order("GameData.CreatedAt"),
-		name:  "my-staging-games",
-		desc:  []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
-		route: MyStagingGamesRoute,
+		query:   datastore.NewQuery(memberKind).Filter("GameData.Started=", false).Order("-GameData.NMembers").Order("GameData.CreatedAt"),
+		name:    "my-staging-games",
+		desc:    []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
+		route:   MyStagingGamesRoute,
+		private: true,
 	}
 )
 
 func SetupRouter(r *mux.Router) {
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
-	Handle(r, "/games/open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handlePublic)
-	Handle(r, "/games/started", []string{"GET"}, StartedGamesRoute, startedGamesHandler.handlePublic)
-	Handle(r, "/games/finished", []string{"GET"}, FinishedGamesRoute, finishedGamesHandler.handlePublic)
-	Handle(r, "/games/my/staging", []string{"GET"}, MyStagingGamesRoute, myStagingGamesHandler.handlePrivate)
-	Handle(r, "/games/my/started", []string{"GET"}, MyStartedGamesRoute, myStartedGamesHandler.handlePrivate)
-	Handle(r, "/games/my/finished", []string{"GET"}, MyFinishedGamesRoute, myFinishedGamesHandler.handlePrivate)
+	Handle(r, "/games/open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handle)
+	Handle(r, "/games/started", []string{"GET"}, StartedGamesRoute, startedGamesHandler.handle)
+	Handle(r, "/games/finished", []string{"GET"}, FinishedGamesRoute, finishedGamesHandler.handle)
+	Handle(r, "/games/my/staging", []string{"GET"}, MyStagingGamesRoute, myStagingGamesHandler.handle)
+	Handle(r, "/games/my/started", []string{"GET"}, MyStartedGamesRoute, myStartedGamesHandler.handle)
+	Handle(r, "/games/my/finished", []string{"GET"}, MyFinishedGamesRoute, myFinishedGamesHandler.handle)
 }
