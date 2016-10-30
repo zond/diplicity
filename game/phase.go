@@ -11,7 +11,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
@@ -109,7 +108,6 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Infof(ctx, "gonna load %v", phaseID)
 	if err := datastore.Get(ctx, phaseID, phase); err != nil {
 		return nil, err
 	}
@@ -118,7 +116,13 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 }
 
 func (p *Phase) Item(r Request) *Item {
-	phaseItem := NewItem(p).SetName(fmt.Sprintf("%s %d, %s", p.Season, p.Year, p.Type)).AddLink(r.NewLink(PhaseResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "ordinal", fmt.Sprint(p.Ordinal)})))
+	phaseItem := NewItem(p).SetName(fmt.Sprintf("%s %d, %s", p.Season, p.Year, p.Type))
+	phaseItem.AddLink(r.NewLink(PhaseResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "ordinal", fmt.Sprint(p.Ordinal)})))
+	phaseItem.AddLink(r.NewLink(Link{
+		Rel:         "orders",
+		Route:       ListOrdersRoute,
+		RouteParams: []string{"game_id", p.GameID.Encode(), "ordinal", fmt.Sprint(p.Ordinal)},
+	}))
 	return phaseItem
 }
 
