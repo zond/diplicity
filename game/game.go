@@ -37,10 +37,13 @@ var GameResource = &Resource{
 
 type Games []Game
 
-func (g Games) Item(r Request, cursor *datastore.Cursor, limit int, name string, desc []string, route string) *Item {
+func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit int, name string, desc []string, route string) *Item {
 	gameItems := make(List, len(g))
-	for index := range g {
-		gameItems[index] = g[index].Item(r)
+	for i := range g {
+		if !g[i].HasMember(user.Id) {
+			g[i].Redact()
+		}
+		gameItems[i] = g[i].Item(r)
 	}
 	gamesItem := NewItem(gameItems).SetName(name).SetDesc([][]string{
 		desc,
@@ -184,13 +187,25 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	return game, nil
 }
 
+func (g *Game) Redact() {
+	for index := range g.Members {
+		g.Members[index].Redact()
+	}
+}
+
 func loadGame(w ResponseWriter, r Request) (*Game, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		http.Error(w, "unauthorized", 401)
+		return nil, nil
+	}
+
 	id, err := datastore.DecodeKey(r.Vars()["id"])
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := appengine.NewContext(r.Req())
 
 	game := &Game{}
 	if err := datastore.Get(ctx, id, game); err != nil {
@@ -199,6 +214,10 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 			return nil, nil
 		}
 		return nil, err
+	}
+
+	if !game.HasMember(user.Id) {
+		game.Redact()
 	}
 
 	game.ID = id

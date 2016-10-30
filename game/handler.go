@@ -119,7 +119,7 @@ func (h *gamesHandler) handlePublic(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	w.SetContent(games.Item(r, curs, req.limit, h.name, h.desc, h.route))
+	w.SetContent(games.Item(r, req.user, curs, req.limit, h.name, h.desc, h.route))
 	return nil
 }
 
@@ -156,7 +156,7 @@ func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
 		games[index].ID = id
 	}
 
-	w.SetContent(games.Item(r, curs, req.limit, h.name, h.desc, h.route))
+	w.SetContent(games.Item(r, req.user, curs, req.limit, h.name, h.desc, h.route))
 	return nil
 }
 

@@ -15,7 +15,6 @@ import (
 
 var MemberResource = &Resource{
 	Create:     createMember,
-	Load:       loadMember,
 	Delete:     deleteMember,
 	CreatePath: "/Game/{game_id}/Member",
 	FullPath:   "/Game/{game_id}/Member/{user_id}",
@@ -27,7 +26,11 @@ type Member struct {
 }
 
 func (m *Member) Item(r Request) *Item {
-	return NewItem(m).SetName(m.User.Name).AddLink(r.NewLink(MemberResource.Link("self", Load, []string{"game_id", m.GameData.ID.Encode(), "user_id", m.User.Id})))
+	return NewItem(m).SetName(m.User.Name)
+}
+
+func (m *Member) Redact() {
+	m.User.Email = ""
 }
 
 func MemberID(ctx context.Context, gameID *datastore.Key, userID string) (*datastore.Key, error) {
@@ -91,31 +94,6 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 		game.Members = newMembers
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
-		return nil, err
-	}
-
-	return member, nil
-}
-
-func loadMember(w ResponseWriter, r Request) (*Member, error) {
-	ctx := appengine.NewContext(r.Req())
-
-	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
-	if err != nil {
-		return nil, err
-	}
-
-	memberID, err := MemberID(ctx, gameID, r.Vars()["user_id"])
-	if err != nil {
-		return nil, err
-	}
-
-	member := &Member{}
-	if err := datastore.Get(ctx, memberID, member); err != nil {
-		if err == datastore.ErrNoSuchEntity {
-			http.Error(w, "not found", 404)
-			return nil, nil
-		}
 		return nil, err
 	}
 

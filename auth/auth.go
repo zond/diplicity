@@ -52,7 +52,7 @@ type configuration struct {
 }
 
 type User struct {
-	Email         string
+	Email         string `json:",omitempty"`
 	FamilyName    string
 	Gender        string
 	GivenName     string
