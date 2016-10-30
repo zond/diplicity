@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
@@ -187,6 +188,24 @@ func (g *Game) Redact() {
 	for index := range g.Members {
 		g.Members[index].Redact()
 	}
+}
+
+func (g *Game) Start(ctx context.Context) error {
+	variant := variants.Variants[g.Variant]
+	s, err := variant.Start()
+	if err != nil {
+		return err
+	}
+	phase := NewPhase(s, g.ID, 1)
+
+	g.Started = true
+	g.Closed = true
+
+	for memberIndex, nationIndex := range rand.Perm(len(variants.Variants[g.Variant].Nations)) {
+		g.Members[memberIndex].Nation = variants.Variants[g.Variant].Nations[nationIndex]
+	}
+
+	return phase.Save(ctx)
 }
 
 func loadGame(w ResponseWriter, r Request) (*Game, error) {

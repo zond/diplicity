@@ -48,7 +48,7 @@ func (o *Order) Item(r Request) *Item {
 func listOrders(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
-	_, ok := r.Values()["user"].(*auth.User)
+	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
 		http.Error(w, "unauthorized", 401)
 		return nil
@@ -69,12 +69,39 @@ func listOrders(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	orders := Orders{}
-	_, err = datastore.NewQuery(orderKind).Ancestor(phaseID).GetAll(ctx, &orders)
+	memberID, err := MemberID(ctx, gameID, user.Id)
 	if err != nil {
 		return err
 	}
 
-	w.SetContent(orders.Item(r, gameID, ordinal))
+	var nation dip.Nation
+
+	phase := &Phase{}
+	member := &Member{}
+	err = datastore.GetMulti(ctx, []*datastore.Key{phaseID, memberID}, []interface{}{phase, member})
+	if err == nil {
+		nation = member.Nation
+	} else if merr, ok := err.(appengine.MultiError); ok {
+		if merr[0] != nil {
+			return merr[0]
+		}
+	} else {
+		return err
+	}
+
+	found := Orders{}
+	_, err = datastore.NewQuery(orderKind).Ancestor(phaseID).GetAll(ctx, &found)
+	if err != nil {
+		return err
+	}
+
+	toReturn := Orders{}
+	for _, order := range found {
+		if phase.Resolved || order.Nation == nation {
+			toReturn = append(toReturn, order)
+		}
+	}
+
+	w.SetContent(toReturn.Item(r, gameID, ordinal))
 	return nil
 }

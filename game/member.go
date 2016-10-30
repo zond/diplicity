@@ -5,12 +5,13 @@ import (
 	"net/http"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
-	"github.com/zond/godip/variants"
+	dip "github.com/zond/godip/common"
 )
 
 const (
@@ -27,6 +28,7 @@ var MemberResource = &Resource{
 type Member struct {
 	GameData GameData
 	User     auth.User
+	Nation   dip.Nation
 }
 
 func (m *Member) Item(r Request) *Item {
@@ -148,16 +150,4 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 	}
 
 	return member, nil
-}
-
-func (g *Game) Start(ctx context.Context) error {
-	variant := variants.Variants[g.Variant]
-	s, err := variant.Start()
-	if err != nil {
-		return err
-	}
-	phase := NewPhase(s, g.ID, 1)
-	g.Started = true
-	g.Closed = true
-	return phase.Save(ctx)
 }

@@ -77,6 +77,7 @@ type Phase struct {
 	Dislodgers  []Dislodger
 	Bounces     []Bounce
 	Resolutions []Resolution
+	Resolved    bool
 }
 
 var PhaseResource = &Resource{
