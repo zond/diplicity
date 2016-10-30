@@ -16,18 +16,7 @@ import (
 )
 
 const (
-	OpenGamesRoute       = "OpenGames"
-	StartedGamesRoute    = "StartedGames"
-	FinishedGamesRoute   = "FinishedGames"
-	MyStagingGamesRoute  = "MyStagingGames"
-	MyStartedGamesRoute  = "MyStartedGames"
-	MyFinishedGamesRoute = "MyFinishedGames"
-)
-
-const (
-	gameKind   = "Game"
-	memberKind = "Member"
-	phaseKind  = "Phase"
+	gameKind = "Game"
 )
 
 var GameResource = &Resource{
@@ -123,6 +112,13 @@ func (g *Game) Item(r Request) *Item {
 			}
 		}
 	}
+	if g.Started {
+		gameItem.AddLink(r.NewLink(Link{
+			Rel:         "phases",
+			Route:       ListPhasesRoute,
+			RouteParams: []string{"game_id", g.ID.Encode()},
+		}))
+	}
 	return gameItem
 }
 
@@ -209,10 +205,6 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 
 	game := &Game{}
 	if err := datastore.Get(ctx, id, game); err != nil {
-		if err == datastore.ErrNoSuchEntity {
-			http.Error(w, "not found", 404)
-			return nil, nil
-		}
 		return nil, err
 	}
 

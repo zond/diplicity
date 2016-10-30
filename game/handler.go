@@ -17,6 +17,16 @@ const (
 	maxLimit = 64
 )
 
+const (
+	OpenGamesRoute       = "OpenGames"
+	StartedGamesRoute    = "StartedGames"
+	FinishedGamesRoute   = "FinishedGames"
+	MyStagingGamesRoute  = "MyStagingGames"
+	MyStartedGamesRoute  = "MyStartedGames"
+	MyFinishedGamesRoute = "MyFinishedGames"
+	ListPhasesRoute      = "ListPhases"
+)
+
 type gamesHandler struct {
 	query   *datastore.Query
 	name    string
@@ -208,6 +218,8 @@ var (
 func SetupRouter(r *mux.Router) {
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
+	HandleResource(r, PhaseResource)
+	Handle(r, "/games/{game_id}/phases", []string{"GET"}, ListPhasesRoute, listPhases)
 	Handle(r, "/games/open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handle)
 	Handle(r, "/games/started", []string{"GET"}, StartedGamesRoute, startedGamesHandler.handle)
 	Handle(r, "/games/finished", []string{"GET"}, FinishedGamesRoute, finishedGamesHandler.handle)

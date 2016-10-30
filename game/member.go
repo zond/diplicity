@@ -13,6 +13,10 @@ import (
 	"github.com/zond/godip/variants"
 )
 
+const (
+	memberKind = "Member"
+)
+
 var MemberResource = &Resource{
 	Create:     createMember,
 	Delete:     deleteMember,
@@ -152,7 +156,7 @@ func (g *Game) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	phase := NewPhase(s, g.ID, 0)
+	phase := NewPhase(s, g.ID, 1)
 	g.Started = true
 	g.Closed = true
 	return phase.Save(ctx)

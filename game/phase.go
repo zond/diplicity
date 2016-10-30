@@ -2,13 +2,23 @@ package game
 
 import (
 	"fmt"
+	"net/http"
+	"strconv"
 	"strings"
 
+	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/state"
 	"golang.org/x/net/context"
+	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
+	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
+)
+
+const (
+	phaseKind = "Phase"
 )
 
 type Unit struct {
@@ -41,6 +51,21 @@ type Resolution struct {
 	Resolution string
 }
 
+type Phases []Phase
+
+func (p Phases) Item(r Request, gameID *datastore.Key) *Item {
+	phaseItems := make(List, len(p))
+	for i := range p {
+		phaseItems[i] = p[i].Item(r)
+	}
+	phasesItem := NewItem(phaseItems).SetName("phases").AddLink(r.NewLink(Link{
+		Rel:         "self",
+		Route:       ListPhasesRoute,
+		RouteParams: []string{"game_id", gameID.Encode()},
+	}))
+	return phasesItem
+}
+
 type Phase struct {
 	GameID      *datastore.Key
 	Ordinal     int64
@@ -53,6 +78,48 @@ type Phase struct {
 	Dislodgers  []Dislodger
 	Bounces     []Bounce
 	Resolutions []Resolution
+}
+
+var PhaseResource = &Resource{
+	Load:     loadPhase,
+	FullPath: "/Game/{game_id}/Phase/{ordinal}",
+}
+
+func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	_, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		http.Error(w, "unauthorized", 401)
+		return nil, nil
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return nil, err
+	}
+
+	ordinal, err := strconv.ParseInt(r.Vars()["ordinal"], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	phase := &Phase{}
+	phaseID, err := PhaseID(ctx, gameID, ordinal)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof(ctx, "gonna load %v", phaseID)
+	if err := datastore.Get(ctx, phaseID, phase); err != nil {
+		return nil, err
+	}
+
+	return phase, nil
+}
+
+func (p *Phase) Item(r Request) *Item {
+	phaseItem := NewItem(p).SetName(fmt.Sprintf("%s %d, %s", p.Season, p.Year, p.Type)).AddLink(r.NewLink(PhaseResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "ordinal", fmt.Sprint(p.Ordinal)})))
+	return phaseItem
 }
 
 func PhaseID(ctx context.Context, gameID *datastore.Key, ordinal int64) (*datastore.Key, error) {
@@ -112,4 +179,28 @@ func NewPhase(s *state.State, gameID *datastore.Key, ordinal int64) *Phase {
 		}
 	}
 	return p
+}
+
+func listPhases(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	_, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		http.Error(w, "unauthorized", 401)
+		return nil
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return err
+	}
+
+	phases := Phases{}
+	_, err = datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
+	if err != nil {
+		return err
+	}
+
+	w.SetContent(phases.Item(r, gameID))
+	return nil
 }
