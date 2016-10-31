@@ -45,7 +45,7 @@ func handleIndex(w ResponseWriter, r Request) error {
 			"Authentication",
 			"The `login` link redirects to the Google OAuth2 login flow, and then back the `redirect-to` query param used when loading the `login` link.",
 			"In the final redirect, the query parameter `token` will be your OAuth2 token.",
-			"Use this token as the URL parameter `token` when doing requests, or use it inside an `Authorization: Bearer ...` header to authenticate requests.",
+			"Use this token as the URL parameter `token`, or use it inside an `Authorization: Bearer ...` header to authenticate requests.",
 		},
 	}).AddLink(r.NewLink(Link{
 		Rel:   "self",
