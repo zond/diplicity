@@ -220,6 +220,7 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)
+	HandleResource(r, OrderResource)
 	Handle(r, "/Game/{game_id}/phases", []string{"GET"}, ListPhasesRoute, listPhases)
 	Handle(r, "/Game/{game_id}/Phase/{ordinal}/orders", []string{"GET"}, ListOrdersRoute, listOrders)
 	Handle(r, "/games/open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handle)

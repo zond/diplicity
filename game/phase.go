@@ -88,7 +88,7 @@ var PhaseResource = &Resource{
 func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 	ctx := appengine.NewContext(r.Req())
 
-	_, ok := r.Values()["user"].(*auth.User)
+	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
 		http.Error(w, "unauthorized", 401)
 		return nil, nil
@@ -99,16 +99,30 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 		return nil, err
 	}
 
+	memberID, err := MemberID(ctx, gameID, user.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	member := &Member{}
+	if err := datastore.Get(ctx, memberID, member); err == nil {
+		r.Values()["is-member"] = true
+	} else if err != datastore.ErrNoSuchEntity {
+		return nil, err
+	}
+	err = nil
+
 	ordinal, err := strconv.ParseInt(r.Vars()["ordinal"], 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
-	phase := &Phase{}
 	phaseID, err := PhaseID(ctx, gameID, ordinal)
 	if err != nil {
 		return nil, err
 	}
+
+	phase := &Phase{}
 	if err := datastore.Get(ctx, phaseID, phase); err != nil {
 		return nil, err
 	}
@@ -124,6 +138,9 @@ func (p *Phase) Item(r Request) *Item {
 		Route:       ListOrdersRoute,
 		RouteParams: []string{"game_id", p.GameID.Encode(), "ordinal", fmt.Sprint(p.Ordinal)},
 	}))
+	if _, isMember := r.Values()["is-member"]; isMember && !p.Resolved {
+		phaseItem.AddLink(r.NewLink(OrderResource.Link("set-order", Create, []string{"game_id", p.GameID.Encode(), "ordinal", fmt.Sprint(p.Ordinal)})))
+	}
 	return phaseItem
 }
 
@@ -189,7 +206,7 @@ func NewPhase(s *state.State, gameID *datastore.Key, ordinal int64) *Phase {
 func listPhases(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
-	_, ok := r.Values()["user"].(*auth.User)
+	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
 		http.Error(w, "unauthorized", 401)
 		return nil
@@ -199,6 +216,19 @@ func listPhases(w ResponseWriter, r Request) error {
 	if err != nil {
 		return err
 	}
+
+	memberID, err := MemberID(ctx, gameID, user.Id)
+	if err != nil {
+		return err
+	}
+
+	member := &Member{}
+	if err := datastore.Get(ctx, memberID, member); err == nil {
+		r.Values()["is-member"] = true
+	} else if err != datastore.ErrNoSuchEntity {
+		return err
+	}
+	err = nil
 
 	phases := Phases{}
 	_, err = datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
