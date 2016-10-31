@@ -43,7 +43,7 @@ type Order struct {
 	PhaseID  *datastore.Key
 	Nation   dip.Nation
 	Province dip.Province `methods:"POST"`
-	Parts    []string     `methods:"POST"`
+	Parts    []string     `methods:"POST" separator:" "`
 }
 
 func OrderID(ctx context.Context, phaseID *datastore.Key, province dip.Province) (*datastore.Key, error) {
