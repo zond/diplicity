@@ -348,16 +348,14 @@ func tokenFilter(w ResponseWriter, r Request) error {
 				})
 			}
 			r.Values()["user"] = user
-			if r.Media() == "text/html" {
-				r.DecorateLinks(func(l *Link, u *url.URL) error {
-					if l.Rel != "logout" {
-						q := u.Query()
-						q.Set("token", token)
-						u.RawQuery = q.Encode()
-					}
-					return nil
-				})
-			}
+			r.DecorateLinks(func(l *Link, u *url.URL) error {
+				if l.Rel != "logout" {
+					q := u.Query()
+					q.Set("token", token)
+					u.RawQuery = q.Encode()
+				}
+				return nil
+			})
 		}
 	}
 	return nil
