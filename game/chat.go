@@ -24,6 +24,23 @@ const (
 
 type Nations []dip.Nation
 
+func (n *Nations) FromString(s string) {
+	parts := strings.Split(s, ",")
+	*n = make(Nations, len(parts))
+	for i := range parts {
+		(*n)[i] = dip.Nation(parts[i])
+	}
+}
+
+func (n Nations) Includes(m dip.Nation) bool {
+	for i := range n {
+		if n[i] == m {
+			return true
+		}
+	}
+	return false
+}
+
 func (n Nations) Len() int {
 	return len(n)
 }
@@ -68,7 +85,13 @@ type Channel struct {
 
 func (c *Channel) Item(r Request) *Item {
 	sort.Sort(c.Members)
-	return NewItem(c).SetName(c.Members.String())
+	channelItem := NewItem(c).SetName(c.Members.String())
+	channelItem.AddLink(r.NewLink(Link{
+		Rel:         "messages",
+		Route:       ListMessagesRoute,
+		RouteParams: []string{"game_id", c.GameID.Encode(), "channel_members", c.Members.String()},
+	}))
+	return channelItem
 }
 
 func ChannelID(ctx context.Context, gameID *datastore.Key, members Nations) (*datastore.Key, error) {
@@ -88,6 +111,21 @@ func (c *Channel) ID(ctx context.Context) (*datastore.Key, error) {
 var MessageResource = &Resource{
 	Create:     createMessage,
 	CreatePath: "/Game/{game_id}/Messages",
+}
+
+type Messages []Message
+
+func (m Messages) Item(r Request, gameID *datastore.Key, channelMembers Nations) *Item {
+	messageItems := make(List, len(m))
+	for i := range m {
+		messageItems[i] = m[i].Item(r)
+	}
+	messagesItem := NewItem(messageItems).SetName("messages").AddLink(r.NewLink(Link{
+		Rel:         "self",
+		Route:       ListMessagesRoute,
+		RouteParams: []string{"game_id", gameID.Encode(), "channel_members", channelMembers.String()},
+	}))
+	return messagesItem
 }
 
 type Message struct {
@@ -135,26 +173,19 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 	}
 	message.GameID = gameID
 	message.Sender = member.Nation
+	message.CreatedAt = time.Now()
 	sort.Sort(message.ChannelMembers)
 
-	selfMember := false
-	for _, channelMember := range message.ChannelMembers {
-		if channelMember == member.Nation {
-			selfMember = true
-		}
-		isOK := false
-		for _, okNation := range variants.Variants[game.Variant].Nations {
-			if channelMember == okNation {
-				isOK = true
-				break
-			}
-		}
-		if !isOK {
-			return nil, fmt.Errorf("unknown channel members")
-		}
+	if !message.ChannelMembers.Includes(member.Nation) {
+		http.Error(w, "can only send messages to member channels", 403)
+		return nil, nil
 	}
-	if !selfMember {
-		return nil, fmt.Errorf("can only send messages to member channels")
+
+	for _, channelMember := range message.ChannelMembers {
+		if !Nations(variants.Variants[game.Variant].Nations).Includes(channelMember) {
+			http.Error(w, "unknown channel member", 400)
+			return nil, nil
+		}
 	}
 
 	channelID, err := ChannelID(ctx, gameID, message.ChannelMembers)
@@ -180,6 +211,52 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 	}
 
 	return message, nil
+}
+
+func listMessages(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		http.Error(w, "unauthorized", 401)
+		return nil
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return err
+	}
+
+	channelMembers := Nations{}
+	channelMembers.FromString(r.Vars()["channel_members"])
+
+	memberID, err := MemberID(ctx, gameID, user.Id)
+	if err != nil {
+		return err
+	}
+
+	member := &Member{}
+	if err := datastore.Get(ctx, memberID, member); err != nil {
+		return err
+	}
+
+	if !channelMembers.Includes(member.Nation) {
+		http.Error(w, "can only list member channels", 403)
+		return nil
+	}
+
+	channelID, err := ChannelID(ctx, gameID, channelMembers)
+	if err != nil {
+		return err
+	}
+
+	messages := Messages{}
+	if _, err := datastore.NewQuery(messageKind).Ancestor(channelID).GetAll(ctx, &messages); err != nil {
+		return err
+	}
+
+	w.SetContent(messages.Item(r, gameID, channelMembers))
+	return nil
 }
 
 func listChannels(w ResponseWriter, r Request) error {
