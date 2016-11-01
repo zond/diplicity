@@ -88,6 +88,7 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 		if err := datastore.Get(ctx, memberID.Parent(), game); err != nil {
 			return err
 		}
+		game.ID = memberID.Parent()
 		newMembers := []Member{}
 		for _, member := range game.Members {
 			if member.User.Id != member.User.Id {
@@ -126,6 +127,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}
+		game.ID = gameID
 		if !game.Joinable() {
 			return fmt.Errorf("game not joinable")
 		}

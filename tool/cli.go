@@ -18,12 +18,12 @@ func main() {
 	}
 
 	for _, route := range []string{
-		"/games/open",
-		"/games/started",
-		"/games/finished",
-		"/games/my/staging",
-		"/games/my/started",
-		"/games/my/finished",
+		"/Games/Open",
+		"/Games/Started",
+		"/Games/Finished",
+		"/Games/My/Staging",
+		"/Games/My/Started",
+		"/Games/My/Finished",
 	} {
 		url, err := url.Parse(fmt.Sprintf("http://localhost:8080%s?token=%s", route, *token))
 		if err != nil {

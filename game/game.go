@@ -136,9 +136,9 @@ func (g *Game) Save(ctx context.Context) error {
 		return err
 	}
 	memberIDs := make([]*datastore.Key, len(g.Members))
-	for index, member := range g.Members {
-		g.Members[index].GameData = g.GameData
-		memberIDs[index], err = member.ID(ctx)
+	for i := range g.Members {
+		g.Members[i].GameData = g.GameData
+		memberIDs[i], err = g.Members[i].ID(ctx)
 		if err != nil {
 			return err
 		}

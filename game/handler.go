@@ -225,7 +225,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phases", []string{"GET"}, ListPhasesRoute, listPhases)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Orders", []string{"GET"}, ListOrdersRoute, listOrders)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Options", []string{"GET"}, ListOptionsRoute, listOptions)
-	Handle(r, "/games/Open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handle)
+	Handle(r, "/Games/Open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handle)
 	Handle(r, "/Games/Started", []string{"GET"}, StartedGamesRoute, startedGamesHandler.handle)
 	Handle(r, "/Games/Finished", []string{"GET"}, FinishedGamesRoute, finishedGamesHandler.handle)
 	Handle(r, "/Games/My/Staging", []string{"GET"}, MyStagingGamesRoute, myStagingGamesHandler.handle)
