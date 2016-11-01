@@ -78,7 +78,7 @@ func ChannelID(ctx context.Context, gameID *datastore.Key, members Nations) (*da
 	if gameID.IntID() == 0 {
 		return nil, fmt.Errorf("gameIDs must have int IDs")
 	}
-	return datastore.NewKey(ctx, channelKind, fmt.Sprintf("%d:%s", members.String()), 0, nil), nil
+	return datastore.NewKey(ctx, channelKind, fmt.Sprintf("%d:%s", gameID.IntID(), members.String()), 0, nil), nil
 }
 
 func (c *Channel) ID(ctx context.Context) (*datastore.Key, error) {
