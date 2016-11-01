@@ -293,16 +293,16 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func tokenFilter(w ResponseWriter, r Request) error {
+func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 	token := r.Req().URL.Query().Get("token")
 	if token == "" {
 		if authHeader := r.Req().Header.Get("Authorization"); authHeader != "" {
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 {
-				return fmt.Errorf("Authorization header not two parts joined by space")
+				return false, fmt.Errorf("Authorization header not two parts joined by space")
 			}
 			if strings.ToLower(parts[0]) != "bearer" {
-				return fmt.Errorf("Authorization header part 1 not 'bearer'")
+				return false, fmt.Errorf("Authorization header part 1 not 'bearer'")
 			}
 			token = parts[1]
 		}
@@ -313,14 +313,14 @@ func tokenFilter(w ResponseWriter, r Request) error {
 
 		b, err := base64.URLEncoding.DecodeString(token)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		var nonceAry [24]byte
 		copy(nonceAry[:], b)
 		nacl, err := getNaCl(ctx)
 		if err != nil {
-			return err
+			return false, err
 		}
 		var secretAry [32]byte
 		copy(secretAry[:], nacl.Secret)
@@ -328,44 +328,50 @@ func tokenFilter(w ResponseWriter, r Request) error {
 		plain, ok := secretbox.Open([]byte{}, b[24:], &nonceAry, &secretAry)
 		if !ok {
 			http.Error(w, "badly encrypted token", 403)
-			return nil
+			return false, nil
 		}
 
 		user := &User{}
 		if err := json.Unmarshal(plain, user); err != nil {
-			return err
+			return false, err
 		}
-		if user.ValidUntil.After(time.Now()) {
-			if fakeID := r.Req().URL.Query().Get("fake-id"); appengine.IsDevAppServer() && fakeID != "" {
-				user.Id = fakeID
-				r.DecorateLinks(func(l *Link, u *url.URL) error {
-					if l.Rel != "logout" {
-						q := u.Query()
-						q.Set("fake-id", fakeID)
-						u.RawQuery = q.Encode()
-					}
-					return nil
-				})
-			}
-			r.Values()["user"] = user
+		if user.ValidUntil.Before(time.Now()) {
+			http.Error(w, "token timed out", 401)
+			return false, nil
+		}
+
+		if fakeID := r.Req().URL.Query().Get("fake-id"); appengine.IsDevAppServer() && fakeID != "" {
+			user.Id = fakeID
 			r.DecorateLinks(func(l *Link, u *url.URL) error {
 				if l.Rel != "logout" {
 					q := u.Query()
-					q.Set("token", token)
+					q.Set("fake-id", fakeID)
 					u.RawQuery = q.Encode()
 				}
 				return nil
 			})
 		}
+
+		r.Values()["user"] = user
+
+		r.DecorateLinks(func(l *Link, u *url.URL) error {
+			if l.Rel != "logout" {
+				q := u.Query()
+				q.Set("token", token)
+				u.RawQuery = q.Encode()
+			}
+			return nil
+		})
+
 	}
-	return nil
+	return true, nil
 }
 
 func SetupRouter(r *mux.Router) {
 	router = r
-	Handle(router, "/auth/_configure", []string{"POST"}, AuthConfigureRoute, handleConfigure)
-	Handle(router, "/auth/login", []string{"GET"}, LoginRoute, handleLogin)
-	Handle(router, "/auth/logout", []string{"GET"}, LogoutRoute, handleLogout)
-	Handle(router, "/auth/oauth2callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
+	Handle(router, "/Auth/_configure", []string{"POST"}, AuthConfigureRoute, handleConfigure)
+	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
+	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
+	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
 	AddFilter(tokenFilter)
 }

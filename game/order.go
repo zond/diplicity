@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
-	"github.com/zond/godip/variants"
 )
 
 const (
