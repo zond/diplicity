@@ -78,9 +78,10 @@ func (c Channels) Item(r Request, gameID *datastore.Key) *Item {
 }
 
 type Channel struct {
-	GameID    *datastore.Key
-	Members   Nations
-	NMessages int
+	GameID         *datastore.Key
+	Members        Nations
+	NMessages      int
+	NMessagesSince int `datastore:"-" json:",omitempty"`
 }
 
 func (c *Channel) Item(r Request) *Item {
@@ -106,6 +107,19 @@ func ChannelID(ctx context.Context, gameID *datastore.Key, members Nations) (*da
 
 func (c *Channel) ID(ctx context.Context) (*datastore.Key, error) {
 	return ChannelID(ctx, c.GameID, c.Members)
+}
+
+func (c *Channel) CountSince(ctx context.Context, since time.Time) error {
+	channelID, err := ChannelID(ctx, c.GameID, c.Members)
+	if err != nil {
+		return err
+	}
+	count, err := datastore.NewQuery(messageKind).Ancestor(channelID).Filter("CreatedAt>", since).Count(ctx)
+	if err != nil {
+		return err
+	}
+	c.NMessagesSince = count
+	return nil
 }
 
 var MessageResource = &Resource{
@@ -278,6 +292,15 @@ func listChannels(w ResponseWriter, r Request) error {
 		return err
 	}
 
+	var since *time.Time
+	if sinceParam := r.Req().URL.Query().Get("since"); sinceParam != "" {
+		sinceTime, err := time.Parse(time.RFC3339, r.Req().URL.Query().Get("since"))
+		if err != nil {
+			return err
+		}
+		since = &sinceTime
+	}
+
 	var nation dip.Nation
 
 	game := &Game{}
@@ -309,6 +332,24 @@ func listChannels(w ResponseWriter, r Request) error {
 		_, err = datastore.NewQuery(channelKind).Filter("GameID=", gameID).Filter("Members=", nation).GetAll(ctx, &channels)
 		if err != nil {
 			return err
+		}
+	}
+
+	if since != nil {
+		results := make(chan error)
+		for i := range channels {
+			go func(c *Channel) {
+				results <- c.CountSince(ctx, *since)
+			}(&channels[i])
+		}
+		merr := appengine.MultiError{}
+		for _ = range channels {
+			if err := <-results; err != nil {
+				merr = append(merr, err)
+			}
+		}
+		if len(merr) > 0 {
+			return merr
 		}
 	}
 

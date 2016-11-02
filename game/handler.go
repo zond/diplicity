@@ -13,11 +13,20 @@ import (
 	. "github.com/zond/goaeoas"
 )
 
+func preflight(w http.ResponseWriter, r *http.Request) {
+	CORSHeaders(w)
+}
+
+var (
+	router = mux.NewRouter()
+)
+
 const (
 	maxLimit = 64
 )
 
 const (
+	IndexRoute           = "Index"
 	OpenGamesRoute       = "OpenGames"
 	StartedGamesRoute    = "StartedGames"
 	FinishedGamesRoute   = "FinishedGames"
@@ -225,6 +234,7 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, PhaseResource)
 	HandleResource(r, OrderResource)
 	HandleResource(r, MessageResource)
+	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channel/{channel_members}/Messages", []string{"GET"}, ListMessagesRoute, listMessages)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
 	Handle(r, "/Game/{game_id}/Phases", []string{"GET"}, ListPhasesRoute, listPhases)
