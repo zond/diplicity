@@ -41,4 +41,5 @@ func TestStartGame(t *testing.T) {
 		Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
 
 	testOrders(gameDesc, envs)
+	testOptions(gameDesc, envs)
 }
