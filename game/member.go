@@ -90,9 +90,9 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 		}
 		game.ID = memberID.Parent()
 		newMembers := []Member{}
-		for _, member := range game.Members {
-			if member.User.Id != member.User.Id {
-				newMembers = append(newMembers, member)
+		for _, oldMember := range game.Members {
+			if oldMember.User.Id != member.User.Id {
+				newMembers = append(newMembers, oldMember)
 			}
 		}
 		if len(newMembers) == 0 {

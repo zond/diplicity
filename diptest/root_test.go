@@ -7,8 +7,7 @@ import (
 )
 
 func TestRootNotLoggedIn(t *testing.T) {
-	NewEnv().GetRoute(game.IndexRoute).Do().
-		AssertOK().
+	NewEnv().GetRoute(game.IndexRoute).Success().
 		AssertStringEq("diplicity", "Name").
 		AssertStringEq("Diplicity", "Type").
 		AssertNil("Properties", "User").
@@ -17,11 +16,11 @@ func TestRootNotLoggedIn(t *testing.T) {
 }
 
 func TestRootLoggedIn(t *testing.T) {
-	NewEnv().UID("fake1").GetRoute(game.IndexRoute).Do().
-		AssertOK().
+	uid := String("fake")
+	NewEnv().SetUID(uid).GetRoute(game.IndexRoute).Success().
 		AssertStringEq("diplicity", "Name").
 		AssertStringEq("Diplicity", "Type").
-		AssertStringEq("fake1", "Properties", "User", "Id").
+		AssertStringEq(uid, "Properties", "User", "Id").
 		AssertRel("logout", "Links").
 		AssertRel("my-staging-games", "Links").
 		AssertRel("my-started-games", "Links").

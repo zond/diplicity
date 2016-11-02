@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 
@@ -17,25 +20,105 @@ import (
 	"google.golang.org/appengine/aetest"
 )
 
-var (
+type aetestTransport struct {
 	instance aetest.Instance
-	router   = mux.NewRouter()
-	counter  uint64
+}
+
+func (a *aetestTransport) Request(method string, url string, body io.Reader) (*http.Request, error) {
+	return a.instance.NewRequest(method, url, body)
+}
+
+type responseWriter struct {
+	status int
+	body   *bytes.Buffer
+	header http.Header
+}
+
+func (r *responseWriter) Header() http.Header {
+	return r.header
+}
+
+func (r *responseWriter) WriteHeader(i int) {
+	r.status = i
+}
+
+func (r *responseWriter) Write(b []byte) (int, error) {
+	return r.body.Write(b)
+}
+
+func (a *aetestTransport) Execute(req *http.Request) (int, http.Header, io.Reader, error) {
+	rw := &responseWriter{
+		body:   &bytes.Buffer{},
+		header: http.Header{},
+		status: 200,
+	}
+	router.ServeHTTP(rw, req)
+	return rw.status, rw.header, rw.body, nil
+}
+
+type realTransport struct {
+	host   string
+	scheme string
+	client *http.Client
+}
+
+func (r *realTransport) Request(method string, u string, body io.Reader) (*http.Request, error) {
+	parsedURL, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	parsedURL.Host = r.host
+	parsedURL.Scheme = r.scheme
+	return http.NewRequest(method, parsedURL.String(), body)
+}
+
+func (r *realTransport) Execute(req *http.Request) (int, http.Header, io.Reader, error) {
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	return resp.StatusCode, resp.Header, resp.Body, nil
+}
+
+type Transport interface {
+	Request(method string, url string, body io.Reader) (*http.Request, error)
+	Execute(req *http.Request) (status int, header http.Header, body io.Reader, err error)
+}
+
+var (
+	counter uint64
+	router  = mux.NewRouter()
+)
+
+func init() {
+	routes.Setup(router)
+	if os.Getenv("TRANSPORT") == "local" {
+		T = &realTransport{
+			host:   "localhost:8080",
+			scheme: "http",
+			client: &http.Client{},
+		}
+	} else {
+		auth.TestMode = true
+		instance, err := aetest.NewInstance(&aetest.Options{
+			StronglyConsistentDatastore: true,
+		})
+		if err != nil {
+			panic(fmt.Errorf("trying to create aetest instance: %v", err))
+		}
+		T = &aetestTransport{
+			instance: instance,
+		}
+	}
+}
+
+var (
+	T Transport
 )
 
 func String(s string) string {
 	c := atomic.AddUint64(&counter, 1)
 	return fmt.Sprintf("%s-%d", s, c)
-}
-
-func init() {
-	inst, err := aetest.NewInstance(&aetest.Options{StronglyConsistentDatastore: true})
-	if err != nil {
-		panic(fmt.Errorf("when starting test instance: %v", err))
-	}
-	instance = inst
-	routes.Setup(router)
-	auth.TestMode = true
 }
 
 func NewEnv() *Env {
@@ -46,75 +129,125 @@ type Env struct {
 	uid string
 }
 
-func (e *Env) UID(uid string) *Env {
+func (e *Env) GetUID() string {
+	return e.uid
+}
+
+func (e *Env) SetUID(uid string) *Env {
 	e.uid = uid
 	return e
 }
 
-type Get struct {
+type Req struct {
 	env         *Env
 	route       string
 	routeParams []string
 	queryParams url.Values
+	url         *url.URL
+	method      string
+	body        io.Reader
 }
 
-func (e *Env) GetRoute(route string) *Get {
-	return &Get{
-		env:   e,
-		route: route,
+func (e *Env) GetRoute(route string) *Req {
+	return &Req{
+		env:    e,
+		route:  route,
+		method: "GET",
 	}
 }
 
-func (g *Get) RouteParams(routeParams ...string) *Get {
-	g.routeParams = routeParams
-	return g
+func (r *Req) RouteParams(routeParams ...string) *Req {
+	r.routeParams = routeParams
+	return r
 }
 
-func (g *Get) QueryParams(queryParams url.Values) *Get {
-	g.queryParams = queryParams
-	return g
+func (r *Req) QueryParams(queryParams url.Values) *Req {
+	r.queryParams = queryParams
+	return r
+}
+
+func (r *Req) Body(i interface{}) *Req {
+	buf := &bytes.Buffer{}
+	if err := json.NewEncoder(buf).Encode(i); err != nil {
+		panic(fmt.Errorf("trying to encode %v: %v", spew.Sdump(i), err))
+	}
+	r.body = buf
+	return r
 }
 
 type Result struct {
-	Env      *Env
-	URL      *url.URL
-	Body     interface{}
-	Response *ResponseWriter
+	Env    *Env
+	URL    *url.URL
+	Body   interface{}
+	Status int
 }
 
-func (r *Result) AssertOK() *Result {
-	if r.Response.StatusCode != 200 {
-		panic(fmt.Errorf("fetching %q: %v", r.URL, r.Response.StatusCode))
+func (r *Result) GetValue(path ...string) interface{} {
+	found, err := jsonq.NewQuery(r.Body).Interface(path...)
+	if err != nil {
+		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
 	}
-	return r
+	return found
 }
 
 func (r *Result) AssertStringEq(val string, path ...string) *Result {
 	if found, err := jsonq.NewQuery(r.Body).String(path...); err != nil {
-		panic(fmt.Errorf("looking for %+v in %+v: %v", path, r.Body, err))
+		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
 	} else if found != val {
 		panic(fmt.Errorf("got %+v = %q, want %q", path, found, val))
 	}
 	return r
 }
 
+func (r *Result) AssertEmpty(path ...string) *Result {
+	if val, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...); err != nil {
+		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
+	} else if len(val) > 0 {
+		panic(fmt.Errorf("got %+v = %+v, want empty", path, val))
+	}
+	return r
+}
+
 func (r *Result) AssertNil(path ...string) *Result {
 	if val, err := jsonq.NewQuery(r.Body).String(path...); err == nil {
-		panic(fmt.Errorf("wanted nil at %+v, got %q", path, val))
+		panic(fmt.Errorf("wanted nil at %+v in %v, got %q", path, pp(r.Body), val))
 	} else if !strings.Contains(err.Error(), "Nil value found") {
 		panic(fmt.Errorf("wanted nil at %+v: %v", err))
 	}
 	return r
 }
 
-func (r *Result) AssertRel(rel string, path ...string) *Result {
-	return r.AssertSliceStringEq(rel, []string{"Rel"}, path...)
+func pp(i interface{}) string {
+	b, err := json.MarshalIndent(i, "  ", "  ")
+	if err != nil {
+		panic(fmt.Errorf("trying to marshal %+v: %v", i, err))
+	}
+	return string(b)
 }
 
-func (r *Result) AssertSliceStringEq(val string, inSlicePath []string, path ...string) *Result {
+func (r *Result) AssertNotFind(path []string, subPath []string, subMatch interface{}) *Result {
 	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
 	if err != nil {
-		panic(fmt.Errorf("looking for %+v in %+v: %v", path, r.Body, err))
+		panic(err)
+	}
+	for _, obj := range ary {
+		found, err := jsonq.NewQuery(obj).Interface(subPath...)
+		if err == nil && found == subMatch {
+			panic(fmt.Errorf("found %+v with %+v = %q in %v", path, subPath, subMatch, pp(r.Body)))
+		}
+	}
+	return r
+}
+
+func (r *Result) AssertRel(rel string, path ...string) *Result {
+	r.Find(path, []string{"Rel"}, rel)
+	return r
+}
+
+func (r *Result) AssertInSliceStringEq(val string, inSlicePath []string, path ...string) *Result {
+	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
+	if err != nil {
+		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
 	}
 	found := false
 	for _, obj := range ary {
@@ -124,15 +257,56 @@ func (r *Result) AssertSliceStringEq(val string, inSlicePath []string, path ...s
 		}
 	}
 	if !found {
-		panic(fmt.Errorf("found no %+v = %q in %v", inSlicePath, val, spew.Sdump(r.Body)))
+		panic(fmt.Errorf("found no %+v = %q in %v", inSlicePath, val, pp(r.Body)))
 	}
 	return r
 }
 
-func (r *Result) FollowPOST(body interface{}, rel string, path ...string) *Result {
+func (r *Result) Find(path []string, subPath []string, subMatch interface{}) *Result {
 	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
 	if err != nil {
-		panic(fmt.Errorf("looking for %+v in %+v: %v", path, r.Body, err))
+		panic(err)
+	}
+	for _, obj := range ary {
+		found, err := jsonq.NewQuery(obj).Interface(subPath...)
+		if err == nil && found == subMatch {
+			cpy := *r
+			cpy.Body = obj
+			return &cpy
+		}
+	}
+	panic(fmt.Errorf("Found no %+v with %+v = %v in %v", path, subPath, subMatch, pp(r.Body)))
+}
+
+func (r *Result) FollowInSlice(rel string, inSlicePath []string, path ...string) *Req {
+	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
+	if err != nil {
+		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
+	}
+	for _, obj := range ary {
+		if linkAry, err := jsonq.NewQuery(obj).ArrayOfObjects(inSlicePath...); err == nil {
+			for _, link := range linkAry {
+				if rel == link["Rel"] {
+					u, err := url.Parse(link["URL"].(string))
+					if err != nil {
+						panic(fmt.Errorf("trying to parse %q: %v", link["URL"].(string), err))
+					}
+					return &Req{
+						env:    r.Env,
+						url:    u,
+						method: link["Method"].(string),
+					}
+				}
+			}
+		}
+	}
+	panic(fmt.Errorf("found no %+v with Rel %q in %+v", inSlicePath, rel, path))
+}
+
+func (r *Result) Follow(rel string, path ...string) *Req {
+	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
+	if err != nil {
+		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
 	}
 	for _, obj := range ary {
 		if rel == obj["Rel"] {
@@ -140,116 +314,78 @@ func (r *Result) FollowPOST(body interface{}, rel string, path ...string) *Resul
 			if err != nil {
 				panic(fmt.Errorf("trying to parse %q: %v", obj["URL"].(string), err))
 			}
-			return r.Env.POSTURL(body, u)
-		}
-	}
-	panic(fmt.Errorf("found no Rel %q in %+v", rel, ary))
-}
-
-func (r *Result) FollowGET(rel string, path ...string) *Result {
-	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
-	if err != nil {
-		panic(fmt.Errorf("looking for %+v in %+v: %v", path, r.Body, err))
-	}
-	for _, obj := range ary {
-		if rel == obj["Rel"] {
-			u, err := url.Parse(obj["URL"].(string))
-			if err != nil {
-				panic(fmt.Errorf("trying to parse %q: %v", obj["URL"].(string), err))
+			return &Req{
+				env:    r.Env,
+				url:    u,
+				method: obj["Method"].(string),
 			}
-			return r.Env.GetURL(u)
 		}
 	}
-	panic(fmt.Errorf("found no Rel %q in %+v", rel, ary))
+	panic(fmt.Errorf("found no Rel %q in %v, %v", rel, r.URL, pp(r.Body)))
 }
 
-type ResponseWriter struct {
-	Body       *bytes.Buffer
-	HTTPHeader http.Header
-	StatusCode int
-}
-
-func NewResponseWriter() *ResponseWriter {
-	return &ResponseWriter{
-		Body:       &bytes.Buffer{},
-		HTTPHeader: http.Header{},
-		StatusCode: 200,
+func (r *Req) Success() *Result {
+	res := r.do()
+	if res.Status < 200 || res.Status > 299 {
+		panic(fmt.Errorf("fetching %q: %v", res.URL.String(), res.Status))
 	}
+	return res
 }
 
-func (rw *ResponseWriter) Header() http.Header {
-	return rw.HTTPHeader
+func (r *Req) Failure() *Result {
+	res := r.do()
+	if res.Status > 199 && res.Status < 300 {
+		panic(fmt.Errorf("fetching %q: %v", res.URL.String(), res.Status))
+	}
+	return res
 }
 
-func (rw *ResponseWriter) WriteHeader(i int) {
-	rw.StatusCode = i
-}
+func (r *Req) do() *Result {
+	if r.url == nil {
+		u, err := router.Get(r.route).URL(r.routeParams...)
+		if err != nil {
+			panic(fmt.Errorf("creating URL for %q and %+v: %v", r.route, r.routeParams, err))
+		}
+		r.url = u
+	}
+	queryParams := r.url.Query()
+	if r.queryParams != nil {
+		for k, v := range r.queryParams {
+			queryParams[k] = append(queryParams[k], v...)
+		}
+	}
+	if r.env.uid != "" {
+		queryParams.Set("fake-id", r.env.uid)
+	}
+	r.url.RawQuery = queryParams.Encode()
+	if (r.method == "POST" || r.method == "PUT") && r.body == nil {
+		r.body = &bytes.Buffer{}
+	}
 
-func (rw *ResponseWriter) Write(b []byte) (int, error) {
-	return rw.Body.Write(b)
-}
-
-func (g *Get) Do() *Result {
-	u, err := router.Get(g.route).URL(g.routeParams...)
+	req, err := T.Request(r.method, r.url.String(), r.body)
 	if err != nil {
-		panic(fmt.Errorf("creating URL for %q and %+v: %v", g.route, g.routeParams, err))
-	}
-	var queryParams url.Values
-	if g.queryParams == nil {
-		queryParams = url.Values{}
-	} else {
-		queryParams = g.queryParams
-	}
-	if g.env.uid != "" {
-		queryParams.Set("fake-id", g.env.uid)
-	}
-	u.RawQuery = queryParams.Encode()
-	return g.env.GetURL(u)
-}
-
-func (e *Env) POSTURL(body interface{}, u *url.URL) *Result {
-	b := &bytes.Buffer{}
-	if err := json.NewEncoder(b).Encode(body); err != nil {
-		panic(fmt.Errorf("encoding %+v to JSON: %v", body, err))
-	}
-	req, err := instance.NewRequest("POST", u.String(), b)
-	if err != nil {
-		panic(fmt.Errorf("creating GET %q: %v", u, err))
+		panic(fmt.Errorf("creating GET %q: %v", r.url, err))
 	}
 	req.Header.Set("Accept", "application/json; charset=utf-8")
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
-	rw := NewResponseWriter()
-	router.ServeHTTP(rw, req)
-	responseBytes := rw.Body.Bytes()
+	if r.body != nil {
+		req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	}
+	status, _, responseReader, err := T.Execute(req)
+	if err != nil {
+		panic(fmt.Errorf("executing %+v: %v", req, err))
+	}
+	responseBytes, err := ioutil.ReadAll(responseReader)
+	if err != nil {
+		panic(fmt.Errorf("reading body from %+v: %v", req, err))
+	}
 	var result interface{}
 	if err := json.Unmarshal(responseBytes, &result); err != nil {
 		panic(fmt.Errorf("unmarshaling %q: %v", string(responseBytes), err))
 	}
 	return &Result{
-		Env:      e,
-		URL:      u,
-		Body:     result,
-		Response: rw,
-	}
-}
-
-func (e *Env) GetURL(u *url.URL) *Result {
-	req, err := instance.NewRequest("GET", u.String(), nil)
-	if err != nil {
-		panic(fmt.Errorf("creating GET %q: %v", u, err))
-	}
-	req.Header.Set("Accept", "application/json; charset=utf-8")
-	rw := NewResponseWriter()
-	router.ServeHTTP(rw, req)
-	body := rw.Body.Bytes()
-	var result interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		panic(fmt.Errorf("unmarshaling %q: %v", string(body), err))
-	}
-	return &Result{
-		Env:      e,
-		URL:      u,
-		Body:     result,
-		Response: rw,
+		Env:    r.env,
+		URL:    r.url,
+		Body:   result,
+		Status: status,
 	}
 }
