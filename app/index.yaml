@@ -98,9 +98,4 @@ indexes:
   ancestor: yes
   properties:
   - name: CreatedAt
-
-- kind: Message
-  ancestor: yes
-  properties:
-  - name: CreatedAt
     direction: desc
