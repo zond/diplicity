@@ -32,6 +32,11 @@ func handleIndex(w ResponseWriter, r Request) error {
 			"In the final redirect, the query parameter `token` will be your OAuth2 token.",
 			"Use this token as the URL parameter `token`, or use it inside an `Authorization: Bearer ...` header to authenticate requests.",
 		},
+		[]string{
+			"Source code",
+			"The source code for this service can be found at https://github.com/zond/diplicity.",
+			"Patches are welcome!",
+		},
 	}).AddLink(r.NewLink(Link{
 		Rel:   "self",
 		Route: IndexRoute,
