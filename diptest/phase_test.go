@@ -42,4 +42,5 @@ func TestStartGame(t *testing.T) {
 
 	testOrders(gameDesc, envs)
 	testOptions(gameDesc, envs)
+	testChat(gameDesc, envs)
 }

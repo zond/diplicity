@@ -68,7 +68,17 @@ func (c Channels) Item(r Request, gameID *datastore.Key) *Item {
 	for i := range c {
 		channelItems[i] = c[i].Item(r)
 	}
-	channelsItem := NewItem(channelItems).SetName("channels").AddLink(r.NewLink(Link{
+	channelsItem := NewItem(channelItems).SetName("channels").SetDesc([][]string{
+		[]string{
+			"Lazy channels",
+			"Channels are created lazily when messages are created for previously non existing channels.",
+			"This means that you can write messages to combinations of nations not currently represented by a channel listed here, and the channel will simply be created for you.",
+		},
+		[]string{
+			"Counters",
+			"Channels tell you how many messages they have, and if you provide the `since` query parameter they will even tell you how many new messages they have received since then.",
+		},
+	}).AddLink(r.NewLink(Link{
 		Rel:         "self",
 		Route:       ListChannelsRoute,
 		RouteParams: []string{"game_id", gameID.Encode()},
@@ -77,11 +87,16 @@ func (c Channels) Item(r Request, gameID *datastore.Key) *Item {
 	return channelsItem
 }
 
+type NMessagesSince struct {
+	Since     time.Time
+	NMessages int
+}
+
 type Channel struct {
 	GameID         *datastore.Key
 	Members        Nations
 	NMessages      int
-	NMessagesSince int `datastore:"-" json:",omitempty"`
+	NMessagesSince NMessagesSince `datastore:"-" json:",omitempty"`
 }
 
 func (c *Channel) Item(r Request) *Item {
@@ -118,7 +133,8 @@ func (c *Channel) CountSince(ctx context.Context, since time.Time) error {
 	if err != nil {
 		return err
 	}
-	c.NMessagesSince = count
+	c.NMessagesSince.Since = since
+	c.NMessagesSince.NMessages = count
 	return nil
 }
 
@@ -134,7 +150,12 @@ func (m Messages) Item(r Request, gameID *datastore.Key, channelMembers Nations)
 	for i := range m {
 		messageItems[i] = m[i].Item(r)
 	}
-	messagesItem := NewItem(messageItems).SetName("messages").AddLink(r.NewLink(Link{
+	messagesItem := NewItem(messageItems).SetName("messages").SetDesc([][]string{
+		[]string{
+			"Limiting messages",
+			"Messages normally contain all messages for the chosen channel, but if you provide a `since` query parameter they will only contain new messages since that time.",
+		},
+	}).AddLink(r.NewLink(Link{
 		Rel:         "self",
 		Route:       ListMessagesRoute,
 		RouteParams: []string{"game_id", gameID.Encode(), "channel_members", channelMembers.String()},
@@ -244,6 +265,15 @@ func listMessages(w ResponseWriter, r Request) error {
 	channelMembers := Nations{}
 	channelMembers.FromString(r.Vars()["channel_members"])
 
+	var since *time.Time
+	if sinceParam := r.Req().URL.Query().Get("since"); sinceParam != "" {
+		sinceTime, err := time.Parse(time.RFC3339, sinceParam)
+		if err != nil {
+			return err
+		}
+		since = &sinceTime
+	}
+
 	memberID, err := MemberID(ctx, gameID, user.Id)
 	if err != nil {
 		return err
@@ -265,7 +295,11 @@ func listMessages(w ResponseWriter, r Request) error {
 	}
 
 	messages := Messages{}
-	if _, err := datastore.NewQuery(messageKind).Ancestor(channelID).GetAll(ctx, &messages); err != nil {
+	q := datastore.NewQuery(messageKind).Ancestor(channelID)
+	if since != nil {
+		q = q.Filter("CreatedAt>", *since)
+	}
+	if _, err := q.Order("-CreatedAt").GetAll(ctx, &messages); err != nil {
 		return err
 	}
 
@@ -294,7 +328,7 @@ func listChannels(w ResponseWriter, r Request) error {
 
 	var since *time.Time
 	if sinceParam := r.Req().URL.Query().Get("since"); sinceParam != "" {
-		sinceTime, err := time.Parse(time.RFC3339, r.Req().URL.Query().Get("since"))
+		sinceTime, err := time.Parse(time.RFC3339, sinceParam)
 		if err != nil {
 			return err
 		}
@@ -350,6 +384,10 @@ func listChannels(w ResponseWriter, r Request) error {
 		}
 		if len(merr) > 0 {
 			return merr
+		}
+	} else {
+		for i := range channels {
+			channels[i].NMessagesSince.NMessages = channels[i].NMessages
 		}
 	}
 
