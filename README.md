@@ -14,3 +14,10 @@ To enable exploration of the API for debugging, research by UI engineers or even
 
 To enable debugging the JSON output in a browser, adding the query parameter `accept=application/json` will make the server output JSON even to a browser that claims to prefer `text/html`.
 
+## Running locally
+
+To run it locally, install the [App Engine SDK for Go](https://cloud.google.com/appengine/docs/go/download) and run `goapp serve` in the `app` directory.
+
+## Running the tests
+
+To run the tests, run `goapp test` in the `diptest` directory.
