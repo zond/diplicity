@@ -145,7 +145,7 @@ type Req struct {
 	queryParams url.Values
 	url         *url.URL
 	method      string
-	body        io.Reader
+	body        []byte
 }
 
 func (e *Env) GetRoute(route string) *Req {
@@ -167,19 +167,20 @@ func (r *Req) QueryParams(queryParams url.Values) *Req {
 }
 
 func (r *Req) Body(i interface{}) *Req {
-	buf := &bytes.Buffer{}
-	if err := json.NewEncoder(buf).Encode(i); err != nil {
+	b, err := json.Marshal(i)
+	if err != nil {
 		panic(fmt.Errorf("trying to encode %v: %v", spew.Sdump(i), err))
 	}
-	r.body = buf
+	r.body = b
 	return r
 }
 
 type Result struct {
-	Env    *Env
-	URL    *url.URL
-	Body   interface{}
-	Status int
+	Env       *Env
+	URL       *url.URL
+	Body      interface{}
+	BodyBytes []byte
+	Status    int
 }
 
 func (r *Result) GetValue(path ...string) interface{} {
@@ -335,8 +336,12 @@ func (r *Result) Follow(rel string, path ...string) *Req {
 
 func (r *Req) Success() *Result {
 	res := r.do()
+	bodyDesc := ""
+	if r.body != nil {
+		bodyDesc = fmt.Sprintf(" with %q", string(r.body))
+	}
 	if res.Status < 200 || res.Status > 299 {
-		panic(fmt.Errorf("fetching %q: %v", res.URL.String(), res.Status))
+		panic(fmt.Errorf("%qing %q%v: %v\n%s", r.method, r.url.String(), bodyDesc, res.Status, res.BodyBytes))
 	}
 	return res
 }
@@ -367,11 +372,12 @@ func (r *Req) do() *Result {
 		queryParams.Set("fake-id", r.env.uid)
 	}
 	r.url.RawQuery = queryParams.Encode()
-	if (r.method == "POST" || r.method == "PUT") && r.body == nil {
-		r.body = &bytes.Buffer{}
+	var bodyReader io.Reader
+	if r.method == "POST" || r.method == "PUT" {
+		bodyReader = bytes.NewBuffer(r.body)
 	}
 
-	req, err := T.Request(r.method, r.url.String(), r.body)
+	req, err := T.Request(r.method, r.url.String(), bodyReader)
 	if err != nil {
 		panic(fmt.Errorf("creating GET %q: %v", r.url, err))
 	}
@@ -394,9 +400,10 @@ func (r *Req) do() *Result {
 		}
 	}
 	return &Result{
-		Env:    r.env,
-		URL:    r.url,
-		Body:   result,
-		Status: status,
+		Env:       r.env,
+		URL:       r.url,
+		BodyBytes: responseBytes,
+		Body:      result,
+		Status:    status,
 	}
 }
