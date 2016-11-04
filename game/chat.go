@@ -248,6 +248,32 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 	return message, nil
 }
 
+func publicChannel(variant string) Nations {
+	publicChannel := make(Nations, len(variants.Variants[variant].Nations))
+	copy(publicChannel, variants.Variants[variant].Nations)
+	sort.Sort(publicChannel)
+
+	return publicChannel
+}
+
+func isPublic(variant string, members Nations) bool {
+	public := publicChannel(variant)
+
+	sort.Sort(members)
+
+	if len(members) != len(public) {
+		return false
+	}
+
+	for i := range public {
+		if members[i] != public[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
 func listMessages(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -279,12 +305,22 @@ func listMessages(w ResponseWriter, r Request) error {
 		return err
 	}
 
+	var nation dip.Nation
+
+	game := &Game{}
 	member := &Member{}
-	if err := datastore.Get(ctx, memberID, member); err != nil {
+	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, memberID}, []interface{}{game, member})
+	if err == nil {
+		nation = member.Nation
+	} else if merr, ok := err.(appengine.MultiError); ok {
+		if merr[0] != nil {
+			return merr[0]
+		}
+	} else {
 		return err
 	}
 
-	if !channelMembers.Includes(member.Nation) {
+	if !channelMembers.Includes(nation) && !isPublic(game.Variant, channelMembers) {
 		http.Error(w, "can only list member channels", 403)
 		return nil
 	}
@@ -352,7 +388,7 @@ func listChannels(w ResponseWriter, r Request) error {
 
 	channels := Channels{}
 	if nation == "" {
-		channelID, err := ChannelID(ctx, gameID, variants.Variants[game.Variant].Nations)
+		channelID, err := ChannelID(ctx, gameID, publicChannel(game.Variant))
 		if err != nil {
 			return err
 		}
