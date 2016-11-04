@@ -42,7 +42,7 @@ func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit 
 			fmt.Sprintf("The list contains at most %d games.", maxLimit),
 			"If there are additional matching games, a 'next' link will be available with a 'cursor' query parameter.",
 			"Use the 'next' link to list the next batch of matching games.",
-			fmt.Sprintf("To list fewer games than %d, add an explicit 'limit' query parameter.", maxLimit),
+			fmt.Sprintf("To list fewer than %d games, add an explicit 'limit' query parameter.", maxLimit),
 		},
 		[]string{
 			"Filters",

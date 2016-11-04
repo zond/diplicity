@@ -27,6 +27,10 @@ To run it locally
 3. Install the [App Engine SDK for Go](https://cloud.google.com/appengine/docs/go/download).
 4. Run `goapp serve` in the `app` directory.
 
+### Faking user ID
+
+When running the server locally, you can use the query parameter `fake-id` to set a fake user ID for your requests. This makes it possible and easy to test interaction between users without creating multiple Google accounts or even running multiple browsers.
+
 ## Running the tests
 
 To run the tests, run `goapp test` in the `diptest` directory.
