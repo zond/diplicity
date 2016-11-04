@@ -46,6 +46,7 @@ func (o Orders) Item(r Request, gameID *datastore.Key, phaseOrdinal int64) *Item
 type Order struct {
 	GameID       *datastore.Key
 	PhaseOrdinal int64
+	Province     dip.Province `methods:"POST,PUT"`
 	Nation       dip.Nation
 	Parts        []string `methods:"POST,PUT" separator:" "`
 }
@@ -64,7 +65,7 @@ func (o *Order) ID(ctx context.Context) (*datastore.Key, error) {
 	if len(o.Parts) == 0 {
 		return nil, fmt.Errorf("orders must have parts")
 	}
-	return OrderID(ctx, o.GameID, o.PhaseOrdinal, dip.Province(o.Parts[0]))
+	return OrderID(ctx, o.GameID, o.PhaseOrdinal, o.Province)
 }
 
 func (o *Order) Save(ctx context.Context) error {
@@ -78,8 +79,8 @@ func (o *Order) Save(ctx context.Context) error {
 
 func (o *Order) Item(r Request) *Item {
 	orderItem := NewItem(o).SetName(strings.Join(o.Parts, " "))
-	orderItem.AddLink(r.NewLink(OrderResource.Link("delete", Delete, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", o.Parts[0]})))
-	orderItem.AddLink(r.NewLink(OrderResource.Link("update", Update, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", o.Parts[0]})))
+	orderItem.AddLink(r.NewLink(OrderResource.Link("delete", Delete, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", string(o.Parts[0])})))
+	orderItem.AddLink(r.NewLink(OrderResource.Link("update", Update, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", string(o.Parts[0])})))
 	return orderItem
 }
 
@@ -191,13 +192,28 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	order.GameID = gameID
 	order.PhaseOrdinal = phaseOrdinal
-	order.Nation = member.Nation
 
-	if _, err := variants.Variants[game.Variant].ParseOrder(order.Parts); err != nil {
+	variant := variants.Variants[game.Variant]
+
+	parsedOrder, err := variant.ParseOrder(order.Parts)
+	if err != nil {
 		return nil, err
 	}
 
-	if order.Parts[0] != srcProvince {
+	s, err := phase.State(ctx, variant, false)
+	if err != nil {
+		return nil, err
+	}
+
+	validNation, err := parsedOrder.Validate(s)
+	if err != nil {
+		return nil, err
+	}
+	if validNation != member.Nation {
+		return nil, fmt.Errorf("can't issue orders for others")
+	}
+
+	if order.Province != dip.Province(srcProvince) {
 		return nil, fmt.Errorf("unable to change source province for order")
 	}
 
@@ -254,8 +270,24 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 	order.PhaseOrdinal = phaseOrdinal
 	order.Nation = member.Nation
 
-	if _, err := variants.Variants[game.Variant].ParseOrder(order.Parts); err != nil {
+	variant := variants.Variants[game.Variant]
+
+	parsedOrder, err := variant.ParseOrder(order.Parts)
+	if err != nil {
 		return nil, err
+	}
+
+	s, err := phase.State(ctx, variant, false)
+	if err != nil {
+		return nil, err
+	}
+
+	validNation, err := parsedOrder.Validate(s)
+	if err != nil {
+		return nil, err
+	}
+	if validNation != member.Nation {
+		return nil, fmt.Errorf("can't issue orders for others")
 	}
 
 	if err := order.Save(ctx); err != nil {

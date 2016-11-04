@@ -245,7 +245,7 @@ func listOptions(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	state, err := phase.State(ctx, variants.Variants[game.Variant])
+	state, err := phase.State(ctx, variants.Variants[game.Variant], false)
 	if err != nil {
 		return err
 	}
@@ -284,25 +284,27 @@ func listOptions(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func (p *Phase) State(ctx context.Context, variant variants.Variant) (*state.State, error) {
+func (p *Phase) State(ctx context.Context, variant variants.Variant, withOrders bool) (*state.State, error) {
 	phaseID, err := p.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	orders := []Order{}
-	if _, err := datastore.NewQuery(orderKind).Ancestor(phaseID).GetAll(ctx, &orders); err != nil {
-		return nil, err
-	}
-
 	orderMap := map[dip.Nation]map[dip.Province][]string{}
-	for _, order := range orders {
-		nationMap, found := orderMap[order.Nation]
-		if !found {
-			nationMap = map[dip.Province][]string{}
-			orderMap[order.Nation] = nationMap
+	if withOrders {
+		orders := []Order{}
+		if _, err := datastore.NewQuery(orderKind).Ancestor(phaseID).GetAll(ctx, &orders); err != nil {
+			return nil, err
 		}
-		nationMap[dip.Province(order.Parts[0])] = order.Parts
+
+		for _, order := range orders {
+			nationMap, found := orderMap[order.Nation]
+			if !found {
+				nationMap = map[dip.Province][]string{}
+				orderMap[order.Nation] = nationMap
+			}
+			nationMap[dip.Province(order.Parts[0])] = order.Parts
+		}
 	}
 
 	parsedOrders, err := variant.ParseOrders(orderMap)

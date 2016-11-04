@@ -7,26 +7,34 @@ func testOrders(gameDesc string, envs []*Env) {
 		Follow("my-started-games", "Links").Success().
 		Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
 
-	parts := []string{"", "Hold"}
+	okParts := []string{"", "Hold"}
+	badParts := []string{"", "Hold"}
 
 	nation := g.
 		Find([]string{"Properties", "Members"}, []string{"User", "Id"}, envs[0].GetUID()).GetValue("Nation")
 
 	switch nation {
 	case "Austria":
-		parts[0] = "vie"
+		okParts[0] = "vie"
+		badParts[0] = "ber"
 	case "Germany":
-		parts[0] = "ber"
+		okParts[0] = "ber"
+		badParts[0] = "ank"
 	case "Turkey":
-		parts[0] = "ank"
+		okParts[0] = "ank"
+		badParts[0] = "rom"
 	case "Italy":
-		parts[0] = "rom"
+		okParts[0] = "rom"
+		badParts[0] = "bre"
 	case "France":
-		parts[0] = "bre"
+		okParts[0] = "bre"
+		badParts[0] = "mos"
 	case "Russia":
-		parts[0] = "mos"
+		okParts[0] = "mos"
+		badParts[0] = "lon"
 	case "England":
-		parts[0] = "lon"
+		okParts[0] = "lon"
+		badParts[0] = "vie"
 	}
 
 	phase := g.
@@ -46,13 +54,29 @@ func testOrders(gameDesc string, envs []*Env) {
 		AssertEmpty("Properties")
 
 	phase.Follow("create-order", "Links").Body(map[string]interface{}{
-		"Parts": parts,
+		"Parts":    okParts,
+		"Province": okParts[0],
 	}).Success()
 
 	phase.Follow("orders", "Links").Success().
 		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nation)
 
 	otherPlayerPhase.Follow("orders", "Links").Success().
+		AssertEmpty("Properties")
+
+	phase.Follow("orders", "Links").Success().
+		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nation).
+		Follow("delete", "Links").Success()
+
+	phase.Follow("orders", "Links").Success().
+		AssertEmpty("Properties")
+
+	phase.Follow("create-order", "Links").Body(map[string]interface{}{
+		"Parts":    badParts,
+		"Province": badParts[0],
+	}).Failure()
+
+	phase.Follow("orders", "Links").Success().
 		AssertEmpty("Properties")
 
 }

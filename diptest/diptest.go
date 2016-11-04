@@ -379,8 +379,10 @@ func (r *Req) do() *Result {
 		panic(fmt.Errorf("reading body from %+v: %v", req, err))
 	}
 	var result interface{}
-	if err := json.Unmarshal(responseBytes, &result); err != nil {
-		panic(fmt.Errorf("unmarshaling %q: %v", string(responseBytes), err))
+	if status > 199 && status < 300 {
+		if err := json.Unmarshal(responseBytes, &result); err != nil {
+			panic(fmt.Errorf("unmarshaling %q: %v", string(responseBytes), err))
+		}
 	}
 	return &Result{
 		Env:    r.env,
