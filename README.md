@@ -33,4 +33,4 @@ When running the server locally, you can use the query parameter `fake-id` to se
 
 ## Running the tests
 
-To run the tests, run `goapp test` in the `diptest` directory.
+To run the tests, run `go test -v` in the `diptest` directory.
