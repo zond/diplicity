@@ -234,6 +234,7 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, PhaseResource)
 	HandleResource(r, OrderResource)
 	HandleResource(r, MessageResource)
+	HandleResource(r, PhaseStateResource)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channel/{channel_members}/Messages", []string{"GET"}, ListMessagesRoute, listMessages)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)

@@ -6,6 +6,11 @@ import (
 	"github.com/zond/diplicity/game"
 )
 
+var (
+	startedGameDesc string
+	startedGameEnvs []*Env
+)
+
 func TestStartGame(t *testing.T) {
 	gameDesc := String("test-game")
 
@@ -40,7 +45,10 @@ func TestStartGame(t *testing.T) {
 		Follow("phases", "Links").Success().
 		Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
 
-	testOrders(gameDesc, envs)
-	testOptions(gameDesc, envs)
-	testChat(gameDesc, envs)
+	startedGameDesc = gameDesc
+	startedGameEnvs = envs
+	t.Run("TestOrders", testOrders)
+	t.Run("TestOptions", testOptions)
+	t.Run("TestChat", testChat)
+	t.Run("TestPhaseState", testPhaseState)
 }

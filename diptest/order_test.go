@@ -1,17 +1,21 @@
 package diptest
 
-import "github.com/zond/diplicity/game"
+import (
+	"testing"
 
-func testOrders(gameDesc string, envs []*Env) {
-	g := envs[0].GetRoute(game.IndexRoute).Success().
+	"github.com/zond/diplicity/game"
+)
+
+func testOrders(t *testing.T) {
+	g := startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 		Follow("my-started-games", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
+		Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc)
 
 	okParts := []string{"", "Hold"}
 	badParts := []string{"", "Hold"}
 
 	nation := g.
-		Find([]string{"Properties", "Members"}, []string{"User", "Id"}, envs[0].GetUID()).GetValue("Nation")
+		Find([]string{"Properties", "Members"}, []string{"User", "Id"}, startedGameEnvs[0].GetUID()).GetValue("Nation")
 
 	switch nation {
 	case "Austria":
@@ -44,9 +48,9 @@ func testOrders(gameDesc string, envs []*Env) {
 	phase.Follow("orders", "Links").Success().
 		AssertEmpty("Properties")
 
-	otherPlayerPhase := envs[1].GetRoute(game.IndexRoute).Success().
+	otherPlayerPhase := startedGameEnvs[1].GetRoute(game.IndexRoute).Success().
 		Follow("my-started-games", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc).
+		Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc).
 		Follow("phases", "Links").Success().
 		Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
 

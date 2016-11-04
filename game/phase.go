@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	phaseKind = "Phase"
+	phaseKind        = "Phase"
+	memberNationFlag = "member-nation"
 )
 
 type Unit struct {
@@ -107,7 +108,7 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 
 	member := &Member{}
 	if err := datastore.Get(ctx, memberID, member); err == nil {
-		r.Values()["is-member"] = true
+		r.Values()[memberNationFlag] = member.Nation
 	} else if err != datastore.ErrNoSuchEntity {
 		return nil, err
 	}
@@ -139,13 +140,14 @@ func (p *Phase) Item(r Request) *Item {
 		Route:       ListOrdersRoute,
 		RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
 	}))
-	if _, isMember := r.Values()["is-member"]; isMember && !p.Resolved {
+	if memberNationIf, isMember := r.Values()[memberNationFlag]; isMember && !p.Resolved {
 		phaseItem.AddLink(r.NewLink(Link{
 			Rel:         "options",
 			Route:       ListOptionsRoute,
 			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
 		}))
 		phaseItem.AddLink(r.NewLink(OrderResource.Link("create-order", Create, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)})))
+		phaseItem.AddLink(r.NewLink(PhaseStateResource.Link("phase-state", Load, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal), "nation", fmt.Sprint(memberNationIf)})))
 	}
 	return phaseItem
 }
@@ -365,7 +367,7 @@ func listPhases(w ResponseWriter, r Request) error {
 
 	member := &Member{}
 	if err := datastore.Get(ctx, memberID, member); err == nil {
-		r.Values()["is-member"] = true
+		r.Values()[memberNationFlag] = member.Nation
 	} else if err != datastore.ErrNoSuchEntity {
 		return err
 	}

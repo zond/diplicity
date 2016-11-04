@@ -30,7 +30,8 @@ var OrderResource = &Resource{
 
 type Orders []Order
 
-func (o Orders) Item(r Request, gameID *datastore.Key, phaseOrdinal int64) *Item {
+func (o Orders) Item(r Request, gameID *datastore.Key, phase *Phase) *Item {
+	r.Values()["is-unresolved"] = !phase.Resolved
 	orderItems := make(List, len(o))
 	for i := range o {
 		orderItems[i] = o[i].Item(r)
@@ -38,7 +39,7 @@ func (o Orders) Item(r Request, gameID *datastore.Key, phaseOrdinal int64) *Item
 	ordersItem := NewItem(orderItems).SetName("orders").AddLink(r.NewLink(Link{
 		Rel:         "self",
 		Route:       ListOrdersRoute,
-		RouteParams: []string{"game_id", gameID.Encode(), "phase_ordinal", fmt.Sprint(phaseOrdinal)},
+		RouteParams: []string{"game_id", gameID.Encode(), "phase_ordinal", fmt.Sprint(phase.PhaseOrdinal)},
 	}))
 	return ordersItem
 }
@@ -62,9 +63,6 @@ func OrderID(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, src
 }
 
 func (o *Order) ID(ctx context.Context) (*datastore.Key, error) {
-	if len(o.Parts) == 0 {
-		return nil, fmt.Errorf("orders must have parts")
-	}
 	return OrderID(ctx, o.GameID, o.PhaseOrdinal, o.Province)
 }
 
@@ -79,8 +77,10 @@ func (o *Order) Save(ctx context.Context) error {
 
 func (o *Order) Item(r Request) *Item {
 	orderItem := NewItem(o).SetName(strings.Join(o.Parts, " "))
-	orderItem.AddLink(r.NewLink(OrderResource.Link("delete", Delete, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", string(o.Parts[0])})))
-	orderItem.AddLink(r.NewLink(OrderResource.Link("update", Update, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", string(o.Parts[0])})))
+	if _, isUnresolved := r.Values()["is-unresolved"]; isUnresolved {
+		orderItem.AddLink(r.NewLink(OrderResource.Link("delete", Delete, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", string(o.Parts[0])})))
+		orderItem.AddLink(r.NewLink(OrderResource.Link("update", Update, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", string(o.Parts[0])})))
+	}
 	return orderItem
 }
 
@@ -125,6 +125,9 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 	order := &Order{}
 	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID, orderID}, []interface{}{game, phase, member, order}); err != nil {
 		return nil, err
+	}
+	if phase.Resolved {
+		return nil, fmt.Errorf("can only delete orders for unresolved phases")
 	}
 
 	if order.Nation != member.Nation {
@@ -179,6 +182,9 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 	order := &Order{}
 	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID, orderID}, []interface{}{game, phase, member, order}); err != nil {
 		return nil, err
+	}
+	if phase.Resolved {
+		return nil, fmt.Errorf("can only update orders for unresolved phases")
 	}
 
 	if order.Nation != member.Nation {
@@ -258,6 +264,9 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 	member := &Member{}
 	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID}, []interface{}{game, phase, member}); err != nil {
 		return nil, err
+	}
+	if phase.Resolved {
+		return nil, fmt.Errorf("can only create orders for unresolved phases")
 	}
 
 	order := &Order{}
@@ -354,6 +363,6 @@ func listOrders(w ResponseWriter, r Request) error {
 		}
 	}
 
-	w.SetContent(toReturn.Item(r, gameID, phaseOrdinal))
+	w.SetContent(toReturn.Item(r, gameID, phase))
 	return nil
 }

@@ -199,6 +199,15 @@ func (r *Result) AssertStringEq(val string, path ...string) *Result {
 	return r
 }
 
+func (r *Result) AssertBoolEq(val bool, path ...string) *Result {
+	if found, err := jsonq.NewQuery(r.Body).Bool(path...); err != nil {
+		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
+	} else if found != val {
+		panic(fmt.Errorf("got %+v = %v, want %v", path, found, val))
+	}
+	return r
+}
+
 func (r *Result) AssertEmpty(path ...string) *Result {
 	if val, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...); err != nil {
 		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))

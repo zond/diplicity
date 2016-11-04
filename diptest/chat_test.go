@@ -3,21 +3,22 @@ package diptest
 import (
 	"sort"
 	"strings"
+	"testing"
 
 	"github.com/zond/diplicity/game"
 )
 
-func testChat(gameDesc string, envs []*Env) {
-	games := make([]*Result, len(envs))
-	nations := make([]string, len(envs))
+func testChat(t *testing.T) {
+	games := make([]*Result, len(startedGameEnvs))
+	nations := make([]string, len(startedGameEnvs))
 
-	for i, env := range envs {
+	for i, env := range startedGameEnvs {
 		games[i] = env.GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
+			Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc)
 
 		nations[i] = games[i].
-			Find([]string{"Properties", "Members"}, []string{"User", "Id"}, envs[i].GetUID()).GetValue("Nation").(string)
+			Find([]string{"Properties", "Members"}, []string{"User", "Id"}, startedGameEnvs[i].GetUID()).GetValue("Nation").(string)
 
 	}
 
