@@ -45,42 +45,48 @@ func testOrders(t *testing.T) {
 		Follow("phases", "Links").Success().
 		Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
 
-	phase.Follow("orders", "Links").Success().
-		AssertEmpty("Properties")
+	t.Run("TestOrdersIsolated", func(t *testing.T) {
+		phase.Follow("orders", "Links").Success().
+			AssertEmpty("Properties")
 
-	otherPlayerPhase := startedGameEnvs[1].GetRoute(game.IndexRoute).Success().
-		Follow("my-started-games", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc).
-		Follow("phases", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
+		otherPlayerPhase := startedGameEnvs[1].GetRoute(game.IndexRoute).Success().
+			Follow("my-started-games", "Links").Success().
+			Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc).
+			Follow("phases", "Links").Success().
+			Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
 
-	otherPlayerPhase.Follow("orders", "Links").Success().
-		AssertEmpty("Properties")
+		otherPlayerPhase.Follow("orders", "Links").Success().
+			AssertEmpty("Properties")
 
-	phase.Follow("create-order", "Links").Body(map[string]interface{}{
-		"Parts":    okParts,
-		"Province": okParts[0],
-	}).Success()
+		phase.Follow("create-order", "Links").Body(map[string]interface{}{
+			"Parts":    okParts,
+			"Province": okParts[0],
+		}).Success()
 
-	phase.Follow("orders", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nation)
+		phase.Follow("orders", "Links").Success().
+			Find([]string{"Properties"}, []string{"Properties", "Nation"}, nation)
 
-	otherPlayerPhase.Follow("orders", "Links").Success().
-		AssertEmpty("Properties")
+		otherPlayerPhase.Follow("orders", "Links").Success().
+			AssertEmpty("Properties")
+	})
 
-	phase.Follow("orders", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nation).
-		Follow("delete", "Links").Success()
+	t.Run("TestDeleteOrder", func(t *testing.T) {
 
-	phase.Follow("orders", "Links").Success().
-		AssertEmpty("Properties")
+		phase.Follow("orders", "Links").Success().
+			Find([]string{"Properties"}, []string{"Properties", "Nation"}, nation).
+			Follow("delete", "Links").Success()
 
-	phase.Follow("create-order", "Links").Body(map[string]interface{}{
-		"Parts":    badParts,
-		"Province": badParts[0],
-	}).Failure()
+		phase.Follow("orders", "Links").Success().
+			AssertEmpty("Properties")
+	})
 
-	phase.Follow("orders", "Links").Success().
-		AssertEmpty("Properties")
+	t.Run("TestBadOrderErrors", func(t *testing.T) {
+		phase.Follow("create-order", "Links").Body(map[string]interface{}{
+			"Parts":    badParts,
+			"Province": badParts[0],
+		}).Failure()
 
+		phase.Follow("orders", "Links").Success().
+			AssertEmpty("Properties")
+	})
 }

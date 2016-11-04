@@ -20,25 +20,29 @@ func TestJoinLeaveGame(t *testing.T) {
 	}).Success().
 		AssertStringEq(gameDesc, "Properties", "Desc")
 
-	env2.GetRoute(game.IndexRoute).Success().
-		Follow("open-games", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc).
-		Follow("join", "Links").Success()
+	t.Run("TestJoiningExistingGame", func(t *testing.T) {
+		env2.GetRoute(game.IndexRoute).Success().
+			Follow("open-games", "Links").Success().
+			Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc).
+			Follow("join", "Links").Success()
 
-	env2.GetRoute(game.MyStagingGamesRoute).Success().
-		Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
+		env2.GetRoute(game.MyStagingGamesRoute).Success().
+			Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
+	})
 
-	env1.GetRoute(game.MyStagingGamesRoute).Success().
-		Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc).
-		Follow("leave", "Links").Success()
+	t.Run("TestAllLeavingAndDestroyingGame", func(t *testing.T) {
+		env1.GetRoute(game.MyStagingGamesRoute).Success().
+			Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc).
+			Follow("leave", "Links").Success()
 
-	env2.GetRoute(game.MyStagingGamesRoute).Success().
-		Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc).
-		Follow("leave", "Links").Success()
+		env2.GetRoute(game.MyStagingGamesRoute).Success().
+			Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc).
+			Follow("leave", "Links").Success()
 
-	env1.GetRoute(game.MyStagingGamesRoute).Success().
-		AssertNotFind([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
+		env1.GetRoute(game.MyStagingGamesRoute).Success().
+			AssertNotFind([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
 
-	env2.GetRoute(game.MyStagingGamesRoute).Success().
-		AssertNotFind([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
+		env2.GetRoute(game.MyStagingGamesRoute).Success().
+			AssertNotFind([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
+	})
 }
