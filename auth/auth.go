@@ -21,7 +21,7 @@ import (
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
-	oauth2service "google.golang.org/api/oauth2/v1"
+	oauth2service "google.golang.org/api/oauth2/v2"
 )
 
 var TestMode = false
