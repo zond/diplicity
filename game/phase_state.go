@@ -32,18 +32,19 @@ type PhaseState struct {
 	WantsDIAS      bool `methods:"PUT"`
 }
 
-func PhaseStateID(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, nation dip.Nation) (*datastore.Key, error) {
-	if gameID == nil || phaseOrdinal < 0 || nation == "" {
-		return nil, fmt.Errorf("phase states must have games, ordinals > 0 and nations")
+func PhaseStateID(ctx context.Context, phaseID *datastore.Key, nation dip.Nation) (*datastore.Key, error) {
+	if phaseID == nil || nation == "" {
+		return nil, fmt.Errorf("phase states must have phases and nations")
 	}
-	if gameID.IntID() == 0 {
-		return nil, fmt.Errorf("gameIDs must have int IDs")
-	}
-	return datastore.NewKey(ctx, phaseStateKind, fmt.Sprintf("%d:%d:%s", gameID.IntID(), phaseOrdinal, nation), 0, nil), nil
+	return datastore.NewKey(ctx, phaseStateKind, string(nation), 0, phaseID), nil
 }
 
 func (p *PhaseState) ID(ctx context.Context) (*datastore.Key, error) {
-	return PhaseStateID(ctx, p.GameID, p.PhaseOrdinal, p.Nation)
+	phaseID, err := PhaseID(ctx, p.GameID, p.PhaseOrdinal)
+	if err != nil {
+		return nil, err
+	}
+	return PhaseStateID(ctx, phaseID, p.Nation)
 }
 
 func (p *PhaseState) Save(ctx context.Context) error {
@@ -95,29 +96,31 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 	game := &Game{}
 	phase := &Phase{}
 	member := &Member{}
-	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID}, []interface{}{game, phase, member}); err != nil {
-		return nil, err
-	}
-
-	if member.Nation != nation {
-		return nil, fmt.Errorf("can only update own phase state")
-	}
-
-	if phase.Resolved {
-		return nil, fmt.Errorf("can only update phase states of unresolved phases")
-	}
-
 	phaseState := &PhaseState{}
-	err = Copy(phaseState, r, "PUT")
-	if err != nil {
-		return nil, err
-	}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID}, []interface{}{game, phase, member}); err != nil {
+			return err
+		}
 
-	phaseState.GameID = gameID
-	phaseState.PhaseOrdinal = phaseOrdinal
-	phaseState.Nation = member.Nation
+		if member.Nation != nation {
+			return fmt.Errorf("can only update own phase state")
+		}
 
-	if err := phaseState.Save(ctx); err != nil {
+		if phase.Resolved {
+			return fmt.Errorf("can only update phase states of unresolved phases")
+		}
+
+		err = Copy(phaseState, r, "PUT")
+		if err != nil {
+			return err
+		}
+
+		phaseState.GameID = gameID
+		phaseState.PhaseOrdinal = phaseOrdinal
+		phaseState.Nation = member.Nation
+
+		return phaseState.Save(ctx)
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
 
@@ -155,7 +158,7 @@ func loadPhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		return nil, err
 	}
 
-	phaseStateID, err := PhaseStateID(ctx, gameID, phaseOrdinal, nation)
+	phaseStateID, err := PhaseStateID(ctx, phaseID, nation)
 	if err != nil {
 		return nil, err
 	}
