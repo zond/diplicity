@@ -52,18 +52,19 @@ type Order struct {
 	Parts        []string `methods:"POST,PUT" separator:" "`
 }
 
-func OrderID(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, srcProvince dip.Province) (*datastore.Key, error) {
-	if gameID == nil || phaseOrdinal < 0 || srcProvince == "" {
-		return nil, fmt.Errorf("phases must have games, ordinals > 0 and source provinces")
+func OrderID(ctx context.Context, phaseID *datastore.Key, srcProvince dip.Province) (*datastore.Key, error) {
+	if phaseID == nil || srcProvince == "" {
+		return nil, fmt.Errorf("orders must have phases and source provinces")
 	}
-	if gameID.IntID() == 0 {
-		return nil, fmt.Errorf("gameIDs must have int IDs")
-	}
-	return datastore.NewKey(ctx, orderKind, fmt.Sprintf("%d:%d:%s", gameID.IntID(), phaseOrdinal, srcProvince), 0, nil), nil
+	return datastore.NewKey(ctx, orderKind, string(srcProvince), 0, phaseID), nil
 }
 
 func (o *Order) ID(ctx context.Context) (*datastore.Key, error) {
-	return OrderID(ctx, o.GameID, o.PhaseOrdinal, o.Province)
+	phaseID, err := PhaseID(ctx, o.GameID, o.PhaseOrdinal)
+	if err != nil {
+		return nil, err
+	}
+	return OrderID(ctx, phaseID, o.Province)
 }
 
 func (o *Order) Save(ctx context.Context) error {
@@ -103,13 +104,13 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	srcProvince := r.Vars()["src_province"]
-	orderID, err := OrderID(ctx, gameID, phaseOrdinal, dip.Province(srcProvince))
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
 	if err != nil {
 		return nil, err
 	}
 
-	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	srcProvince := r.Vars()["src_province"]
+	orderID, err := OrderID(ctx, phaseID, dip.Province(srcProvince))
 	if err != nil {
 		return nil, err
 	}
@@ -123,18 +124,20 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 	phase := &Phase{}
 	member := &Member{}
 	order := &Order{}
-	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID, orderID}, []interface{}{game, phase, member, order}); err != nil {
-		return nil, err
-	}
-	if phase.Resolved {
-		return nil, fmt.Errorf("can only delete orders for unresolved phases")
-	}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID, orderID}, []interface{}{game, phase, member, order}); err != nil {
+			return err
+		}
+		if phase.Resolved {
+			return fmt.Errorf("can only delete orders for unresolved phases")
+		}
 
-	if order.Nation != member.Nation {
-		return nil, fmt.Errorf("can only update your own orders")
-	}
+		if order.Nation != member.Nation {
+			return fmt.Errorf("can only update your own orders")
+		}
 
-	if err := datastore.Delete(ctx, orderID); err != nil {
+		return datastore.Delete(ctx, orderID)
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
 
@@ -160,13 +163,13 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	srcProvince := r.Vars()["src_province"]
-	orderID, err := OrderID(ctx, gameID, phaseOrdinal, dip.Province(srcProvince))
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
 	if err != nil {
 		return nil, err
 	}
 
-	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	srcProvince := r.Vars()["src_province"]
+	orderID, err := OrderID(ctx, phaseID, dip.Province(srcProvince))
 	if err != nil {
 		return nil, err
 	}
@@ -180,50 +183,53 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 	phase := &Phase{}
 	member := &Member{}
 	order := &Order{}
-	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID, orderID}, []interface{}{game, phase, member, order}); err != nil {
-		return nil, err
-	}
-	if phase.Resolved {
-		return nil, fmt.Errorf("can only update orders for unresolved phases")
-	}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID, orderID}, []interface{}{game, phase, member, order}); err != nil {
+			return err
+		}
+		if phase.Resolved {
+			return fmt.Errorf("can only update orders for unresolved phases")
+		}
 
-	if order.Nation != member.Nation {
-		return nil, fmt.Errorf("can only update your own orders")
-	}
+		if order.Nation != member.Nation {
+			return fmt.Errorf("can only update your own orders")
+		}
 
-	err = Copy(order, r, "POST")
-	if err != nil {
-		return nil, err
-	}
+		err = Copy(order, r, "POST")
+		if err != nil {
+			return err
+		}
 
-	order.GameID = gameID
-	order.PhaseOrdinal = phaseOrdinal
+		order.GameID = gameID
+		order.PhaseOrdinal = phaseOrdinal
+		order.Nation = member.Nation
 
-	variant := variants.Variants[game.Variant]
+		variant := variants.Variants[game.Variant]
 
-	parsedOrder, err := variant.ParseOrder(order.Parts)
-	if err != nil {
-		return nil, err
-	}
+		parsedOrder, err := variant.ParseOrder(order.Parts)
+		if err != nil {
+			return err
+		}
 
-	s, err := phase.State(ctx, variant, false)
-	if err != nil {
-		return nil, err
-	}
+		s, err := phase.State(ctx, variant, false)
+		if err != nil {
+			return err
+		}
 
-	validNation, err := parsedOrder.Validate(s)
-	if err != nil {
-		return nil, err
-	}
-	if validNation != member.Nation {
-		return nil, fmt.Errorf("can't issue orders for others")
-	}
+		validNation, err := parsedOrder.Validate(s)
+		if err != nil {
+			return err
+		}
+		if validNation != member.Nation {
+			return fmt.Errorf("can't issue orders for others")
+		}
 
-	if order.Province != dip.Province(srcProvince) {
-		return nil, fmt.Errorf("unable to change source province for order")
-	}
+		if order.Province != dip.Province(srcProvince) {
+			return fmt.Errorf("unable to change source province for order")
+		}
 
-	if err := order.Save(ctx); err != nil {
+		return order.Save(ctx)
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
 
@@ -262,44 +268,46 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 	game := &Game{}
 	phase := &Phase{}
 	member := &Member{}
-	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID}, []interface{}{game, phase, member}); err != nil {
-		return nil, err
-	}
-	if phase.Resolved {
-		return nil, fmt.Errorf("can only create orders for unresolved phases")
-	}
-
 	order := &Order{}
-	err = Copy(order, r, "POST")
-	if err != nil {
-		return nil, err
-	}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID}, []interface{}{game, phase, member}); err != nil {
+			return err
+		}
+		if phase.Resolved {
+			return fmt.Errorf("can only create orders for unresolved phases")
+		}
 
-	order.GameID = gameID
-	order.PhaseOrdinal = phaseOrdinal
-	order.Nation = member.Nation
+		err = Copy(order, r, "POST")
+		if err != nil {
+			return err
+		}
 
-	variant := variants.Variants[game.Variant]
+		order.GameID = gameID
+		order.PhaseOrdinal = phaseOrdinal
+		order.Nation = member.Nation
 
-	parsedOrder, err := variant.ParseOrder(order.Parts)
-	if err != nil {
-		return nil, err
-	}
+		variant := variants.Variants[game.Variant]
 
-	s, err := phase.State(ctx, variant, false)
-	if err != nil {
-		return nil, err
-	}
+		parsedOrder, err := variant.ParseOrder(order.Parts)
+		if err != nil {
+			return err
+		}
 
-	validNation, err := parsedOrder.Validate(s)
-	if err != nil {
-		return nil, err
-	}
-	if validNation != member.Nation {
-		return nil, fmt.Errorf("can't issue orders for others")
-	}
+		s, err := phase.State(ctx, variant, false)
+		if err != nil {
+			return err
+		}
 
-	if err := order.Save(ctx); err != nil {
+		validNation, err := parsedOrder.Validate(s)
+		if err != nil {
+			return err
+		}
+		if validNation != member.Nation {
+			return fmt.Errorf("can't issue orders for others")
+		}
+
+		return order.Save(ctx)
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
 
