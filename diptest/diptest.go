@@ -92,14 +92,9 @@ var (
 
 func init() {
 	routes.Setup(router)
-	if os.Getenv("TRANSPORT") == "local" {
-		T = &realTransport{
-			host:   "localhost:8080",
-			scheme: "http",
-			client: &http.Client{},
-		}
-	} else {
-		auth.TestMode = true
+	if os.Getenv("TRANSPORT") == "inprocess" {
+		// This used to work, but then it stopped working.
+		// Don't know why :/
 		instance, err := aetest.NewInstance(&aetest.Options{
 			StronglyConsistentDatastore: true,
 		})
@@ -109,6 +104,13 @@ func init() {
 		T = &aetestTransport{
 			instance: instance,
 		}
+	} else {
+		T = &realTransport{
+			host:   "localhost:8080",
+			scheme: "http",
+			client: &http.Client{},
+		}
+		auth.TestMode = true
 	}
 }
 

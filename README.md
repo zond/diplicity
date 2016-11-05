@@ -33,4 +33,7 @@ When running the server locally, you can use the query parameter `fake-id` to se
 
 ## Running the tests
 
-To run the tests, run `go test -v` in the `diptest` directory.
+To run the tests
+
+1. Start the local server with a clean database and consistent datastore. Since the tests don't wait around for consistency to be achieved, this simplifies writing the tests. Run `dev_appserver.py --clear_datastore=yes --datastore_consistency_policy=consistent .` in the `app` directory.
+2. Run `go test -v` in the `diptest` directory.
