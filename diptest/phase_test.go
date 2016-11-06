@@ -26,9 +26,10 @@ func TestStartGame(t *testing.T) {
 
 	envs[0].GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").
-		Body(map[string]string{
-		"Variant": "Classical",
-		"Desc":    gameDesc,
+		Body(map[string]interface{}{
+		"Variant":            "Classical",
+		"Desc":               gameDesc,
+		"PhaseLengthMinutes": 60 * 24,
 	}).Success().
 		AssertStringEq(gameDesc, "Properties", "Desc")
 
