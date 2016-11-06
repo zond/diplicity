@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/taskqueue"
 
 	. "github.com/zond/goaeoas"
 )
@@ -72,8 +73,7 @@ type GameData struct {
 	Finished           bool           // Game has reached its end.
 	Desc               string         `methods:"POST"`
 	Variant            string         `methods:"POST"`
-	PhaseLengthMinutes int            `methods:"POST"`
-	NextDeadlineAt     time.Time
+	PhaseLengthMinutes time.Duration  `methods:"POST"`
 	NMembers           int
 	CreatedAt          time.Time
 }
@@ -191,16 +191,26 @@ func (g *Game) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	phase := NewPhase(s, g.ID, 1)
 
 	g.Started = true
 	g.Closed = true
-
 	for memberIndex, nationIndex := range rand.Perm(len(variants.Variants[g.Variant].Nations)) {
 		g.Members[memberIndex].Nation = variants.Variants[g.Variant].Nations[nationIndex]
 	}
 
-	return phase.Save(ctx)
+	phase := NewPhase(s, g.ID, 1)
+	phase.DeadlineAt = time.Now().Add(time.Minute * g.PhaseLengthMinutes)
+	if err := phase.Save(ctx); err != nil {
+		return err
+	}
+
+	task, err := timeoutResolvePhase.Task(g.ID, phase.PhaseOrdinal)
+	if err != nil {
+		return err
+	}
+	task.ETA = phase.DeadlineAt
+	_, err = taskqueue.Add(ctx, task, "game-timeoutResolvePhase")
+	return err
 }
 
 func loadGame(w ResponseWriter, r Request) (*Game, error) {

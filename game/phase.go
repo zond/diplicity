@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/state"
@@ -12,6 +13,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/delay"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
@@ -80,6 +83,7 @@ type Phase struct {
 	Bounces      []Bounce
 	Resolutions  []Resolution
 	Resolved     bool
+	DeadlineAt   time.Time
 }
 
 var PhaseResource = &Resource{
@@ -148,6 +152,11 @@ func (p *Phase) Item(r Request) *Item {
 	}
 	return phaseItem
 }
+
+var timeoutResolvePhase = delay.Func("game-timeoutResolvePhase", func(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
+	log.Infof(ctx, "Wanted to resolve %v/%v", gameID, phaseOrdinal)
+	return nil
+})
 
 func PhaseID(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) (*datastore.Key, error) {
 	if gameID == nil || phaseOrdinal < 0 {

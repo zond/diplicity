@@ -124,7 +124,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 			}
 		}
 		return game.Save(ctx)
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}
 
