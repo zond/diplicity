@@ -88,18 +88,17 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		return nil, err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
-	if err != nil {
-		return nil, err
-	}
-
 	game := &Game{}
 	phase := &Phase{}
-	member := &Member{}
 	phaseState := &PhaseState{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID}, []interface{}{game, phase, member}); err != nil {
+		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
 			return err
+		}
+		game.ID = gameID
+		member, isMember := game.GetMember(user.Id)
+		if !isMember {
+			return fmt.Errorf("can only update phase state of member games")
 		}
 
 		if member.Nation != nation {
@@ -153,11 +152,6 @@ func loadPhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		return nil, err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
-	if err != nil {
-		return nil, err
-	}
-
 	phaseStateID, err := PhaseStateID(ctx, phaseID, nation)
 	if err != nil {
 		return nil, err
@@ -165,26 +159,30 @@ func loadPhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 
 	game := &Game{}
 	phase := &Phase{}
-	member := &Member{}
 	phaseState := &PhaseState{}
-	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID, phaseStateID}, []interface{}{game, phase, member, phaseState})
+	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, phaseStateID}, []interface{}{game, phase, phaseState})
 	if err != nil {
 		if merr, ok := err.(appengine.MultiError); ok {
-			if merr[0] != nil || merr[1] != nil || merr[2] != nil {
+			if merr[0] != nil || merr[1] != nil {
 				return nil, merr
-			} else if merr[3] != datastore.ErrNoSuchEntity {
+			} else if merr[2] != datastore.ErrNoSuchEntity {
 				return nil, merr[3]
-			} else {
-				phaseState.Nation = nation
-				phaseState.GameID = gameID
-				phaseState.PhaseOrdinal = phaseOrdinal
 			}
+			phaseState.Nation = nation
+			phaseState.GameID = gameID
+			phaseState.PhaseOrdinal = phaseOrdinal
 		} else {
 			return nil, err
 		}
 	}
 
-	if !phase.Resolved && nation != member.Nation {
+	var memberNation dip.Nation
+
+	if member, isMember := game.GetMember(user.Id); isMember {
+		memberNation = member.Nation
+	}
+
+	if !phase.Resolved && nation != memberNation {
 		return nil, fmt.Errorf("can only load own phase states before phase resolution")
 	}
 

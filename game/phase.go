@@ -101,19 +101,6 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 		return nil, err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	member := &Member{}
-	if err := datastore.Get(ctx, memberID, member); err == nil {
-		r.Values()[memberNationFlag] = member.Nation
-	} else if err != datastore.ErrNoSuchEntity {
-		return nil, err
-	}
-	err = nil
-
 	phaseOrdinal, err := strconv.ParseInt(r.Vars()["phase_ordinal"], 10, 64)
 	if err != nil {
 		return nil, err
@@ -124,9 +111,16 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 		return nil, err
 	}
 
+	game := &Game{}
 	phase := &Phase{}
-	if err := datastore.Get(ctx, phaseID, phase); err != nil {
+	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
 		return nil, err
+	}
+	game.ID = gameID
+
+	member, isMember := game.GetMember(user.Id)
+	if isMember {
+		r.Values()[memberNationFlag] = member.Nation
 	}
 
 	return phase, nil
@@ -238,16 +232,16 @@ func listOptions(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
-	if err != nil {
-		return err
-	}
-
 	game := &Game{}
 	phase := &Phase{}
-	member := &Member{}
-	if err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID}, []interface{}{game, phase, member}); err != nil {
+	if err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
 		return err
+	}
+	game.ID = gameID
+
+	member, isMember := game.GetMember(user.Id)
+	if !isMember {
+		return fmt.Errorf("can only load options for member games")
 	}
 
 	state, err := phase.State(ctx, variants.Variants[game.Variant], false)
@@ -363,18 +357,14 @@ func listPhases(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
-	if err != nil {
+	game := &Game{}
+	if err := datastore.Get(ctx, gameID, game); err != nil {
 		return err
 	}
-
-	member := &Member{}
-	if err := datastore.Get(ctx, memberID, member); err == nil {
+	member, isMember := game.GetMember(user.Id)
+	if isMember {
 		r.Values()[memberNationFlag] = member.Nation
-	} else if err != datastore.ErrNoSuchEntity {
-		return err
 	}
-	err = nil
 
 	phases := Phases{}
 	_, err = datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)

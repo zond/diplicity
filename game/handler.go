@@ -50,9 +50,12 @@ type gamesHandler struct {
 
 type gamesReq struct {
 	ctx   context.Context
+	w     ResponseWriter
+	r     Request
 	user  *auth.User
 	iter  *datastore.Iterator
 	limit int
+	h     *gamesHandler
 }
 
 func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
@@ -69,9 +72,12 @@ func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
 	return nil, err
 }
 
-func (h *gamesHandler) prepare(w ResponseWriter, r Request) (*gamesReq, error) {
+func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*gamesReq, error) {
 	req := &gamesReq{
 		ctx: appengine.NewContext(r.Req()),
+		w:   w,
+		r:   r,
+		h:   h,
 	}
 
 	user, ok := r.Values()["user"].(*auth.User)
@@ -89,16 +95,12 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request) (*gamesReq, error) {
 	req.limit = int(limit)
 
 	q := h.query
-	if h.private {
-		q = q.Filter("User.Id=", user.Id).KeysOnly()
+	if private {
+		q = q.Filter("Members.User.Id=", user.Id)
 	}
 
 	if variantFilter := r.Req().URL.Query().Get("variant"); variantFilter != "" {
-		if h.private {
-			q = q.Filter("GameData.Variant=", variantFilter)
-		} else {
-			q = q.Filter("Variant=", variantFilter)
-		}
+		q = q.Filter("Variant=", variantFilter)
 	}
 
 	cursor := r.Req().URL.Query().Get("cursor")
@@ -115,19 +117,8 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request) (*gamesReq, error) {
 	return req, nil
 }
 
-func (h *gamesHandler) handle(w ResponseWriter, r Request) error {
-	if h.private {
-		return h.handlePrivate(w, r)
-	}
-	return h.handlePublic(w, r)
-}
-
-func (h *gamesHandler) handlePublic(w ResponseWriter, r Request) error {
-	req, err := h.prepare(w, r)
-	if err != nil {
-		return err
-	}
-
+func (req *gamesReq) handle() error {
+	var err error
 	games := Games{}
 	for err == nil && len(games) < req.limit {
 		game := Game{}
@@ -142,89 +133,52 @@ func (h *gamesHandler) handlePublic(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	w.SetContent(games.Item(r, req.user, curs, req.limit, h.name, h.desc, h.route))
+	req.w.SetContent(games.Item(req.r, req.user, curs, req.limit, req.h.name, req.h.desc, req.h.route))
 	return nil
 }
 
+func (h *gamesHandler) handlePublic(w ResponseWriter, r Request) error {
+	req, err := h.prepare(w, r, false)
+	if err != nil {
+		return err
+	}
+
+	return req.handle()
+}
+
 func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
-	req, err := h.prepare(w, r)
+	req, err := h.prepare(w, r, true)
 	if err != nil {
 		return err
 	}
 
-	memberIDs := []*datastore.Key{}
-	for err == nil && len(memberIDs) < req.limit {
-		var memberID *datastore.Key
-		memberID, err = req.iter.Next(nil)
-		if err == nil {
-			memberIDs = append(memberIDs, memberID)
-		}
-	}
-
-	curs, err := req.cursor(err)
-	if err != nil {
-		return err
-	}
-
-	gameIDs := make([]*datastore.Key, len(memberIDs))
-	for index, key := range memberIDs {
-		gameIDs[index] = key.Parent()
-	}
-
-	games := make(Games, len(gameIDs))
-	if err := datastore.GetMulti(req.ctx, gameIDs, games); err != nil {
-		return err
-	}
-	for index, id := range gameIDs {
-		games[index].ID = id
-	}
-
-	w.SetContent(games.Item(r, req.user, curs, req.limit, h.name, h.desc, h.route))
-	return nil
+	return req.handle()
 }
 
 var (
 	finishedGamesHandler = gamesHandler{
-		query:   datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-CreatedAt"),
-		name:    "finished-games",
-		desc:    []string{"Finished games", "Finished games, sorted with newest first."},
-		route:   FinishedGamesRoute,
-		private: false,
+		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-CreatedAt"),
+		name:  "finished-games",
+		desc:  []string{"Finished games", "Finished games, sorted with newest first."},
+		route: FinishedGamesRoute,
 	}
 	startedGamesHandler = gamesHandler{
-		query:   datastore.NewQuery(gameKind).Filter("Started=", true).Order("CreatedAt"),
-		name:    "started-games",
-		desc:    []string{"Started games", "Started games, sorted with oldest first."},
-		route:   StartedGamesRoute,
-		private: false,
+		query: datastore.NewQuery(gameKind).Filter("Started=", true).Order("CreatedAt"),
+		name:  "started-games",
+		desc:  []string{"Started games", "Started games, sorted with oldest first."},
+		route: StartedGamesRoute,
 	}
 	openGamesHandler = gamesHandler{
-		query:   datastore.NewQuery(gameKind).Filter("Closed=", false).Order("-NMembers").Order("CreatedAt"),
-		name:    "open-games",
-		desc:    []string{"Open games", "Open games, sorted with fullest and oldest first."},
-		route:   OpenGamesRoute,
-		private: false,
+		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("-NMembers").Order("CreatedAt"),
+		name:  "open-games",
+		desc:  []string{"Open games", "Open games, sorted with fullest and oldest first."},
+		route: OpenGamesRoute,
 	}
-	myFinishedGamesHandler = gamesHandler{
-		query:   datastore.NewQuery(memberKind).Filter("GameData.Finished=", true).Order("-GameData.CreatedAt"),
-		name:    "my-finished-games",
-		desc:    []string{"My finished games", "Finished games I'm a member of, sorted with newest first."},
-		route:   MyFinishedGamesRoute,
-		private: true,
-	}
-	myStartedGamesHandler = gamesHandler{
-		query:   datastore.NewQuery(memberKind).Filter("GameData.Started=", true).Order("GameData.NextDeadlineAt"),
-		name:    "my-started-games",
-		desc:    []string{"My started games", "Started games I'm a member of, sorted with closest deadline first."},
-		route:   MyStartedGamesRoute,
-		private: true,
-	}
-	myStagingGamesHandler = gamesHandler{
-		query:   datastore.NewQuery(memberKind).Filter("GameData.Started=", false).Order("-GameData.NMembers").Order("GameData.CreatedAt"),
-		name:    "my-staging-games",
-		desc:    []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
-		route:   MyStagingGamesRoute,
-		private: true,
+	stagingGamesHandler = gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("-NMembers").Order("CreatedAt"),
+		name:  "my-staging-games",
+		desc:  []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
+		route: MyStagingGamesRoute,
 	}
 )
 
@@ -241,10 +195,10 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phases", []string{"GET"}, ListPhasesRoute, listPhases)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Orders", []string{"GET"}, ListOrdersRoute, listOrders)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Options", []string{"GET"}, ListOptionsRoute, listOptions)
-	Handle(r, "/Games/Open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handle)
-	Handle(r, "/Games/Started", []string{"GET"}, StartedGamesRoute, startedGamesHandler.handle)
-	Handle(r, "/Games/Finished", []string{"GET"}, FinishedGamesRoute, finishedGamesHandler.handle)
-	Handle(r, "/Games/My/Staging", []string{"GET"}, MyStagingGamesRoute, myStagingGamesHandler.handle)
-	Handle(r, "/Games/My/Started", []string{"GET"}, MyStartedGamesRoute, myStartedGamesHandler.handle)
-	Handle(r, "/Games/My/Finished", []string{"GET"}, MyFinishedGamesRoute, myFinishedGamesHandler.handle)
+	Handle(r, "/Games/Open", []string{"GET"}, OpenGamesRoute, openGamesHandler.handlePublic)
+	Handle(r, "/Games/Started", []string{"GET"}, StartedGamesRoute, startedGamesHandler.handlePublic)
+	Handle(r, "/Games/Finished", []string{"GET"}, FinishedGamesRoute, finishedGamesHandler.handlePublic)
+	Handle(r, "/Games/My/Staging", []string{"GET"}, MyStagingGamesRoute, stagingGamesHandler.handlePrivate)
+	Handle(r, "/Games/My/Started", []string{"GET"}, MyStartedGamesRoute, startedGamesHandler.handlePrivate)
+	Handle(r, "/Games/My/Finished", []string{"GET"}, MyFinishedGamesRoute, finishedGamesHandler.handlePrivate)
 }

@@ -190,16 +190,16 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 		return nil, err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
+	game := &Game{}
+	err = datastore.Get(ctx, gameID, game)
 	if err != nil {
 		return nil, err
 	}
+	game.ID = gameID
 
-	game := &Game{}
-	member := &Member{}
-	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, memberID}, []interface{}{game, member})
-	if err != nil {
-		return nil, err
+	member, found := game.GetMember(user.Id)
+	if !found {
+		return nil, fmt.Errorf("can only create messages in member games")
 	}
 
 	message := &Message{}
@@ -300,24 +300,16 @@ func listMessages(w ResponseWriter, r Request) error {
 		since = &sinceTime
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
+	game := &Game{}
+	err = datastore.Get(ctx, gameID, game)
 	if err != nil {
 		return err
 	}
+	game.ID = gameID
 
 	var nation dip.Nation
-
-	game := &Game{}
-	member := &Member{}
-	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, memberID}, []interface{}{game, member})
-	if err == nil {
+	if member, found := game.GetMember(user.Id); found {
 		nation = member.Nation
-	} else if merr, ok := err.(appengine.MultiError); ok {
-		if merr[0] != nil {
-			return merr[0]
-		}
-	} else {
-		return err
 	}
 
 	if !channelMembers.Includes(nation) && !isPublic(game.Variant, channelMembers) {
@@ -357,11 +349,6 @@ func listChannels(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
-	if err != nil {
-		return err
-	}
-
 	var since *time.Time
 	if sinceParam := r.Req().URL.Query().Get("since"); sinceParam != "" {
 		sinceTime, err := time.Parse(time.RFC3339, sinceParam)
@@ -371,19 +358,17 @@ func listChannels(w ResponseWriter, r Request) error {
 		since = &sinceTime
 	}
 
+	game := &Game{}
+	err = datastore.Get(ctx, gameID, game)
+	if err != nil {
+		return err
+	}
+	game.ID = gameID
+
 	var nation dip.Nation
 
-	game := &Game{}
-	member := &Member{}
-	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, memberID}, []interface{}{game, member})
-	if err == nil {
+	if member, found := game.GetMember(user.Id); found {
 		nation = member.Nation
-	} else if merr, ok := err.(appengine.MultiError); ok {
-		if merr[0] != nil {
-			return merr[0]
-		}
-	} else {
-		return err
 	}
 
 	channels := Channels{}

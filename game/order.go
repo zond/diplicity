@@ -115,18 +115,17 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
-	if err != nil {
-		return nil, err
-	}
-
 	game := &Game{}
 	phase := &Phase{}
-	member := &Member{}
 	order := &Order{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID, orderID}, []interface{}{game, phase, member, order}); err != nil {
+		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, orderID}, []interface{}{game, phase, order}); err != nil {
 			return err
+		}
+		game.ID = gameID
+		member, isMember := game.GetMember(user.Id)
+		if !isMember {
+			return fmt.Errorf("can only delete orders in member games")
 		}
 		if phase.Resolved {
 			return fmt.Errorf("can only delete orders for unresolved phases")
@@ -174,21 +173,20 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
-	if err != nil {
-		return nil, err
-	}
-
 	game := &Game{}
 	phase := &Phase{}
-	member := &Member{}
 	order := &Order{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID, orderID}, []interface{}{game, phase, member, order}); err != nil {
+		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, orderID}, []interface{}{game, phase, order}); err != nil {
 			return err
 		}
+		game.ID = gameID
 		if phase.Resolved {
 			return fmt.Errorf("can only update orders for unresolved phases")
+		}
+		member, isMember := game.GetMember(user.Id)
+		if !isMember {
+			return fmt.Errorf("can only update orders in member games")
 		}
 
 		if order.Nation != member.Nation {
@@ -260,21 +258,20 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
-	if err != nil {
-		return nil, err
-	}
-
 	game := &Game{}
 	phase := &Phase{}
-	member := &Member{}
 	order := &Order{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, memberID}, []interface{}{game, phase, member}); err != nil {
+		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
 			return err
 		}
+		game.ID = gameID
 		if phase.Resolved {
 			return fmt.Errorf("can only create orders for unresolved phases")
+		}
+		member, isMember := game.GetMember(user.Id)
+		if !isMember {
+			return fmt.Errorf("can only create orders for member games")
 		}
 
 		err = Copy(order, r, "POST")
@@ -338,24 +335,18 @@ func listOrders(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	memberID, err := MemberID(ctx, gameID, user.Id)
+	game := &Game{}
+	phase := &Phase{}
+	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase})
 	if err != nil {
 		return err
 	}
+	game.ID = gameID
 
 	var nation dip.Nation
 
-	phase := &Phase{}
-	member := &Member{}
-	err = datastore.GetMulti(ctx, []*datastore.Key{phaseID, memberID}, []interface{}{phase, member})
-	if err == nil {
+	if member, found := game.GetMember(user.Id); found {
 		nation = member.Nation
-	} else if merr, ok := err.(appengine.MultiError); ok {
-		if merr[0] != nil {
-			return merr[0]
-		}
-	} else {
-		return err
 	}
 
 	found := Orders{}

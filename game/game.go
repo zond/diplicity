@@ -30,7 +30,7 @@ type Games []Game
 func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit int, name string, desc []string, route string) *Item {
 	gameItems := make(List, len(g))
 	for i := range g {
-		if !g[i].HasMember(user.Id) {
+		if _, isMember := g[i].GetMember(user.Id); !isMember {
 			g[i].Redact()
 		}
 		gameItems[i] = g[i].Item(r)
@@ -83,13 +83,13 @@ type Game struct {
 	Members  []Member
 }
 
-func (g *Game) HasMember(userID string) bool {
+func (g *Game) GetMember(userID string) (*Member, bool) {
 	for _, member := range g.Members {
 		if member.User.Id == userID {
-			return true
+			return &member, true
 		}
 	}
-	return false
+	return nil, false
 }
 
 func (g GameData) Leavable() bool {
@@ -104,7 +104,7 @@ func (g *Game) Item(r Request) *Item {
 	gameItem := NewItem(g).SetName(g.Desc).AddLink(r.NewLink(GameResource.Link("self", Load, []string{"id", g.ID.Encode()})))
 	user, ok := r.Values()["user"].(*auth.User)
 	if ok {
-		if g.HasMember(user.Id) {
+		if _, isMember := g.GetMember(user.Id); isMember {
 			if g.Leavable() {
 				gameItem.AddLink(r.NewLink(MemberResource.Link("leave", Delete, []string{"game_id", g.ID.Encode(), "user_id", user.Id})))
 			}
@@ -140,18 +140,6 @@ func (g *Game) Save(ctx context.Context) error {
 	} else {
 		_, err = datastore.Put(ctx, g.ID, g)
 	}
-	if err != nil {
-		return err
-	}
-	memberIDs := make([]*datastore.Key, len(g.Members))
-	for i := range g.Members {
-		g.Members[i].GameData = g.GameData
-		memberIDs[i], err = g.Members[i].ID(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	_, err = datastore.PutMulti(ctx, memberIDs, g.Members)
 	return err
 }
 
@@ -180,8 +168,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 			return err
 		}
 		member := Member{
-			User:     *user,
-			GameData: game.GameData,
+			User: *user,
 		}
 		game.Members = []Member{member}
 		return game.Save(ctx)
@@ -225,20 +212,20 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 		return nil, nil
 	}
 
-	id, err := datastore.DecodeKey(r.Vars()["id"])
+	gameID, err := datastore.DecodeKey(r.Vars()["id"])
 	if err != nil {
 		return nil, err
 	}
 
 	game := &Game{}
-	if err := datastore.Get(ctx, id, game); err != nil {
+	if err := datastore.Get(ctx, gameID, game); err != nil {
 		return nil, err
 	}
+	game.ID = gameID
 
-	if !game.HasMember(user.Id) {
+	if _, isMember := game.GetMember(user.Id); !isMember {
 		game.Redact()
 	}
 
-	game.ID = id
 	return game, nil
 }

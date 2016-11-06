@@ -34,9 +34,54 @@ indexes:
 - kind: Game
   properties:
   - name: Finished
+  - name: Members.User.Id
+  - name: CreatedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Members.User.Id
   - name: Variant
   - name: CreatedAt
     direction: desc
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Variant
+  - name: CreatedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: Members.User.Id
+  - name: Started
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Members.User.Id
+  - name: Started
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Members.User.Id
+  - name: Started
+  - name: Variant
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Members.User.Id
+  - name: Started
+  - name: Variant
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
 
 - kind: Game
   properties:
@@ -48,51 +93,6 @@ indexes:
   - name: Started
   - name: Variant
   - name: CreatedAt
-
-- kind: Member
-  properties:
-  - name: GameData.Finished
-  - name: GameData.Variant
-  - name: User.Id
-  - name: GameData.CreatedAt
-    direction: desc
-
-- kind: Member
-  properties:
-  - name: GameData.Finished
-  - name: User.Id
-  - name: GameData.CreatedAt
-    direction: desc
-
-- kind: Member
-  properties:
-  - name: GameData.Started
-  - name: GameData.Variant
-  - name: User.Id
-  - name: GameData.NMembers
-    direction: desc
-  - name: GameData.CreatedAt
-
-- kind: Member
-  properties:
-  - name: GameData.Started
-  - name: GameData.Variant
-  - name: User.Id
-  - name: GameData.NextDeadlineAt
-
-- kind: Member
-  properties:
-  - name: GameData.Started
-  - name: User.Id
-  - name: GameData.NMembers
-    direction: desc
-  - name: GameData.CreatedAt
-
-- kind: Member
-  properties:
-  - name: GameData.Started
-  - name: User.Id
-  - name: GameData.NextDeadlineAt
 
 - kind: Message
   ancestor: yes
