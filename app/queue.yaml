@@ -1,3 +1,3 @@
 queue:
-- name: game-Phase-timeoutResolve
+- name: game-timeoutResolvePhase
   rate: 500/s
