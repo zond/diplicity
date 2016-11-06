@@ -38,6 +38,7 @@ const (
 	ListOptionsRoute     = "ListOptions"
 	ListChannelsRoute    = "ListChannels"
 	ListMessagesRoute    = "ListMessages"
+	ListVariantsRoute    = "ListVariants"
 )
 
 type gamesHandler struct {
@@ -236,6 +237,7 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, MessageResource)
 	HandleResource(r, PhaseStateResource)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
+	Handle(r, "/Variants", []string{"GET"}, ListVariantsRoute, listVariants)
 	Handle(r, "/Game/{game_id}/Channel/{channel_members}/Messages", []string{"GET"}, ListMessagesRoute, listMessages)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
 	Handle(r, "/Game/{game_id}/Phases", []string{"GET"}, ListPhasesRoute, listPhases)
