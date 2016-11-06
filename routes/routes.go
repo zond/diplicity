@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/diplicity/game"
+	"github.com/zond/diplicity/variants"
 
 	. "github.com/zond/goaeoas"
 )
@@ -16,4 +17,5 @@ func Setup(r *mux.Router) {
 	})
 	auth.SetupRouter(r)
 	game.SetupRouter(r)
+	variants.SetupRouter(r)
 }
