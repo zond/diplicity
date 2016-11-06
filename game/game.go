@@ -66,15 +66,16 @@ func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit 
 }
 
 type GameData struct {
-	ID             *datastore.Key `datastore:"-"`
-	Started        bool           // Game has started.
-	Closed         bool           // Game is no longer joinable..
-	Finished       bool           // Game has reached its end.
-	Desc           string         `methods:"POST"`
-	Variant        string         `methods:"POST"`
-	NextDeadlineAt time.Time
-	NMembers       int
-	CreatedAt      time.Time
+	ID                 *datastore.Key `datastore:"-"`
+	Started            bool           // Game has started.
+	Closed             bool           // Game is no longer joinable..
+	Finished           bool           // Game has reached its end.
+	Desc               string         `methods:"POST"`
+	Variant            string         `methods:"POST"`
+	PhaseLengthMinutes int            `methods:"POST"`
+	NextDeadlineAt     time.Time
+	NMembers           int
+	CreatedAt          time.Time
 }
 
 type Game struct {
