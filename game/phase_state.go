@@ -12,6 +12,7 @@ import (
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
+	"github.com/zond/godip/variants"
 )
 
 const (
@@ -118,6 +119,34 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		phaseState.GameID = gameID
 		phaseState.PhaseOrdinal = phaseOrdinal
 		phaseState.Nation = member.Nation
+
+		if phaseState.ReadyToResolve {
+			allStates := []PhaseState{}
+			if _, err := datastore.NewQuery(phaseStateKind).Ancestor(phaseID).GetAll(ctx, &allStates); err != nil {
+				return err
+			}
+			readyNations := map[dip.Nation]struct{}{
+				// Override the result from the query, since it will read the state from before the transaction
+				// started.
+				phaseState.Nation: struct{}{},
+			}
+			for _, otherState := range allStates {
+				if otherState.ReadyToResolve {
+					readyNations[otherState.Nation] = struct{}{}
+				}
+			}
+			if len(readyNations) == len(variants.Variants[game.Variant].Nations) {
+				if err := (&PhaseResolver{
+					Context:       ctx,
+					Game:          game,
+					Phase:         phase,
+					PhaseState:    phaseState,
+					TaskTriggered: false,
+				}).Act(); err != nil {
+					return err
+				}
+			}
+		}
 
 		return phaseState.Save(ctx)
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
