@@ -33,7 +33,7 @@ func init() {
 		phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
 		if err != nil {
 			log.Errorf(ctx, "PhaseID(..., %v, %v): %v, %v; retrying later (fix the PhaseID func in the mean time!)", gameID, phaseOrdinal, phaseID, err)
-			return nil
+			return err
 		}
 
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
