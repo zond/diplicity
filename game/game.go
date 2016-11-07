@@ -12,7 +12,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/taskqueue"
 
 	. "github.com/zond/goaeoas"
 )
@@ -204,13 +203,7 @@ func (g *Game) Start(ctx context.Context) error {
 		return err
 	}
 
-	task, err := timeoutResolvePhase.Task(g.ID, phase.PhaseOrdinal)
-	if err != nil {
-		return err
-	}
-	task.ETA = phase.DeadlineAt
-	_, err = taskqueue.Add(ctx, task, "game-timeoutResolvePhase")
-	return err
+	return phase.ScheduleResolution(ctx)
 }
 
 func loadGame(w ResponseWriter, r Request) (*Game, error) {

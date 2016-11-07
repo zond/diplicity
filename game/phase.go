@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/state"
 	"github.com/zond/godip/variants"
@@ -15,10 +16,111 @@ import (
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/delay"
 	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/taskqueue"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
 )
+
+var (
+	timeoutResolvePhase *delay.Function
+)
+
+func init() {
+	timeoutResolvePhase = delay.Func("game-timeoutResolvePhase", func(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
+		log.Infof(ctx, "timeoutResolvePhase(..., %v, %v)", gameID, phaseOrdinal)
+
+		phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+		if err != nil {
+			log.Errorf(ctx, "PhaseID(..., %v, %v): %v, %v; retrying later (fix the PhaseID func in the mean time!)", gameID, phaseOrdinal, phaseID, err)
+			return nil
+		}
+
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			game := &Game{}
+			phase := &Phase{}
+			keys := []*datastore.Key{gameID, phaseID}
+			values := []interface{}{game, phase}
+			if err := datastore.GetMulti(ctx, keys, values); err != nil {
+				log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; retrying later (hoping datastore will get fixed)", keys, values, err)
+				return err
+			}
+
+			if phase.DeadlineAt.After(time.Now()) {
+				log.Infof(ctx, "Resolution postponed to %v by %v; rescheduling task", phase.DeadlineAt, spew.Sdump(phase))
+				return phase.ScheduleResolution(ctx)
+			}
+			if phase.Resolved {
+				log.Infof(ctx, "Already resolved; %v; skipping this resolution", spew.Sdump(phase))
+				return nil
+			}
+
+			phaseStates := []PhaseState{}
+			if _, err := datastore.NewQuery(phaseStateKind).Ancestor(phaseID).GetAll(ctx, &phaseStates); err != nil {
+				log.Errorf(ctx, "Unable to load phase states for all members of %v: %v; retrying later (hoping datastore will get fixed)", spew.Sdump(phase), err)
+				return err
+			}
+			log.Infof(ctx, "PhaseStates at resolve time: %v", spew.Sdump(phaseStates))
+
+			orderMap, err := phase.Orders(ctx)
+			if err != nil {
+				log.Errorf(ctx, "Unable to load orders for %v: %v; retrying later (hoping phase.Orders or datastore will get fixed)", spew.Sdump(phase), err)
+				return err
+			}
+			log.Infof(ctx, "Orders at resolve time: %v", spew.Sdump(orderMap))
+
+			s, err := phase.State(ctx, variants.Variants[game.Variant], nil)
+			if err != nil {
+				log.Errorf(ctx, "Unable to create godip State for %v: %v; retrying later (fix godip in the mean time!)", spew.Sdump(phase), err)
+				return err
+			}
+			if err := s.Next(); err != nil {
+				log.Errorf(ctx, "Unable to roll State forward for %v: %v; retrying later (fix godip in the mean time!)", spew.Sdump(phase), err)
+				return err
+			}
+			newPhase := NewPhase(s, gameID, phaseOrdinal+1)
+			newPhase.DeadlineAt = time.Now().Add(time.Minute * game.PhaseLengthMinutes)
+			if err := phase.Save(ctx); err != nil {
+				log.Errorf(ctx, "Unable to save new Phase %v: %v; retrying later (hoping datastore will get fixed)", spew.Sdump(newPhase), err)
+				return err
+			}
+
+			for _, nat := range variants.Variants[game.Variant].Nations {
+				_, hadOrders := orderMap[nat]
+				wasReady := false
+				for _, phaseState := range phaseStates {
+					if phaseState.Nation == nat && phaseState.ReadyToResolve {
+						wasReady = true
+						break
+					}
+				}
+				log.Infof(ctx, "%v NMR state: hadOrders = %v, wasReady = %v", hadOrders, wasReady)
+				if !hadOrders && !wasReady {
+					newPhaseState := &PhaseState{
+						GameID:         gameID,
+						PhaseOrdinal:   newPhase.PhaseOrdinal,
+						Nation:         nat,
+						ReadyToResolve: true,
+						WantsDIAS:      true,
+						Note:           fmt.Sprintf("Auto generated due to NMR in %v/%v; hadOrders = %v, wasReady = %v", gameID, phaseOrdinal, hadOrders, wasReady),
+					}
+					if err := newPhaseState.Save(ctx); err != nil {
+						log.Errorf(ctx, "Unable to save new PhaseState %v: %v; retrying later (hoping datastore will get fixed)", spew.Sdump(newPhaseState), err)
+						return err
+					}
+					log.Infof(ctx, "Saved %v to avoid delays due to tardy players", spew.Sdump(newPhaseState))
+				}
+			}
+
+			return phase.ScheduleResolution(ctx)
+		}, &datastore.TransactionOptions{XG: true}); err != nil {
+			log.Errorf(ctx, "Unable to complete resolve tx: %v; retrying later", err)
+			return err
+		}
+		log.Infof(ctx, "timeoutResolvePhase(..., %v, %v) *** SUCCESSFUL ***", gameID, phaseOrdinal)
+		return nil
+	})
+}
 
 const (
 	phaseKind        = "Phase"
@@ -153,10 +255,15 @@ func (p *Phase) Item(r Request) *Item {
 	return phaseItem
 }
 
-var timeoutResolvePhase = delay.Func("game-timeoutResolvePhase", func(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
-	log.Infof(ctx, "Wanted to resolve %v/%v", gameID, phaseOrdinal)
-	return nil
-})
+func (p *Phase) ScheduleResolution(ctx context.Context) error {
+	task, err := timeoutResolvePhase.Task(p.GameID, p.PhaseOrdinal)
+	if err != nil {
+		return err
+	}
+	task.ETA = p.DeadlineAt
+	_, err = taskqueue.Add(ctx, task, "game-timeoutResolvePhase")
+	return err
+}
 
 func PhaseID(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) (*datastore.Key, error) {
 	if gameID == nil || phaseOrdinal < 0 {
@@ -253,7 +360,7 @@ func listOptions(w ResponseWriter, r Request) error {
 		return fmt.Errorf("can only load options for member games")
 	}
 
-	state, err := phase.State(ctx, variants.Variants[game.Variant], false)
+	state, err := phase.State(ctx, variants.Variants[game.Variant], nil)
 	if err != nil {
 		return err
 	}
@@ -292,29 +399,31 @@ func listOptions(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func (p *Phase) State(ctx context.Context, variant variants.Variant, withOrders bool) (*state.State, error) {
-	phaseID, err := p.ID(ctx)
+func (p *Phase) Orders(ctx context.Context) (map[dip.Nation]map[dip.Province][]string, error) {
+	phaseID, err := PhaseID(ctx, p.GameID, p.PhaseOrdinal)
 	if err != nil {
 		return nil, err
 	}
 
-	orderMap := map[dip.Nation]map[dip.Province][]string{}
-	if withOrders {
-		orders := []Order{}
-		if _, err := datastore.NewQuery(orderKind).Ancestor(phaseID).GetAll(ctx, &orders); err != nil {
-			return nil, err
-		}
-
-		for _, order := range orders {
-			nationMap, found := orderMap[order.Nation]
-			if !found {
-				nationMap = map[dip.Province][]string{}
-				orderMap[order.Nation] = nationMap
-			}
-			nationMap[dip.Province(order.Parts[0])] = order.Parts
-		}
+	orders := []Order{}
+	if _, err := datastore.NewQuery(orderKind).Ancestor(phaseID).GetAll(ctx, &orders); err != nil {
+		return nil, err
 	}
 
+	orderMap := map[dip.Nation]map[dip.Province][]string{}
+	for _, order := range orders {
+		nationMap, found := orderMap[order.Nation]
+		if !found {
+			nationMap = map[dip.Province][]string{}
+			orderMap[order.Nation] = nationMap
+		}
+		nationMap[dip.Province(order.Parts[0])] = order.Parts
+	}
+
+	return orderMap, nil
+}
+
+func (p *Phase) State(ctx context.Context, variant variants.Variant, orderMap map[dip.Nation]map[dip.Province][]string) (*state.State, error) {
 	parsedOrders, err := variant.ParseOrders(orderMap)
 	if err != nil {
 		return nil, err

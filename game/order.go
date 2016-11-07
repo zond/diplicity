@@ -209,7 +209,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 			return err
 		}
 
-		s, err := phase.State(ctx, variant, false)
+		s, err := phase.State(ctx, variant, nil)
 		if err != nil {
 			return err
 		}
@@ -290,7 +290,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 			return err
 		}
 
-		s, err := phase.State(ctx, variant, false)
+		s, err := phase.State(ctx, variant, nil)
 		if err != nil {
 			return err
 		}
