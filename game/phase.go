@@ -46,11 +46,18 @@ func init() {
 				return err
 			}
 
+			phaseStates := PhaseStates{}
+
+			if _, err := datastore.NewQuery(phaseStateKind).Ancestor(phaseID).GetAll(ctx, &phaseStates); err != nil {
+				log.Errorf(ctx, "Unable to query phase states for %v/%v: %v; hope datastore will get fixed", gameID, phaseID, err)
+				return err
+			}
+
 			return (&PhaseResolver{
 				Context:       ctx,
 				Game:          game,
 				Phase:         phase,
-				PhaseState:    nil,
+				PhaseStates:   phaseStates,
 				TaskTriggered: true,
 			}).Act()
 		}, &datastore.TransactionOptions{XG: true}); err != nil {
@@ -68,17 +75,12 @@ type PhaseResolver struct {
 	Context       context.Context
 	Game          *Game
 	Phase         *Phase
-	PhaseState    *PhaseState
+	PhaseStates   PhaseStates
 	TaskTriggered bool
 }
 
 func (p *PhaseResolver) Act() error {
 	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act()", p.Phase.GameID, p.Phase.PhaseOrdinal)
-
-	phaseID, err := PhaseID(p.Context, p.Phase.GameID, p.Phase.PhaseOrdinal)
-	if err != nil {
-		return err
-	}
 
 	if p.TaskTriggered && p.Phase.DeadlineAt.After(time.Now()) {
 		log.Infof(p.Context, "Resolution postponed to %v by %v; rescheduling task", p.Phase.DeadlineAt, spew.Sdump(p.Phase))
@@ -90,28 +92,7 @@ func (p *PhaseResolver) Act() error {
 		return nil
 	}
 
-	phaseStates := []PhaseState{}
-	if _, err := datastore.NewQuery(phaseStateKind).Ancestor(phaseID).GetAll(p.Context, &phaseStates); err != nil {
-		log.Errorf(p.Context, "Unable to load phase states for all members of %v: %v; hope datastore will get fixed", spew.Sdump(p.Phase), err)
-		return err
-	}
-	// This is necessary because datastore transactions read the state from before they started,
-	// which would make the query for phase states after the last player flags 'ready' read the
-	// last player as 'not ready'. Let's just override that here.
-	if p.PhaseState != nil {
-		foundPhaseStateOverride := false
-		for i := range phaseStates {
-			if phaseStates[i].Nation == p.PhaseState.Nation {
-				phaseStates[i] = *p.PhaseState
-				foundPhaseStateOverride = true
-				break
-			}
-		}
-		if !foundPhaseStateOverride {
-			phaseStates = append(phaseStates, *p.PhaseState)
-		}
-	}
-	log.Infof(p.Context, "PhaseStates at resolve time: %v", spew.Sdump(phaseStates))
+	log.Infof(p.Context, "PhaseStates at resolve time: %v", spew.Sdump(p.PhaseStates))
 
 	orderMap, err := p.Phase.Orders(p.Context)
 	if err != nil {
@@ -137,40 +118,57 @@ func (p *PhaseResolver) Act() error {
 		return err
 	}
 
+	allReady := true
+	newPhaseStates := PhaseStates{}
 	for _, nat := range variants.Variants[p.Game.Variant].Nations {
 		_, hadOrders := orderMap[nat]
 		wasReady := false
-		for _, phaseState := range phaseStates {
-			if phaseState.Nation == nat && phaseState.ReadyToResolve {
-				wasReady = true
+		wantedDIAS := false
+		for _, phaseState := range p.PhaseStates {
+			if phaseState.Nation == nat {
+				wasReady = phaseState.ReadyToResolve
+				wantedDIAS = phaseState.WantsDIAS
 				break
 			}
 		}
-		log.Infof(p.Context, "%v NMR state: hadOrders = %v, wasReady = %v", nat, hadOrders, wasReady)
-		if !hadOrders && !wasReady {
+		newOptions := len(s.Phase().Options(s, nat))
+
+		stateString := fmt.Sprintf("hadOrders = %v, wasReady = %v, wantedDIAS = %v, newOptions = %v", hadOrders, wasReady, wantedDIAS, newOptions)
+		log.Infof(p.Context, "%v at phase change: %s", nat, stateString)
+
+		probation := !hadOrders && !wasReady
+		autoReady := newOptions == 0 || probation
+		autoDIAS := wantedDIAS || probation
+		allReady = allReady && autoReady
+
+		if autoReady || autoDIAS {
 			newPhaseState := &PhaseState{
 				GameID:         p.Phase.GameID,
 				PhaseOrdinal:   newPhase.PhaseOrdinal,
 				Nation:         nat,
-				ReadyToResolve: true,
-				WantsDIAS:      true,
-				Note:           fmt.Sprintf("Auto generated due to NMR in %v/%v; hadOrders = %v, wasReady = %v", p.Phase.GameID, p.Phase.PhaseOrdinal, hadOrders, wasReady),
+				ReadyToResolve: autoReady,
+				WantsDIAS:      autoDIAS,
+				Note:           fmt.Sprintf("Auto generated due to phase change at %v/%v: %s", p.Phase.GameID, p.Phase.PhaseOrdinal, stateString),
 			}
-			if err := newPhaseState.Save(p.Context); err != nil {
-				log.Errorf(p.Context, "Unable to save new PhaseState %v: %v; hope datastore will get fixed", spew.Sdump(newPhaseState), err)
-				return err
-			}
-			log.Infof(p.Context, "Saved %v to avoid delays due to tardy players", spew.Sdump(newPhaseState))
+			newPhaseStates = append(newPhaseStates, *newPhaseState)
 		}
 	}
 
-	if p.Game.PhaseLengthMinutes > 0 {
-		if err := newPhase.ScheduleResolution(p.Context); err != nil {
-			log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", spew.Sdump(newPhase), err)
+	if len(newPhaseStates) > 0 {
+		ids := make([]*datastore.Key, len(newPhaseStates))
+		for i := range newPhaseStates {
+			id, err := newPhaseStates[i].ID(p.Context)
+			if err != nil {
+				log.Errorf(p.Context, "Unable to create new phase state ID for %v: %v; fix PhaseState.ID or hope datastore gets fixed", spew.Sdump(newPhaseStates[i]), err)
+				return err
+			}
+			ids[i] = id
+		}
+		if _, err := datastore.PutMulti(p.Context, ids, newPhaseStates); err != nil {
+			log.Errorf(p.Context, "Unable to save new PhaseStates %v: %v; hope datastore will get fixed", spew.Sdump(newPhaseStates), err)
 			return err
 		}
-	} else {
-		log.Infof(p.Context, "%v has a zero phase length, skipping resolve scheduling", spew.Sdump(p.Game))
+		log.Infof(p.Context, "Saved %v to get things moving", spew.Sdump(newPhaseStates))
 	}
 
 	p.Phase.Resolved = true
@@ -179,9 +177,27 @@ func (p *PhaseResolver) Act() error {
 		return err
 	}
 
-	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+	if !allReady {
+		if p.Game.PhaseLengthMinutes > 0 {
+			if err := newPhase.ScheduleResolution(p.Context); err != nil {
+				log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", spew.Sdump(newPhase), err)
+				return err
+			}
+			log.Infof(p.Context, "%v has phase length of %v minutes, scheduled new resolve", spew.Sdump(p.Game), p.Game.PhaseLengthMinutes)
+		} else {
+			log.Infof(p.Context, "%v has a zero phase length, skipping resolve scheduling", spew.Sdump(p.Game))
+		}
 
-	return nil
+		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+
+		return nil
+	}
+
+	log.Infof(p.Context, "Since all players are ready to resolve RIGHT NOW, rolling forward again")
+
+	p.Phase = newPhase
+	p.PhaseStates = newPhaseStates
+	return p.Act()
 }
 
 const (

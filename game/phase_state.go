@@ -144,22 +144,32 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 			if _, err := datastore.NewQuery(phaseStateKind).Ancestor(phaseID).GetAll(ctx, &allStates); err != nil {
 				return err
 			}
-			readyNations := map[dip.Nation]struct{}{
-				// Override the result from the query, since it will read the state from before the transaction
-				// started.
-				phaseState.Nation: struct{}{},
-			}
-			for _, otherState := range allStates {
-				if otherState.ReadyToResolve {
-					readyNations[otherState.Nation] = struct{}{}
+
+			phaseStates := map[dip.Nation]*PhaseState{}
+			readyNations := map[dip.Nation]struct{}{}
+			for i := range allStates {
+				phaseStates[allStates[i].Nation] = &allStates[i]
+				if allStates[i].ReadyToResolve {
+					readyNations[allStates[i].Nation] = struct{}{}
 				}
 			}
+
+			// Overwrite what we found with what we know, since the query will have fetched what was visible before
+			// the transaction.
+			phaseStates[phaseState.Nation] = phaseState
+			readyNations[phaseState.Nation] = struct{}{}
+
+			allStates = make([]PhaseState, 0, len(phaseStates))
+			for _, phaseState := range phaseStates {
+				allStates = append(allStates, *phaseState)
+			}
+
 			if len(readyNations) == len(variants.Variants[game.Variant].Nations) {
 				if err := (&PhaseResolver{
 					Context:       ctx,
 					Game:          game,
 					Phase:         phase,
-					PhaseState:    phaseState,
+					PhaseStates:   allStates,
 					TaskTriggered: false,
 				}).Act(); err != nil {
 					return err
