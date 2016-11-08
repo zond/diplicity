@@ -297,7 +297,7 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 func (p *Phase) Item(r Request) *Item {
 	phaseItem := NewItem(p).SetName(fmt.Sprintf("%s %d, %s", p.Season, p.Year, p.Type))
 	phaseItem.AddLink(r.NewLink(PhaseResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)})))
-	memberNationIf, isMember := r.Values()[memberNationFlag]
+	_, isMember := r.Values()[memberNationFlag]
 	if isMember || p.Resolved {
 		phaseItem.AddLink(r.NewLink(Link{
 			Rel:         "orders",
@@ -312,7 +312,13 @@ func (p *Phase) Item(r Request) *Item {
 			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
 		}))
 		phaseItem.AddLink(r.NewLink(OrderResource.Link("create-order", Create, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)})))
-		phaseItem.AddLink(r.NewLink(PhaseStateResource.Link("phase-state", Load, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal), "nation", fmt.Sprint(memberNationIf)})))
+	}
+	if isMember || p.Resolved {
+		phaseItem.AddLink(r.NewLink(Link{
+			Rel:         "phase-states",
+			Route:       ListPhaseStatesRoute,
+			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
+		}))
 	}
 	return phaseItem
 }
