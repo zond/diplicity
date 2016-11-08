@@ -15,12 +15,14 @@ func testPhaseState(t *testing.T) {
 			Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc).
 			Follow("phases", "Links").Success().
 			Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
-		phases[i].Follow("phase-state", "Links").Success().
+		phases[i].Follow("phase-states", "Links").Success().
+			Find([]string{"Properties"}, []string{"Properties", "Note"}, "").
 			AssertBoolEq(false, "Properties", "ReadyToResolve").
 			AssertBoolEq(false, "Properties", "WantsDIAS")
 	}
 
-	phases[0].Follow("phase-state", "Links").Success().
+	phases[0].Follow("phase-states", "Links").Success().
+		Find([]string{"Properties"}, []string{"Properties", "Note"}, "").
 		Follow("update", "Links").Body(map[string]interface{}{
 		"ReadyToResolve": true,
 		"WantsDIAS":      true,
@@ -28,7 +30,8 @@ func testPhaseState(t *testing.T) {
 		AssertBoolEq(true, "Properties", "ReadyToResolve").
 		AssertBoolEq(true, "Properties", "WantsDIAS")
 
-	phases[1].Follow("phase-state", "Links").Success().
+	phases[1].Follow("phase-states", "Links").Success().
+		Find([]string{"Properties"}, []string{"Properties", "Note"}, "").
 		AssertBoolEq(false, "Properties", "ReadyToResolve").
 		AssertBoolEq(false, "Properties", "WantsDIAS")
 

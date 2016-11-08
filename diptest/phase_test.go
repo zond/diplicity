@@ -89,7 +89,8 @@ func testReadyResolution(t *testing.T) {
 
 			g.Follow("phases", "Links").Success().
 				Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring").
-				Follow("phase-state", "Links").Success().
+				Follow("phase-states", "Links").Success().
+				Find([]string{"Properties"}, []string{"Properties", "Note"}, "").
 				Follow("update", "Links").Body(map[string]interface{}{
 				"ReadyToResolve": true,
 				"WantsDIAS":      false,
@@ -115,11 +116,15 @@ func testReadyResolution(t *testing.T) {
 	})
 
 	t.Run("TestOldPhase", func(t *testing.T) {
-		g.Follow("phases", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Type"}, "Movement").
-			Follow("orders", "Links").Success().
+		p := g.Follow("phases", "Links").Success().
+			Find([]string{"Properties"}, []string{"Properties", "Type"}, "Movement")
+		p.Follow("orders", "Links").Success().
 			AssertLen(7, "Properties").
 			AssertNotFind([]string{"Properties"}, []string{"Link", "Rel"}, "delete").
 			AssertNotFind([]string{"Properties"}, []string{"Link", "Rel"}, "update")
+		p.Follow("phase-states", "Links").Success().
+			AssertLen(7, "Properties").
+			AssertNotFind([]string{"Properties"}, []string{"Link", "Rel"}, "update")
+
 	})
 }
