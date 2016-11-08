@@ -43,7 +43,7 @@ func (rv RenderVariants) Item(r Request) *Item {
 		[]string{
 			"Variant services",
 			"Variants can provide clients with a start state as a JSON blob via the `start-state` link.",
-			"To get the resolved result of a state plus some orders, the client `POST`s the same state plus the orders as a map `{ NATION: { PROVINCE: []WORD } }`, e.g. `{ 'England': { 'lon': ['lon', 'Move', 'nth'] } }`.",
+			"To get the resolved result of a state plus some orders, the client `POST`s the same state plus the orders as a map `{ NATION: { PROVINCE: []WORD } }`, e.g. `{ 'England': { 'lon': ['Move', 'nth'] } }`.",
 			"Unfortunately the auto generated HTML interface isn't powerful enough to create a form for this phase type, so interested parties will have to use `curl` or similar tools to experiment.",
 		},
 		[]string{
