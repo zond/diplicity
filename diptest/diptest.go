@@ -220,6 +220,15 @@ func (r *Result) AssertEmpty(path ...string) *Result {
 	return r
 }
 
+func (r *Result) AssertLen(l int, path ...string) *Result {
+	if val, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...); err != nil {
+		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
+	} else if len(val) != l {
+		panic(fmt.Errorf("got %+v = %+v, want length %v", path, val, l))
+	}
+	return r
+}
+
 func (r *Result) AssertNil(path ...string) *Result {
 	if val, err := jsonq.NewQuery(r.Body).String(path...); err == nil {
 		panic(fmt.Errorf("wanted nil at %+v in %v, got %q", path, pp(r.Body), val))
@@ -256,24 +265,6 @@ func (r *Result) AssertRel(rel string, path ...string) *Result {
 	return r
 }
 
-func (r *Result) AssertInSliceStringEq(val string, inSlicePath []string, path ...string) *Result {
-	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
-	if err != nil {
-		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
-	}
-	found := false
-	for _, obj := range ary {
-		if foundString, err := jsonq.NewQuery(obj).String(inSlicePath...); err == nil && foundString == val {
-			found = true
-			break
-		}
-	}
-	if !found {
-		panic(fmt.Errorf("found no %+v = %q in %v", inSlicePath, val, pp(r.Body)))
-	}
-	return r
-}
-
 func (r *Result) Find(path []string, subPath []string, subMatch interface{}) *Result {
 	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
 	if err != nil {
@@ -288,31 +279,6 @@ func (r *Result) Find(path []string, subPath []string, subMatch interface{}) *Re
 		}
 	}
 	panic(fmt.Errorf("Found no %+v with %+v = %v in %v", path, subPath, subMatch, pp(r.Body)))
-}
-
-func (r *Result) FollowInSlice(rel string, inSlicePath []string, path ...string) *Req {
-	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
-	if err != nil {
-		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
-	}
-	for _, obj := range ary {
-		if linkAry, err := jsonq.NewQuery(obj).ArrayOfObjects(inSlicePath...); err == nil {
-			for _, link := range linkAry {
-				if rel == link["Rel"] {
-					u, err := url.Parse(link["URL"].(string))
-					if err != nil {
-						panic(fmt.Errorf("trying to parse %q: %v", link["URL"].(string), err))
-					}
-					return &Req{
-						env:    r.Env,
-						url:    u,
-						method: link["Method"].(string),
-					}
-				}
-			}
-		}
-	}
-	panic(fmt.Errorf("found no %+v with Rel %q in %+v", inSlicePath, rel, path))
 }
 
 func (r *Result) Follow(rel string, path ...string) *Req {
