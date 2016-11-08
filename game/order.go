@@ -31,7 +31,9 @@ var OrderResource = &Resource{
 type Orders []Order
 
 func (o Orders) Item(r Request, gameID *datastore.Key, phase *Phase) *Item {
-	r.Values()["is-unresolved"] = !phase.Resolved
+	if !phase.Resolved {
+		r.Values()["is-unresolved"] = true
+	}
 	orderItems := make(List, len(o))
 	for i := range o {
 		orderItems[i] = o[i].Item(r)
@@ -47,7 +49,6 @@ func (o Orders) Item(r Request, gameID *datastore.Key, phase *Phase) *Item {
 type Order struct {
 	GameID       *datastore.Key
 	PhaseOrdinal int64
-	Province     dip.Province `methods:"POST,PUT"`
 	Nation       dip.Nation
 	Parts        []string `methods:"POST,PUT" separator:" "`
 }
@@ -64,7 +65,7 @@ func (o *Order) ID(ctx context.Context) (*datastore.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return OrderID(ctx, phaseID, o.Province)
+	return OrderID(ctx, phaseID, dip.Province(o.Parts[0]))
 }
 
 func (o *Order) Save(ctx context.Context) error {
@@ -222,7 +223,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 			return fmt.Errorf("can't issue orders for others")
 		}
 
-		if order.Province != dip.Province(srcProvince) {
+		if order.Parts[0] != srcProvince {
 			return fmt.Errorf("unable to change source province for order")
 		}
 

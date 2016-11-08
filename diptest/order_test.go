@@ -59,8 +59,7 @@ func testOrders(t *testing.T) {
 			AssertEmpty("Properties")
 
 		phase.Follow("create-order", "Links").Body(map[string]interface{}{
-			"Parts":    okParts,
-			"Province": okParts[0],
+			"Parts": okParts,
 		}).Success()
 
 		phase.Follow("orders", "Links").Success().
@@ -82,8 +81,7 @@ func testOrders(t *testing.T) {
 
 	t.Run("TestBadOrderErrors", func(t *testing.T) {
 		phase.Follow("create-order", "Links").Body(map[string]interface{}{
-			"Parts":    badParts,
-			"Province": badParts[0],
+			"Parts": badParts,
 		}).Failure()
 
 		phase.Follow("orders", "Links").Success().
