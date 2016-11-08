@@ -7,11 +7,13 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 )
@@ -201,6 +203,11 @@ func (g *Game) Start(ctx context.Context) error {
 	phase.DeadlineAt = time.Now().Add(time.Minute * g.PhaseLengthMinutes)
 	if err := phase.Save(ctx); err != nil {
 		return err
+	}
+
+	if g.PhaseLengthMinutes == 0 {
+		log.Infof(ctx, "%v has a zero phase length, skipping resolve scheduling", spew.Sdump(g))
+		return nil
 	}
 
 	return phase.ScheduleResolution(ctx)
