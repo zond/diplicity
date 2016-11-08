@@ -36,7 +36,7 @@ func init() {
 			return err
 		}
 
-		err = datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			game := &Game{}
 			phase := &Phase{}
 			keys := []*datastore.Key{gameID, phaseID}
@@ -53,11 +53,14 @@ func init() {
 				PhaseState:    nil,
 				TaskTriggered: true,
 			}).Act()
-		}, &datastore.TransactionOptions{XG: true})
+		}, &datastore.TransactionOptions{XG: true}); err != nil {
+			log.Errorf(ctx, "Unable to commit resolve tx: %v; retrying later", err)
+			return err
+		}
 
-		log.Infof(ctx, "timeoutResolvePhase(..., %v, %v): *** %v ***", gameID, phaseOrdinal, err)
+		log.Infof(ctx, "timeoutResolvePhase(..., %v, %v): *** SUCCESS ***", gameID, phaseOrdinal, err)
 
-		return err
+		return nil
 	})
 }
 
@@ -70,6 +73,8 @@ type PhaseResolver struct {
 }
 
 func (p *PhaseResolver) Act() error {
+	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act()", p.Phase.GameID, p.Phase.PhaseOrdinal)
+
 	phaseID, err := PhaseID(p.Context, p.Phase.GameID, p.Phase.PhaseOrdinal)
 	if err != nil {
 		return err
@@ -94,10 +99,16 @@ func (p *PhaseResolver) Act() error {
 	// which would make the query for phase states after the last player flags 'ready' read the
 	// last player as 'not ready'. Let's just override that here.
 	if p.PhaseState != nil {
+		foundPhaseStateOverride := false
 		for i := range phaseStates {
 			if phaseStates[i].Nation == p.PhaseState.Nation {
 				phaseStates[i] = *p.PhaseState
+				foundPhaseStateOverride = true
+				break
 			}
+		}
+		if !foundPhaseStateOverride {
+			phaseStates = append(phaseStates, *p.PhaseState)
 		}
 	}
 	log.Infof(p.Context, "PhaseStates at resolve time: %v", spew.Sdump(phaseStates))
@@ -109,7 +120,7 @@ func (p *PhaseResolver) Act() error {
 	}
 	log.Infof(p.Context, "Orders at resolve time: %v", spew.Sdump(orderMap))
 
-	s, err := p.Phase.State(p.Context, variants.Variants[p.Game.Variant], nil)
+	s, err := p.Phase.State(p.Context, variants.Variants[p.Game.Variant], orderMap)
 	if err != nil {
 		log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", spew.Sdump(p.Phase), err)
 		return err
@@ -135,7 +146,7 @@ func (p *PhaseResolver) Act() error {
 				break
 			}
 		}
-		log.Infof(p.Context, "%v NMR state: hadOrders = %v, wasReady = %v", hadOrders, wasReady)
+		log.Infof(p.Context, "%v NMR state: hadOrders = %v, wasReady = %v", nat, hadOrders, wasReady)
 		if !hadOrders && !wasReady {
 			newPhaseState := &PhaseState{
 				GameID:         p.Phase.GameID,
@@ -153,7 +164,24 @@ func (p *PhaseResolver) Act() error {
 		}
 	}
 
-	return newPhase.ScheduleResolution(p.Context)
+	if p.Game.PhaseLengthMinutes > 0 {
+		if err := newPhase.ScheduleResolution(p.Context); err != nil {
+			log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", spew.Sdump(newPhase), err)
+			return err
+		}
+	} else {
+		log.Infof(p.Context, "%v has a zero phase length, skipping resolve scheduling", spew.Sdump(p.Game))
+	}
+
+	p.Phase.Resolved = true
+	if err := p.Phase.Save(p.Context); err != nil {
+		log.Errorf(p.Context, "Unable to save old phase %v: %v; hope datastore gets fixed", spew.Sdump(p.Phase), err)
+		return err
+	}
+
+	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+
+	return nil
 }
 
 const (
@@ -451,7 +479,7 @@ func (p *Phase) Orders(ctx context.Context) (map[dip.Nation]map[dip.Province][]s
 			nationMap = map[dip.Province][]string{}
 			orderMap[order.Nation] = nationMap
 		}
-		nationMap[dip.Province(order.Parts[0])] = order.Parts
+		nationMap[dip.Province(order.Parts[0])] = order.Parts[1:]
 	}
 
 	return orderMap, nil
