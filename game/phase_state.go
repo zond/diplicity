@@ -21,7 +21,7 @@ const (
 
 var PhaseStateResource = &Resource{
 	Update:   updatePhaseState,
-	FullPath: "/Game/{game_id}/Phase/{phase_ordinal}/State/{nation}",
+	FullPath: "/Game/{game_id}/Phase/{phase_ordinal}/PhaseState/{nation}",
 }
 
 type PhaseStates []PhaseState
@@ -48,6 +48,7 @@ type PhaseState struct {
 	Nation         dip.Nation
 	ReadyToResolve bool `methods:"PUT"`
 	WantsDIAS      bool `methods:"PUT"`
+	OnProbation    bool
 	Note           string
 }
 
@@ -138,6 +139,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		phaseState.GameID = gameID
 		phaseState.PhaseOrdinal = phaseOrdinal
 		phaseState.Nation = member.Nation
+		phaseState.OnProbation = false
 
 		if phaseState.ReadyToResolve {
 			allStates := []PhaseState{}
