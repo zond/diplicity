@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
@@ -86,8 +87,9 @@ type Transport interface {
 }
 
 var (
-	counter uint64
-	router  = mux.NewRouter()
+	counter   uint64
+	startTime = time.Now().UnixNano()
+	router    = mux.NewRouter()
 )
 
 func init() {
@@ -120,7 +122,7 @@ var (
 
 func String(s string) string {
 	c := atomic.AddUint64(&counter, 1)
-	return fmt.Sprintf("%s-%d", s, c)
+	return fmt.Sprintf("%s-%d-%d", s, startTime, c)
 }
 
 func NewEnv() *Env {
@@ -193,11 +195,11 @@ func (r *Result) GetValue(path ...string) interface{} {
 	return found
 }
 
-func (r *Result) AssertStringEq(val string, path ...string) *Result {
-	if found, err := jsonq.NewQuery(r.Body).String(path...); err != nil {
+func (r *Result) AssertEq(val interface{}, path ...string) *Result {
+	if found, err := jsonq.NewQuery(r.Body).Interface(path...); err != nil {
 		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
-	} else if found != val {
-		panic(fmt.Errorf("got %+v = %q, want %q", path, found, val))
+	} else if fmt.Sprint(found) != fmt.Sprint(val) {
+		panic(fmt.Errorf("got %+v = %#v, want %#v\n%v", path, found, val, pp(r.Body)))
 	}
 	return r
 }
@@ -272,7 +274,7 @@ func (r *Result) Find(path []string, subPath []string, subMatch interface{}) *Re
 	}
 	for _, obj := range ary {
 		found, err := jsonq.NewQuery(obj).Interface(subPath...)
-		if err == nil && found == subMatch {
+		if err == nil && fmt.Sprint(found) == fmt.Sprint(subMatch) {
 			cpy := *r
 			cpy.Body = obj
 			return &cpy
@@ -363,8 +365,10 @@ func (r *Req) do() *Result {
 	}
 	var result interface{}
 	if status > 199 && status < 300 {
-		if err := json.Unmarshal(responseBytes, &result); err != nil {
-			panic(fmt.Errorf("unmarshaling %q: %v", string(responseBytes), err))
+		if len(responseBytes) > 0 {
+			if err := json.Unmarshal(responseBytes, &result); err != nil {
+				panic(fmt.Errorf("unmarshaling %q: %v", string(responseBytes), err))
+			}
 		}
 	}
 	return &Result{
