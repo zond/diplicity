@@ -23,52 +23,54 @@ import (
 )
 
 var (
-	timeoutResolvePhase *delay.Function
+	timeoutResolvePhaseFunc *delay.Function
 )
 
 func init() {
-	timeoutResolvePhase = delay.Func("game-timeoutResolvePhase", func(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
-		log.Infof(ctx, "timeoutResolvePhase(..., %v, %v)", gameID, phaseOrdinal)
+	timeoutResolvePhaseFunc = delay.Func("game-timeoutResolvePhase", timeoutResolvePhase)
+}
 
-		phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
-		if err != nil {
-			log.Errorf(ctx, "PhaseID(..., %v, %v): %v, %v; fix the PhaseID func", gameID, phaseOrdinal, phaseID, err)
+func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
+	log.Infof(ctx, "timeoutResolvePhase(..., %v, %v)", gameID, phaseOrdinal)
+
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		log.Errorf(ctx, "PhaseID(..., %v, %v): %v, %v; fix the PhaseID func", gameID, phaseOrdinal, phaseID, err)
+		return err
+	}
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		phase := &Phase{}
+		keys := []*datastore.Key{gameID, phaseID}
+		values := []interface{}{game, phase}
+		if err := datastore.GetMulti(ctx, keys, values); err != nil {
+			log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; hope datastore will get fixed", keys, values, err)
 			return err
 		}
 
-		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-			game := &Game{}
-			phase := &Phase{}
-			keys := []*datastore.Key{gameID, phaseID}
-			values := []interface{}{game, phase}
-			if err := datastore.GetMulti(ctx, keys, values); err != nil {
-				log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; hope datastore will get fixed", keys, values, err)
-				return err
-			}
+		phaseStates := PhaseStates{}
 
-			phaseStates := PhaseStates{}
-
-			if _, err := datastore.NewQuery(phaseStateKind).Ancestor(phaseID).GetAll(ctx, &phaseStates); err != nil {
-				log.Errorf(ctx, "Unable to query phase states for %v/%v: %v; hope datastore will get fixed", gameID, phaseID, err)
-				return err
-			}
-
-			return (&PhaseResolver{
-				Context:       ctx,
-				Game:          game,
-				Phase:         phase,
-				PhaseStates:   phaseStates,
-				TaskTriggered: true,
-			}).Act()
-		}, &datastore.TransactionOptions{XG: true}); err != nil {
-			log.Errorf(ctx, "Unable to commit resolve tx: %v; retrying later", err)
+		if _, err := datastore.NewQuery(phaseStateKind).Ancestor(phaseID).GetAll(ctx, &phaseStates); err != nil {
+			log.Errorf(ctx, "Unable to query phase states for %v/%v: %v; hope datastore will get fixed", gameID, phaseID, err)
 			return err
 		}
 
-		log.Infof(ctx, "timeoutResolvePhase(..., %v, %v): *** SUCCESS ***", gameID, phaseOrdinal, err)
+		return (&PhaseResolver{
+			Context:       ctx,
+			Game:          game,
+			Phase:         phase,
+			PhaseStates:   phaseStates,
+			TaskTriggered: true,
+		}).Act()
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
+		log.Errorf(ctx, "Unable to commit resolve tx: %v; retrying later", err)
+		return err
+	}
 
-		return nil
-	})
+	log.Infof(ctx, "timeoutResolvePhase(..., %v, %v): *** SUCCESS ***", gameID, phaseOrdinal)
+
+	return nil
 }
 
 type PhaseResolver struct {
@@ -124,21 +126,23 @@ func (p *PhaseResolver) Act() error {
 		_, hadOrders := orderMap[nat]
 		wasReady := false
 		wantedDIAS := false
+		wasOnProbation := false
 		for _, phaseState := range p.PhaseStates {
 			if phaseState.Nation == nat {
 				wasReady = phaseState.ReadyToResolve
 				wantedDIAS = phaseState.WantsDIAS
+				wasOnProbation = phaseState.OnProbation
 				break
 			}
 		}
 		newOptions := len(s.Phase().Options(s, nat))
 
-		stateString := fmt.Sprintf("hadOrders = %v, wasReady = %v, wantedDIAS = %v, newOptions = %v", hadOrders, wasReady, wantedDIAS, newOptions)
+		stateString := fmt.Sprintf("wasReady = %v, wantedDIAS = %v, onProbation = %v, hadOrders = %v, newOptions = %v", wasReady, wantedDIAS, wasOnProbation, hadOrders, newOptions)
 		log.Infof(p.Context, "%v at phase change: %s", nat, stateString)
 
-		probation := !hadOrders && !wasReady
-		autoReady := newOptions == 0 || probation
-		autoDIAS := wantedDIAS || probation
+		autoProbation := wasOnProbation || (!hadOrders && !wasReady)
+		autoReady := newOptions == 0 || autoProbation
+		autoDIAS := wantedDIAS || autoProbation
 		allReady = allReady && autoReady
 
 		if autoReady || autoDIAS {
@@ -148,6 +152,7 @@ func (p *PhaseResolver) Act() error {
 				Nation:         nat,
 				ReadyToResolve: autoReady,
 				WantsDIAS:      autoDIAS,
+				OnProbation:    autoProbation,
 				Note:           fmt.Sprintf("Auto generated due to phase change at %v/%v: %s", p.Phase.GameID, p.Phase.PhaseOrdinal, stateString),
 			}
 			newPhaseStates = append(newPhaseStates, *newPhaseState)
@@ -195,6 +200,7 @@ func (p *PhaseResolver) Act() error {
 
 	log.Infof(p.Context, "Since all players are ready to resolve RIGHT NOW, rolling forward again")
 
+	newPhase.DeadlineAt = time.Now()
 	p.Phase = newPhase
 	p.PhaseStates = newPhaseStates
 	return p.Act()
@@ -271,6 +277,41 @@ var PhaseResource = &Resource{
 	FullPath: "/Game/{game_id}/Phase/{phase_ordinal}",
 }
 
+func devResolvePhaseTimeout(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		return fmt.Errorf("only accessible in local dev mode")
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return err
+	}
+
+	phaseOrdinal, err := strconv.ParseInt(r.Vars()["phase_ordinal"], 10, 64)
+	if err != nil {
+		return err
+	}
+
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		return err
+	}
+
+	phase := &Phase{}
+	if err := datastore.Get(ctx, phaseID, phase); err != nil {
+		return err
+	}
+
+	phase.DeadlineAt = time.Now()
+	if _, err := datastore.Put(ctx, phaseID, phase); err != nil {
+		return err
+	}
+
+	return timeoutResolvePhase(ctx, gameID, phaseOrdinal)
+}
+
 func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 	ctx := appengine.NewContext(r.Req())
 
@@ -340,7 +381,7 @@ func (p *Phase) Item(r Request) *Item {
 }
 
 func (p *Phase) ScheduleResolution(ctx context.Context) error {
-	task, err := timeoutResolvePhase.Task(p.GameID, p.PhaseOrdinal)
+	task, err := timeoutResolvePhaseFunc.Task(p.GameID, p.PhaseOrdinal)
 	if err != nil {
 		return err
 	}
