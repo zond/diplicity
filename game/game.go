@@ -162,6 +162,9 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		http.Error(w, "unknown variant", 400)
 		return nil, nil
 	}
+	if game.PhaseLengthMinutes < 0 {
+		return nil, fmt.Errorf("no games with negative length allowed")
+	}
 	game.CreatedAt = time.Now()
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
