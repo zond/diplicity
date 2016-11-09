@@ -17,7 +17,7 @@ func TestCreateLeaveGame(t *testing.T) {
 			"Variant": "Classical",
 			"Desc":    gameDesc,
 		}).Success().
-			AssertStringEq(gameDesc, "Properties", "Desc")
+			AssertEq(gameDesc, "Properties", "Desc")
 
 		env.GetRoute(game.MyStagingGamesRoute).Success().
 			Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)

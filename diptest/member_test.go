@@ -18,7 +18,7 @@ func TestJoinLeaveGame(t *testing.T) {
 		"Variant": "Classical",
 		"Desc":    gameDesc,
 	}).Success().
-		AssertStringEq(gameDesc, "Properties", "Desc")
+		AssertEq(gameDesc, "Properties", "Desc")
 
 	t.Run("TestJoiningExistingGame", func(t *testing.T) {
 		env2.GetRoute(game.IndexRoute).Success().
