@@ -36,6 +36,7 @@ const (
 	ListOrdersRoute             = "ListOrders"
 	ListPhasesRoute             = "ListPhases"
 	ListPhaseStatesRoute        = "ListPhaseStates"
+	ListGameStatesRoute         = "ListGameStates"
 	ListOptionsRoute            = "ListOptions"
 	ListChannelsRoute           = "ListChannels"
 	ListMessagesRoute           = "ListMessages"
@@ -188,6 +189,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channel/{channel_members}/Messages", []string{"GET"}, ListMessagesRoute, listMessages)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
+	Handle(r, "/Game/{game_id}/GameStates", []string{"GET"}, ListGameStatesRoute, listGameStates)
 	Handle(r, "/Game/{game_id}/Phases", []string{"GET"}, ListPhasesRoute, listPhases)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/_dev_resolve_timeout", []string{"GET"}, DevResolvePhaseTimeoutRoute, devResolvePhaseTimeout)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/PhaseStates", []string{"GET"}, ListPhaseStatesRoute, listPhaseStates)
@@ -205,4 +207,5 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, OrderResource)
 	HandleResource(r, MessageResource)
 	HandleResource(r, PhaseStateResource)
+	HandleResource(r, GameStateResource)
 }
