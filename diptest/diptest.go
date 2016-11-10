@@ -16,6 +16,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/jsonq"
+	"github.com/kr/pretty"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/diplicity/routes"
 	"google.golang.org/appengine/aetest"
@@ -198,8 +199,8 @@ func (r *Result) GetValue(path ...string) interface{} {
 func (r *Result) AssertEq(val interface{}, path ...string) *Result {
 	if found, err := jsonq.NewQuery(r.Body).Interface(path...); err != nil {
 		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
-	} else if fmt.Sprint(found) != fmt.Sprint(val) {
-		panic(fmt.Errorf("got %+v = %#v, want %#v\n%v", path, found, val, pp(r.Body)))
+	} else if diff := pretty.Diff(found, val); len(diff) > 0 {
+		panic(fmt.Errorf("got %+v = %v, want %v; diff %v", path, found, val, spew.Sdump(diff)))
 	}
 	return r
 }

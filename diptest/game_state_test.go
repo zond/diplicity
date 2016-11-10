@@ -16,7 +16,7 @@ func testGameState(t *testing.T) {
 
 	g0.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
 		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nat0).
-		AssertEq([]string{nat1}, "Properties", "Muted")
+		AssertEq([]interface{}{nat1}, "Properties", "Muted")
 
 	g0.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
 		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nat1).
@@ -24,7 +24,7 @@ func testGameState(t *testing.T) {
 
 	g1.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
 		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nat0).
-		AssertEq([]string{nat1}, "Properties", "Muted")
+		AssertEq([]interface{}{nat1}, "Properties", "Muted")
 
 	g1.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
 		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nat1).
