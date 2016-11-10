@@ -64,7 +64,7 @@ func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdina
 			TaskTriggered: true,
 		}).Act()
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
-		log.Errorf(ctx, "Unable to commit resolve tx: %v; retrying later", err)
+		log.Errorf(ctx, "Unable to commit resolve tx: %v", err)
 		return err
 	}
 
