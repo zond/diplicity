@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -26,6 +27,7 @@ const (
 )
 
 const (
+	ConfigureRoute              = "AuthConfigure"
 	IndexRoute                  = "Index"
 	OpenGamesRoute              = "OpenGames"
 	StartedGamesRoute           = "StartedGames"
@@ -185,7 +187,33 @@ var (
 	}
 )
 
+type configuration struct {
+	OAuth   *auth.OAuth
+	FCMConf *FCMConf
+}
+
+func handleConfigure(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	conf := &configuration{}
+	if err := json.NewDecoder(r.Req().Body).Decode(conf); err != nil {
+		return err
+	}
+	if conf.OAuth != nil {
+		if err := auth.SetOAuth(ctx, conf.OAuth); err != nil {
+			return err
+		}
+	}
+	if conf.FCMConf != nil {
+		if err := SetFCMConf(ctx, conf.FCMConf); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func SetupRouter(r *mux.Router) {
+	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channel/{channel_members}/Messages", []string{"GET"}, ListMessagesRoute, listMessages)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)

@@ -27,7 +27,6 @@ import (
 var TestMode = false
 
 const (
-	AuthConfigureRoute  = "AuthConfigure"
 	LoginRoute          = "Login"
 	LogoutRoute         = "Logout"
 	RedirectRoute       = "Redirect"
@@ -43,16 +42,12 @@ const (
 )
 
 var (
-	prodOAuth     *oAuth
+	prodOAuth     *OAuth
 	prodOAuthLock = sync.RWMutex{}
 	prodNaCl      *naCl
 	prodNaClLock  = sync.RWMutex{}
 	router        *mux.Router
 )
-
-type configuration struct {
-	OAuth oAuth
-}
 
 type UserConfig struct {
 	UserId    string
@@ -210,7 +205,7 @@ func getNaCl(ctx context.Context) (*naCl, error) {
 	return prodNaCl, nil
 }
 
-type oAuth struct {
+type OAuth struct {
 	ClientID string
 	Secret   string
 }
@@ -219,7 +214,20 @@ func getOAuthKey(ctx context.Context) *datastore.Key {
 	return datastore.NewKey(ctx, oAuthKind, prodKey, 0, nil)
 }
 
-func getOAuth(ctx context.Context) (*oAuth, error) {
+func SetOAuth(ctx context.Context, oAuth *OAuth) error {
+	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		currentOAuth := &OAuth{}
+		if err := datastore.Get(ctx, getOAuthKey(ctx), currentOAuth); err == nil {
+			return fmt.Errorf("OAuth already configured")
+		}
+		if _, err := datastore.Put(ctx, getOAuthKey(ctx), oAuth); err != nil {
+			return err
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: false})
+}
+
+func getOAuth(ctx context.Context) (*OAuth, error) {
 	prodOAuthLock.RLock()
 	if prodOAuth != nil {
 		defer prodOAuthLock.RUnlock()
@@ -228,7 +236,7 @@ func getOAuth(ctx context.Context) (*oAuth, error) {
 	prodOAuthLock.RUnlock()
 	prodOAuthLock.Lock()
 	defer prodOAuthLock.Unlock()
-	prodOAuth = &oAuth{}
+	prodOAuth = &OAuth{}
 	if err := datastore.Get(ctx, getOAuthKey(ctx), prodOAuth); err != nil {
 		return nil, err
 	}
@@ -349,28 +357,6 @@ func handleLogout(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func handleConfigure(w ResponseWriter, r Request) error {
-	ctx := appengine.NewContext(r.Req())
-
-	conf := &configuration{}
-	if err := json.NewDecoder(r.Req().Body).Decode(conf); err != nil {
-		return err
-	}
-	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		current := &oAuth{}
-		if err := datastore.Get(ctx, getOAuthKey(ctx), current); err == nil {
-			return fmt.Errorf("OAuth already configured")
-		}
-		if _, err := datastore.Put(ctx, getOAuthKey(ctx), &conf.OAuth); err != nil {
-			return err
-		}
-		return nil
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
-		return err
-	}
-	return nil
-}
-
 func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 	if fakeID := r.Req().URL.Query().Get("fake-id"); (TestMode || appengine.IsDevAppServer()) && fakeID != "" {
 		user := &User{
@@ -460,7 +446,6 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 
 func SetupRouter(r *mux.Router) {
 	router = r
-	Handle(router, "/Auth/_configure", []string{"POST"}, AuthConfigureRoute, handleConfigure)
 	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
 	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
 	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
