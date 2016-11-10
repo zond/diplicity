@@ -129,6 +129,11 @@ func (g *Game) Item(r Request) *Item {
 			RouteParams: []string{"game_id", g.ID.Encode()},
 		}))
 	}
+	gameItem.AddLink(r.NewLink(Link{
+		Rel:         "game-states",
+		Route:       ListGameStatesRoute,
+		RouteParams: []string{"game_id", g.ID.Encode()},
+	}))
 	return gameItem
 }
 
