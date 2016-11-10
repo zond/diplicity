@@ -262,6 +262,11 @@ func (r *Result) AssertNotFind(path []string, subPath []string, subMatch interfa
 	return r
 }
 
+func (r *Result) AssertNotRel(rel string, path ...string) *Result {
+	r.AssertNotFind(path, []string{"Rel"}, rel)
+	return r
+}
+
 func (r *Result) AssertRel(rel string, path ...string) *Result {
 	r.Find(path, []string{"Rel"}, rel)
 	return r
