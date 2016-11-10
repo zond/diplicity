@@ -79,7 +79,8 @@ func handleIndex(w ResponseWriter, r Request) error {
 		})).AddLink(r.NewLink(Link{
 			Rel:   "finished-games",
 			Route: FinishedGamesRoute,
-		})).AddLink(r.NewLink(GameResource.Link("create-game", Create, nil)))
+		})).AddLink(r.NewLink(GameResource.Link("create-game", Create, nil))).
+			AddLink(r.NewLink(auth.UserConfigResource.Link("user-config", Load, []string{"user_id", user.Id})))
 	}
 	w.SetContent(index)
 	return nil
