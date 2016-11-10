@@ -68,6 +68,7 @@ func withStartedGame(f func()) {
 
 func TestStartGame(t *testing.T) {
 	withStartedGame(func() {
+		t.Run("TestGameState", testGameState)
 		t.Run("TestOrders", testOrders)
 		t.Run("TestOptions", testOptions)
 		t.Run("TestChat", testChat)
