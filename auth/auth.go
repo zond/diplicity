@@ -35,10 +35,11 @@ const (
 )
 
 const (
-	UserKind  = "User"
-	naClKind  = "NaCl"
-	oAuthKind = "OAuth"
-	prodKey   = "prod"
+	userKind       = "User"
+	naClKind       = "NaCl"
+	oAuthKind      = "OAuth"
+	userConfigKind = "UserConfig"
+	prodKey        = "prod"
 )
 
 var (
@@ -51,6 +52,73 @@ var (
 
 type configuration struct {
 	OAuth oAuth
+}
+
+type UserConfig struct {
+	UserId    string
+	FCMTokens []string `methods:"PUT" separator=","`
+}
+
+var UserConfigResource = &Resource{
+	Load:     loadUserConfig,
+	Update:   updateUserConfig,
+	FullPath: "/User/{user_id}/UserConfig",
+}
+
+func UserConfigID(ctx context.Context, userID *datastore.Key) *datastore.Key {
+	return datastore.NewKey(ctx, userConfigKind, "config", 0, userID)
+}
+
+func (u *UserConfig) ID(ctx context.Context) *datastore.Key {
+	return UserConfigID(ctx, UserID(ctx, u.UserId))
+}
+
+func (u *UserConfig) Item(r Request) *Item {
+	return NewItem(u).SetName("user-config").
+		AddLink(r.NewLink(UserConfigResource.Link("self", Load, []string{"user_id", u.UserId}))).
+		AddLink(r.NewLink(UserConfigResource.Link("update", Update, []string{"user_id", u.UserId})))
+}
+
+func loadUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*User)
+	if !ok {
+		http.Error(w, "unauthorized", 401)
+		return nil, nil
+	}
+
+	config := &UserConfig{}
+	if err := datastore.Get(ctx, UserConfigID(ctx, user.ID(ctx)), config); err == datastore.ErrNoSuchEntity {
+		config.UserId = user.Id
+		err = nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func updateUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*User)
+	if !ok {
+		http.Error(w, "unauthorized", 401)
+		return nil, nil
+	}
+
+	config := &UserConfig{}
+	if err := Copy(config, r, "PUT"); err != nil {
+		return nil, err
+	}
+	config.UserId = user.Id
+
+	if _, err := datastore.Put(ctx, config.ID(ctx), config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 type User struct {
@@ -66,6 +134,14 @@ type User struct {
 	Picture       string
 	VerifiedEmail bool
 	ValidUntil    time.Time
+}
+
+func UserID(ctx context.Context, userID string) *datastore.Key {
+	return datastore.NewKey(ctx, userKind, userID, 0, nil)
+}
+
+func (u *User) ID(ctx context.Context) *datastore.Key {
+	return UserID(ctx, u.Id)
 }
 
 func infoToUser(ui *oauth2service.Userinfoplus) *User {
@@ -246,7 +322,7 @@ func handleOAuth2Callback(w ResponseWriter, r Request) error {
 	}
 	user := infoToUser(userInfo)
 	user.ValidUntil = time.Now().Add(time.Hour * 24)
-	if _, err := datastore.Put(ctx, datastore.NewKey(ctx, UserKind, user.Id, 0, nil), user); err != nil {
+	if _, err := datastore.Put(ctx, datastore.NewKey(ctx, userKind, user.Id, 0, nil), user); err != nil {
 		return err
 	}
 
@@ -388,5 +464,6 @@ func SetupRouter(r *mux.Router) {
 	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
 	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
 	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
+	HandleResource(router, UserConfigResource)
 	AddFilter(tokenFilter)
 }
