@@ -6,13 +6,13 @@ import (
 	"strconv"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
-	"github.com/zond/godip/variants"
 )
 
 const (
@@ -222,6 +222,22 @@ func listPhaseStates(w ResponseWriter, r Request) error {
 	if phase.Resolved {
 		if _, err := datastore.NewQuery(phaseStateKind).Ancestor(phaseID).GetAll(ctx, &phaseStates); err != nil {
 			return err
+		}
+		for _, nat := range variants.Variants[game.Variant].Nations {
+			found := false
+			for _, phaseState := range phaseStates {
+				if phaseState.Nation == nat {
+					found = true
+					break
+				}
+			}
+			if !found {
+				phaseStates = append(phaseStates, PhaseState{
+					GameID:       gameID,
+					PhaseOrdinal: phaseOrdinal,
+					Nation:       nat,
+				})
+			}
 		}
 	} else {
 		member, isMember := game.GetMember(user.Id)
