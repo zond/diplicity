@@ -49,9 +49,16 @@ var (
 	router        *mux.Router
 )
 
+type FCMToken struct {
+	Value    string `methods:"PUT"`
+	Disabled bool   `methods:"PUT"`
+	Note     string `methods:"PUT"`
+	App      string `methods:"PUT"`
+}
+
 type UserConfig struct {
 	UserId    string
-	FCMTokens []string `methods:"PUT" separator=","`
+	FCMTokens []FCMToken `methods:"PUT"`
 }
 
 var UserConfigResource = &Resource{

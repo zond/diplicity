@@ -8,7 +8,20 @@ import (
 
 func TestUserConfig(t *testing.T) {
 	env := NewEnv().SetUID(String("fake"))
-	tokens := []string{String("token"), String("token")}
+	tokens := []interface{}{
+		map[string]interface{}{
+			"Value":    String("token"),
+			"Disabled": false,
+			"Note":     "",
+			"App":      String("app"),
+		},
+		map[string]interface{}{
+			"Value":    String("token"),
+			"Disabled": false,
+			"Note":     "",
+			"App":      String("app"),
+		},
+	}
 	env.GetRoute(game.IndexRoute).Success().
 		Follow("user-config", "Links").Success().
 		AssertNil("Properties", "FCMTokens").
