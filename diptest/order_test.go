@@ -7,15 +7,12 @@ import (
 )
 
 func testOrders(t *testing.T) {
-	g := startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
-		Follow("my-started-games", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc)
+	g := startedGames[0]
 
 	okParts := []string{"", "Hold"}
 	badParts := []string{"", "Hold"}
 
-	nation := g.
-		Find([]string{"Properties", "Members"}, []string{"User", "Id"}, startedGameEnvs[0].GetUID()).GetValue("Nation")
+	nation := startedGameNats[0]
 
 	switch nation {
 	case "Austria":

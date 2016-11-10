@@ -1,18 +1,11 @@
 package diptest
 
-import (
-	"testing"
-
-	"github.com/zond/diplicity/game"
-)
+import "testing"
 
 func testOptions(t *testing.T) {
-	g := startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
-		Follow("my-started-games", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc)
+	g := startedGames[0]
 
-	nation := g.
-		Find([]string{"Properties", "Members"}, []string{"User", "Id"}, startedGameEnvs[0].GetUID()).GetValue("Nation")
+	nation := startedGameNats[0]
 
 	var prov string
 

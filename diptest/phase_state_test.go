@@ -1,19 +1,12 @@
 package diptest
 
-import (
-	"testing"
-
-	"github.com/zond/diplicity/game"
-)
+import "testing"
 
 func testPhaseState(t *testing.T) {
 	phases := make([]*Result, len(startedGameEnvs))
 
-	for i, env := range startedGameEnvs {
-		phases[i] = env.GetRoute(game.IndexRoute).Success().
-			Follow("my-started-games", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc).
-			Follow("phases", "Links").Success().
+	for i, g := range startedGames {
+		phases[i] = g.Follow("phases", "Links").Success().
 			Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
 		phases[i].Follow("phase-states", "Links").Success().
 			Find([]string{"Properties"}, []string{"Properties", "Note"}, "").
