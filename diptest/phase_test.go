@@ -182,7 +182,7 @@ func TestTimeoutResolution(t *testing.T) {
 				case "Turkey":
 					order[2], order[0] = "con", "bul"
 				case "Russia":
-					order[2], order[0] = "stp", "bot"
+					order[2], order[0] = "stp/sc", "bot"
 				}
 
 				p := g.Follow("phases", "Links").Success().
