@@ -67,7 +67,7 @@ func (g *GameState) Save(ctx context.Context) error {
 func (p *GameState) Item(r Request) *Item {
 	gameStateItem := NewItem(p).SetName(string(p.Nation))
 	memberNation, isMember := r.Values()[memberNationFlag]
-	if isMember {
+	if isMember && memberNation == p.Nation {
 		gameStateItem.AddLink(r.NewLink(GameStateResource.Link("update", Update, []string{"game_id", p.GameID.Encode(), "nation", fmt.Sprint(memberNation)})))
 	}
 	return gameStateItem
