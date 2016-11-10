@@ -1,3 +1,5 @@
 queue:
 - name: game-timeoutResolvePhase
   rate: 500/s
+- name: game-fcmNotify
+  rate: 500/s
