@@ -218,10 +218,15 @@ func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data *F
 
 	log.Infof(ctx, "UIDs %+v expanded to Tokens %+v", uids, tokens)
 
-	if err := fcmSendToTokensFunc.EnqueueIn(ctx, 0, time.Duration(0), notif, data, tokens); err != nil {
-		// Safe to retry, nothing got sent.
-		log.Errorf(ctx, "Unable to schedule sending of messages: %v; hope datastore gets fixed", err)
-		return err
+	if len(tokens) > 0 {
+		if err := fcmSendToTokensFunc.EnqueueIn(ctx, 0, time.Duration(0), notif, data, tokens); err != nil {
+			// Safe to retry, nothing got sent.
+			log.Errorf(ctx, "Unable to schedule sending of messages: %v; hope datastore gets fixed", err)
+			return err
+		}
+		log.Infof(ctx, "Enqueued sending to tokens")
+	} else {
+		log.Infof(ctx, "Skipping sending to empty token list")
 	}
 
 	log.Infof(ctx, "fcmSendToUsers(..., %v, %v, %+v) *** SUCCESS ***", spew.Sdump(notif), spew.Sdump(data), uids)
@@ -242,7 +247,6 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 	}
 
 	fcmConf, err := getFCMConf(ctx)
-	log.Infof(ctx, "############# found fcmConf %+v, %v", fcmConf, err)
 	if err != nil {
 		// Safe to retry, nothing got sent.
 		log.Errorf(ctx, "Unable to get FCMConf: %v; fix getFCMConf or hope datastore gets fixed", err)
@@ -250,7 +254,6 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 	}
 
 	client := fcm.NewFcmClient(fcmConf.ServerKey)
-	log.Infof(ctx, "########### created client with server key %q", fcmConf.ServerKey)
 	client.SetHTTPClient(urlfetch.Client(ctx))
 	client.AppendDevices(tokenStrings)
 	if notif != nil {
