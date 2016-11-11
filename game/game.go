@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -8,7 +9,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
@@ -24,6 +24,14 @@ import (
 const (
 	gameKind = "Game"
 )
+
+func PP(i interface{}) string {
+	b, err := json.MarshalIndent(i, "  ", "  ")
+	if err != nil {
+		panic(fmt.Errorf("trying to marshal %+v: %v", i, err))
+	}
+	return string(b)
+}
 
 type DelayFunc struct {
 	queue       string
@@ -257,9 +265,9 @@ func (g *Game) Start(ctx context.Context) error {
 		if err := phase.ScheduleResolution(ctx); err != nil {
 			return err
 		}
-		log.Infof(ctx, "%v has a %d minutes phase length, scheduled resolve", spew.Sdump(g), g.PhaseLengthMinutes)
+		log.Infof(ctx, "%v has a %d minutes phase length, scheduled resolve", PP(g), g.PhaseLengthMinutes)
 	} else {
-		log.Infof(ctx, "%v has a zero phase length, skipping resolve scheduling", spew.Sdump(g))
+		log.Infof(ctx, "%v has a zero phase length, skipping resolve scheduling", PP(g))
 	}
 
 	if err := phase.NotifyMembers(ctx, g); err != nil {
