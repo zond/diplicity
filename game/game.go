@@ -46,7 +46,7 @@ func NewDelayFunc(queue string, backend interface{}) *DelayFunc {
 func (d *DelayFunc) EnqueueAt(ctx context.Context, taskETA time.Time, args ...interface{}) error {
 	for i, arg := range args {
 		if !reflect.TypeOf(arg).AssignableTo(d.backendType.In(i + 1)) {
-			return fmt.Errorf("Can't delay execution of %v on %q with %+v, arg %v is not assignable to %v", d.backendType, d.queue, args, i, d.backendType.In(i))
+			return fmt.Errorf("Can't delay execution of %v on %q with %+v, arg %v (%#v) is not assignable to %v", d.backendType, d.queue, args, i, arg, d.backendType.In(i+1))
 		}
 	}
 	t, err := d.backend.Task(args...)
@@ -253,12 +253,20 @@ func (g *Game) Start(ctx context.Context) error {
 		return err
 	}
 
-	if g.PhaseLengthMinutes == 0 {
+	if g.PhaseLengthMinutes != 0 {
+		if err := phase.ScheduleResolution(ctx); err != nil {
+			return err
+		}
+		log.Infof(ctx, "%v has a %d minutes phase length, scheduled resolve", spew.Sdump(g), g.PhaseLengthMinutes)
+	} else {
 		log.Infof(ctx, "%v has a zero phase length, skipping resolve scheduling", spew.Sdump(g))
-		return nil
 	}
 
-	return phase.ScheduleResolution(ctx)
+	if err := phase.NotifyMembers(ctx, g); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func loadGame(w ResponseWriter, r Request) (*Game, error) {
