@@ -14,20 +14,18 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/delay"
 	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/taskqueue"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
 )
 
 var (
-	timeoutResolvePhaseFunc *delay.Function
+	timeoutResolvePhaseFunc *DelayFunc
 )
 
 func init() {
-	timeoutResolvePhaseFunc = delay.Func("game-timeoutResolvePhase", timeoutResolvePhase)
+	timeoutResolvePhaseFunc = NewDelayFunc("game-timeoutResolvePhase", timeoutResolvePhase)
 }
 
 func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
@@ -381,13 +379,7 @@ func (p *Phase) Item(r Request) *Item {
 }
 
 func (p *Phase) ScheduleResolution(ctx context.Context) error {
-	task, err := timeoutResolvePhaseFunc.Task(p.GameID, p.PhaseOrdinal)
-	if err != nil {
-		return err
-	}
-	task.ETA = p.DeadlineAt
-	_, err = taskqueue.Add(ctx, task, "game-timeoutResolvePhase")
-	return err
+	return timeoutResolvePhaseFunc.EnqueueAt(ctx, p.DeadlineAt, p.GameID, p.PhaseOrdinal)
 }
 
 func PhaseID(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) (*datastore.Key, error) {
