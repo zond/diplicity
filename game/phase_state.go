@@ -38,7 +38,24 @@ func (p PhaseStates) Item(r Request, phase *Phase) *Item {
 		Rel:         "self",
 		Route:       ListPhaseStatesRoute,
 		RouteParams: []string{"game_id", phase.GameID.Encode(), "phase_ordinal", fmt.Sprint(phase.PhaseOrdinal)},
-	}))
+	})).SetDesc([][]string{
+		[]string{
+			"Phase states",
+			"Each member has exactly one phase state per phase. The phase state defines phase scoped configuration for the member, such as whether the member is ready for the phase to resolve, if the member wants a draw and if the member is currently on probation.",
+		},
+		[]string{
+			"Ready to resolve",
+			"If all members of a game are ready for the phase to resolve, the phase will resolve immediately without waiting for the deadline.",
+		},
+		[]string{
+			"Draws",
+			"If all members of a game want a draw, the game will end early. The scoring system will reflect this by distributing points to all remaining players.",
+		},
+		[]string{
+			"Probation",
+			"Members on probation will get future phase states automatically marked as 'ready to resolve' and 'wanting draw'. To return from probation, simply update the phase state of the member on probation.",
+		},
+	})
 	return phaseStatesItem
 }
 

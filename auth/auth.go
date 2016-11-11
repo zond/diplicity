@@ -78,7 +78,21 @@ func (u *UserConfig) ID(ctx context.Context) *datastore.Key {
 func (u *UserConfig) Item(r Request) *Item {
 	return NewItem(u).SetName("user-config").
 		AddLink(r.NewLink(UserConfigResource.Link("self", Load, []string{"user_id", u.UserId}))).
-		AddLink(r.NewLink(UserConfigResource.Link("update", Update, []string{"user_id", u.UserId})))
+		AddLink(r.NewLink(UserConfigResource.Link("update", Update, []string{"user_id", u.UserId}))).
+		SetDesc([][]string{
+		[]string{
+			"User configuration",
+			"Each diplicity user has exactly one user configuration. User configurations defined user selected configuration for all of diplicty, such as which FCM tokens should be notified of new press or new phases.",
+		},
+		[]string{
+			"FCM tokens",
+			"Each FCM token has several field.",
+			"A value, which is the registration ID received when registering with FCM.",
+			"A disabled flag which will turn notification to that token off, and which the server toggles if FCM returns errors when notifications are sent to that token.",
+			"A note field, which the server will populate with the reason the token was disabled.",
+			"An app field, which the app populating the token can use to identify tokens belonging to it to avoid removing/updating tokens belonging to other apps.",
+		},
+	})
 }
 
 func loadUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {

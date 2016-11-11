@@ -34,7 +34,16 @@ func (g GameStates) Item(r Request, gameID *datastore.Key) *Item {
 		Rel:         "self",
 		Route:       ListGameStatesRoute,
 		RouteParams: []string{"game_id", gameID.Encode()},
-	}))
+	})).SetDesc([][]string{
+		[]string{
+			"Game states",
+			"Each member has exactly one game state per game. The game state defines game scoped configuration for the member, such as which other members are muted in the chat.",
+		},
+		[]string{
+			"Muting",
+			"Adding another member nation to the 'Muted' list will hide all press from that member.",
+		},
+	})
 	return gameStatesItem
 }
 
