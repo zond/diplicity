@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
@@ -22,13 +23,13 @@ const (
 )
 
 func init() {
-	FcmSendToUsersFunc = NewDelayFunc("game-fcmSendToUsers", fcmSendToUsers)
+	FCMSendToUsersFunc = NewDelayFunc("game-fcmSendToUsers", fcmSendToUsers)
 	fcmSendToTokensFunc = NewDelayFunc("game-fcmSendToTokens", fcmSendToTokens)
 	manageFCMTokensFunc = NewDelayFunc("game-manageFCMTokens", manageFCMTokens)
 }
 
 var (
-	FcmSendToUsersFunc  *DelayFunc
+	FCMSendToUsersFunc  *DelayFunc
 	fcmSendToTokensFunc *DelayFunc
 	manageFCMTokensFunc *DelayFunc
 	prodFCMConf         *FCMConf
@@ -65,10 +66,11 @@ func getFCMConf(ctx context.Context) (*FCMConf, error) {
 	prodFCMConfLock.RUnlock()
 	prodFCMConfLock.Lock()
 	defer prodFCMConfLock.Unlock()
-	prodFCMConf = &FCMConf{}
-	if err := datastore.Get(ctx, getFCMConfKey(ctx), prodFCMConf); err != nil {
+	foundConf := &FCMConf{}
+	if err := datastore.Get(ctx, getFCMConfKey(ctx), foundConf); err != nil {
 		return nil, err
 	}
+	prodFCMConf = foundConf
 	return prodFCMConf, nil
 }
 
@@ -159,7 +161,21 @@ func manageFCMTokens(ctx context.Context, tokensToRemove, tokensToUpdate map[str
 	return nil
 }
 
-func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data interface{}, uids []string) error {
+type FCMData struct {
+	DiplicityJSON string
+}
+
+func NewFCMData(payload interface{}) (*FCMData, error) {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	return &FCMData{
+		DiplicityJSON: string(b),
+	}, nil
+}
+
+func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data *FCMData, uids []string) error {
 	log.Infof(ctx, "fcmSendToUsers(..., %v, %v, %+v)", spew.Sdump(notif), spew.Sdump(data), uids)
 
 	userConfigs := make([]auth.UserConfig, len(uids))
@@ -202,7 +218,7 @@ func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data in
 
 	log.Infof(ctx, "UIDs %+v expanded to Tokens %+v", uids, tokens)
 
-	if err := fcmSendToTokensFunc.EnqueueIn(ctx, 0, notif, data, tokens); err != nil {
+	if err := fcmSendToTokensFunc.EnqueueIn(ctx, 0, time.Duration(0), notif, data, tokens); err != nil {
 		// Safe to retry, nothing got sent.
 		log.Errorf(ctx, "Unable to schedule sending of messages: %v; hope datastore gets fixed", err)
 		return err
@@ -213,7 +229,7 @@ func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data in
 	return nil
 }
 
-func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.NotificationPayload, data interface{}, tokens map[string][]string) error {
+func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.NotificationPayload, data *FCMData, tokens map[string][]string) error {
 	log.Infof(ctx, "fcmSendToTokens(..., %v, %v, %+v)", spew.Sdump(notif), spew.Sdump(data), tokens)
 
 	tokenStrings := []string{}
@@ -226,6 +242,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 	}
 
 	fcmConf, err := getFCMConf(ctx)
+	log.Infof(ctx, "############# found fcmConf %+v, %v", fcmConf, err)
 	if err != nil {
 		// Safe to retry, nothing got sent.
 		log.Errorf(ctx, "Unable to get FCMConf: %v; fix getFCMConf or hope datastore gets fixed", err)
@@ -233,6 +250,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 	}
 
 	client := fcm.NewFcmClient(fcmConf.ServerKey)
+	log.Infof(ctx, "########### created client with server key %q", fcmConf.ServerKey)
 	client.SetHTTPClient(urlfetch.Client(ctx))
 	client.AppendDevices(tokenStrings)
 	if notif != nil {
@@ -329,7 +347,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 			delay = at.Sub(time.Now())
 		}
 		// Finally, try to schedule again. If we can't then fuckall we'll try again with the entire payload.
-		if err := fcmSendToTokensFunc.EnqueueIn(ctx, delay, notif, data, tokens); err != nil {
+		if err := fcmSendToTokensFunc.EnqueueIn(ctx, delay, delay, notif, data, tokens); err != nil {
 			log.Errorf(ctx, "Unable to schedule retry of %v, %v to %+v in %v: %v", spew.Sdump(notif), spew.Sdump(data), tokens, delay, err)
 			return err
 		}
