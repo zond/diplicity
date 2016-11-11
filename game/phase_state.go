@@ -197,7 +197,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		}
 
 		return phaseState.Save(ctx)
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}
 
