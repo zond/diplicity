@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"reflect"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -13,7 +14,9 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/delay"
 	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/taskqueue"
 
 	. "github.com/zond/goaeoas"
 )
@@ -21,6 +24,43 @@ import (
 const (
 	gameKind = "Game"
 )
+
+type DelayFunc struct {
+	queue       string
+	backendType reflect.Type
+	backend     *delay.Function
+}
+
+func NewDelayFunc(queue string, backend interface{}) *DelayFunc {
+	typ := reflect.TypeOf(backend)
+	if typ.Kind() != reflect.Func {
+		panic(fmt.Errorf("Can't create DelayFunc with non Func %#v", backend))
+	}
+	return &DelayFunc{
+		queue:       queue,
+		backend:     delay.Func(queue, backend),
+		backendType: typ,
+	}
+}
+
+func (d *DelayFunc) EnqueueAt(ctx context.Context, taskETA time.Time, args ...interface{}) error {
+	for i, arg := range args {
+		if !reflect.TypeOf(arg).AssignableTo(d.backendType.In(i + 1)) {
+			return fmt.Errorf("Can't delay execution of %v on %q with %+v, arg %v is not assignable to %v", d.backendType, d.queue, args, i, d.backendType.In(i))
+		}
+	}
+	t, err := d.backend.Task(args...)
+	if err != nil {
+		return err
+	}
+	t.ETA = taskETA
+	_, err = taskqueue.Add(ctx, t, d.queue)
+	return err
+}
+
+func (d *DelayFunc) EnqueueIn(ctx context.Context, taskDelay time.Duration, args ...interface{}) error {
+	return d.EnqueueAt(ctx, time.Now().Add(taskDelay), args...)
+}
 
 var GameResource = &Resource{
 	Load:   loadGame,
