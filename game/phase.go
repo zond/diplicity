@@ -9,6 +9,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/go-fcm"
 	"github.com/zond/godip/state"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
@@ -439,6 +440,32 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64) *Phase 
 		}
 	}
 	return p
+}
+
+func (p *Phase) NotifyMembers(ctx context.Context, game *Game) error {
+	memberIds := make([]string, len(game.Members))
+	for i, member := range game.Members {
+		memberIds[i] = member.User.Id
+	}
+	data, err := NewFCMData(map[string]interface{}{
+		"diplicityPhase": p,
+		"diplicityGame":  game,
+	})
+	if err != nil {
+		return err
+	}
+	return FCMSendToUsersFunc.EnqueueIn(
+		ctx,
+		0,
+		&fcm.NotificationPayload{
+			Title:       fmt.Sprintf("%s %d, %s", p.Season, p.Year, p.Type),
+			Body:        fmt.Sprintf("%s has a new phase.", game.Desc),
+			Tag:         "diplicity-engine-new-phase",
+			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Phase/%d", game.ID.Encode(), p.PhaseOrdinal),
+		},
+		data,
+		memberIds,
+	)
 }
 
 func listOptions(w ResponseWriter, r Request) error {
