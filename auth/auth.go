@@ -198,31 +198,32 @@ func getNaCl(ctx context.Context) (*naCl, error) {
 	// nope, check if in datastore
 	prodNaClLock.Lock()
 	defer prodNaClLock.Unlock()
-	prodNaCl = &naCl{}
-	if err := datastore.Get(ctx, getNaClKey(ctx), prodNaCl); err == nil {
-		return prodNaCl, nil
+	foundNaCl := &naCl{}
+	if err := datastore.Get(ctx, getNaClKey(ctx), foundNaCl); err == nil {
+		return foundNaCl, nil
 	} else if err != datastore.ErrNoSuchEntity {
 		return nil, err
 	}
 	// nope, create new key
-	prodNaCl.Secret = make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, prodNaCl.Secret); err != nil {
+	foundNaCl.Secret = make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, foundNaCl.Secret); err != nil {
 		return nil, err
 	}
 	// write it transactionally into datastore
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		if err := datastore.Get(ctx, getNaClKey(ctx), prodNaCl); err == nil {
+		if err := datastore.Get(ctx, getNaClKey(ctx), foundNaCl); err == nil {
 			return nil
 		} else if err != datastore.ErrNoSuchEntity {
 			return err
 		}
-		if _, err := datastore.Put(ctx, getNaClKey(ctx), prodNaCl); err != nil {
+		if _, err := datastore.Put(ctx, getNaClKey(ctx), foundNaCl); err != nil {
 			return err
 		}
 		return nil
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
+	prodNaCl = foundNaCl
 	return prodNaCl, nil
 }
 
@@ -257,10 +258,11 @@ func getOAuth(ctx context.Context) (*OAuth, error) {
 	prodOAuthLock.RUnlock()
 	prodOAuthLock.Lock()
 	defer prodOAuthLock.Unlock()
-	prodOAuth = &OAuth{}
-	if err := datastore.Get(ctx, getOAuthKey(ctx), prodOAuth); err != nil {
+	foundOAuth := &OAuth{}
+	if err := datastore.Get(ctx, getOAuthKey(ctx), foundOAuth); err != nil {
 		return nil, err
 	}
+	prodOAuth = foundOAuth
 	return prodOAuth, nil
 }
 
