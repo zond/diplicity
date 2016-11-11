@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
 	"github.com/zond/godip/state"
@@ -47,6 +46,7 @@ func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdina
 			log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; hope datastore will get fixed", keys, values, err)
 			return err
 		}
+		game.ID = gameID
 
 		phaseStates := PhaseStates{}
 
@@ -84,38 +84,43 @@ func (p *PhaseResolver) Act() error {
 	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act()", p.Phase.GameID, p.Phase.PhaseOrdinal)
 
 	if p.TaskTriggered && p.Phase.DeadlineAt.After(time.Now()) {
-		log.Infof(p.Context, "Resolution postponed to %v by %v; rescheduling task", p.Phase.DeadlineAt, spew.Sdump(p.Phase))
+		log.Infof(p.Context, "Resolution postponed to %v by %v; rescheduling task", p.Phase.DeadlineAt, PP(p.Phase))
 		return p.Phase.ScheduleResolution(p.Context)
 	}
 
 	if p.Phase.Resolved {
-		log.Infof(p.Context, "Already resolved; %v; skipping resolution", spew.Sdump(p.Phase))
+		log.Infof(p.Context, "Already resolved; %v; skipping resolution", PP(p.Phase))
 		return nil
 	}
 
-	log.Infof(p.Context, "PhaseStates at resolve time: %v", spew.Sdump(p.PhaseStates))
+	log.Infof(p.Context, "PhaseStates at resolve time: %v", PP(p.PhaseStates))
 
 	orderMap, err := p.Phase.Orders(p.Context)
 	if err != nil {
-		log.Errorf(p.Context, "Unable to load orders for %v: %v; fix phase.Orders or hope datastore will get fixed", spew.Sdump(p.Phase), err)
+		log.Errorf(p.Context, "Unable to load orders for %v: %v; fix phase.Orders or hope datastore will get fixed", PP(p.Phase), err)
 		return err
 	}
-	log.Infof(p.Context, "Orders at resolve time: %v", spew.Sdump(orderMap))
+	log.Infof(p.Context, "Orders at resolve time: %v", PP(orderMap))
 
 	s, err := p.Phase.State(p.Context, variants.Variants[p.Game.Variant], orderMap)
 	if err != nil {
-		log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", spew.Sdump(p.Phase), err)
+		log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", PP(p.Phase), err)
 		return err
 	}
 	if err := s.Next(); err != nil {
-		log.Errorf(p.Context, "Unable to roll State forward for %v: %v; fix godip!", spew.Sdump(p.Phase), err)
+		log.Errorf(p.Context, "Unable to roll State forward for %v: %v; fix godip!", PP(p.Phase), err)
 		return err
 	}
 
 	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1)
 	newPhase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
 	if err := newPhase.Save(p.Context); err != nil {
-		log.Errorf(p.Context, "Unable to save new Phase %v: %v; hope datastore will get fixed", spew.Sdump(newPhase), err)
+		log.Errorf(p.Context, "Unable to save new Phase %v: %v; hope datastore will get fixed", PP(newPhase), err)
+		return err
+	}
+
+	if err := newPhase.NotifyMembers(p.Context, p.Game); err != nil {
+		log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
 		return err
 	}
 
@@ -163,33 +168,33 @@ func (p *PhaseResolver) Act() error {
 		for i := range newPhaseStates {
 			id, err := newPhaseStates[i].ID(p.Context)
 			if err != nil {
-				log.Errorf(p.Context, "Unable to create new phase state ID for %v: %v; fix PhaseState.ID or hope datastore gets fixed", spew.Sdump(newPhaseStates[i]), err)
+				log.Errorf(p.Context, "Unable to create new phase state ID for %v: %v; fix PhaseState.ID or hope datastore gets fixed", PP(newPhaseStates[i]), err)
 				return err
 			}
 			ids[i] = id
 		}
 		if _, err := datastore.PutMulti(p.Context, ids, newPhaseStates); err != nil {
-			log.Errorf(p.Context, "Unable to save new PhaseStates %v: %v; hope datastore will get fixed", spew.Sdump(newPhaseStates), err)
+			log.Errorf(p.Context, "Unable to save new PhaseStates %v: %v; hope datastore will get fixed", PP(newPhaseStates), err)
 			return err
 		}
-		log.Infof(p.Context, "Saved %v to get things moving", spew.Sdump(newPhaseStates))
+		log.Infof(p.Context, "Saved %v to get things moving", PP(newPhaseStates))
 	}
 
 	p.Phase.Resolved = true
 	if err := p.Phase.Save(p.Context); err != nil {
-		log.Errorf(p.Context, "Unable to save old phase %v: %v; hope datastore gets fixed", spew.Sdump(p.Phase), err)
+		log.Errorf(p.Context, "Unable to save old phase %v: %v; hope datastore gets fixed", PP(p.Phase), err)
 		return err
 	}
 
 	if !allReady {
 		if p.Game.PhaseLengthMinutes > 0 {
 			if err := newPhase.ScheduleResolution(p.Context); err != nil {
-				log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", spew.Sdump(newPhase), err)
+				log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(newPhase), err)
 				return err
 			}
-			log.Infof(p.Context, "%v has phase length of %v minutes, scheduled new resolve", spew.Sdump(p.Game), p.Game.PhaseLengthMinutes)
+			log.Infof(p.Context, "%v has phase length of %v minutes, scheduled new resolve", PP(p.Game), p.Game.PhaseLengthMinutes)
 		} else {
-			log.Infof(p.Context, "%v has a zero phase length, skipping resolve scheduling", spew.Sdump(p.Game))
+			log.Infof(p.Context, "%v has a zero phase length, skipping resolve scheduling", PP(p.Game))
 		}
 
 		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)

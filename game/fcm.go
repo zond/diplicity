@@ -1,13 +1,14 @@
 package game
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
 	"golang.org/x/net/context"
@@ -118,7 +119,7 @@ func splitMap(at int, m map[string]map[string]string) (m1, m2 map[string]map[str
 }
 
 func manageFCMTokens(ctx context.Context, tokensToRemove, tokensToUpdate map[string]map[string]string) error {
-	log.Infof(ctx, "manageFCMTokens(..., %+v, %+v)", spew.Sdump(tokensToRemove), spew.Sdump(tokensToUpdate))
+	log.Infof(ctx, "manageFCMTokens(..., %+v, %+v)", PP(tokensToRemove), PP(tokensToUpdate))
 
 	if len(tokensToRemove) > 0 {
 		toRemove, toDelay := splitMap(4, tokensToRemove)
@@ -156,13 +157,13 @@ func manageFCMTokens(ctx context.Context, tokensToRemove, tokensToUpdate map[str
 		)
 	}
 
-	log.Infof(ctx, "manageFCMTokens(..., %+v, %+v) *** SUCCESS ***", spew.Sdump(tokensToRemove), spew.Sdump(tokensToUpdate))
+	log.Infof(ctx, "manageFCMTokens(..., %+v, %+v) *** SUCCESS ***", PP(tokensToRemove), PP(tokensToUpdate))
 
 	return nil
 }
 
 type FCMData struct {
-	DiplicityJSON string
+	DiplicityJSON []byte
 }
 
 func NewFCMData(payload interface{}) (*FCMData, error) {
@@ -170,13 +171,17 @@ func NewFCMData(payload interface{}) (*FCMData, error) {
 	if err != nil {
 		return nil, err
 	}
+	buf := &bytes.Buffer{}
+	w := zlib.NewWriter(buf)
+	w.Write(b)
+	w.Close()
 	return &FCMData{
-		DiplicityJSON: string(b),
+		DiplicityJSON: buf.Bytes(),
 	}, nil
 }
 
 func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data *FCMData, uids []string) error {
-	log.Infof(ctx, "fcmSendToUsers(..., %v, %v, %+v)", spew.Sdump(notif), spew.Sdump(data), uids)
+	log.Infof(ctx, "fcmSendToUsers(..., %v, %v, %+v)", PP(notif), PP(data), uids)
 
 	userConfigs := make([]auth.UserConfig, len(uids))
 	ids := make([]*datastore.Key, len(uids))
@@ -229,13 +234,13 @@ func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data *F
 		log.Infof(ctx, "Skipping sending to empty token list")
 	}
 
-	log.Infof(ctx, "fcmSendToUsers(..., %v, %v, %+v) *** SUCCESS ***", spew.Sdump(notif), spew.Sdump(data), uids)
+	log.Infof(ctx, "fcmSendToUsers(..., %v, %v, %+v) *** SUCCESS ***", PP(notif), PP(data), uids)
 
 	return nil
 }
 
 func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.NotificationPayload, data *FCMData, tokens map[string][]string) error {
-	log.Infof(ctx, "fcmSendToTokens(..., %v, %v, %+v)", spew.Sdump(notif), spew.Sdump(data), tokens)
+	log.Infof(ctx, "fcmSendToTokens(..., %v, %v, %+v)", PP(notif), PP(data), tokens)
 
 	tokenStrings := []string{}
 	userByToken := map[string]string{}
@@ -266,22 +271,22 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 	resp, err := client.Send()
 	if err != nil {
 		// Safe to retry, nothing got sent probably.
-		log.Errorf(ctx, "%v unable to send: %v", spew.Sdump(client), err)
+		log.Errorf(ctx, "%v unable to send: %v", PP(client), err)
 		return err
 	}
 
-	log.Infof(ctx, "Sent %v, received %v, %v in response", spew.Sdump(client), spew.Sdump(resp), err)
+	log.Infof(ctx, "Sent %v, received %v, %v in response", PP(client), PP(resp), err)
 
 	if resp.StatusCode == 401 {
 		// Safe to retry, we will just keep delaying incrementally until the auth gets fixed.
-		msg := fmt.Sprintf("%v unable to send due to 401: %v; fix your authentication", spew.Sdump(client), spew.Sdump(resp))
+		msg := fmt.Sprintf("%v unable to send due to 401: %v; fix your authentication", PP(client), PP(resp))
 		log.Errorf(ctx, msg)
 		return fmt.Errorf(msg)
 	}
 
 	if resp.StatusCode == 400 {
 		// Can't retry, our payload is fucked up.
-		log.Errorf(ctx, "%v unable to send due to 400: %v; unable to recover", spew.Sdump(client), spew.Sdump(resp))
+		log.Errorf(ctx, "%v unable to send due to 400: %v; unable to recover", PP(client), PP(resp))
 		return nil
 	}
 
@@ -332,7 +337,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 			}
 		}
 		if err := manageFCMTokensFunc.EnqueueIn(ctx, 0, idsToRemove, idsToUpdate); err != nil {
-			log.Errorf(ctx, "Unable to schedule repair of FCM tokens (to remove: %v, to update: %v): %v; hope that datastore gets fixed", spew.Sdump(idsToRemove), spew.Sdump(idsToUpdate), err)
+			log.Errorf(ctx, "Unable to schedule repair of FCM tokens (to remove: %v, to update: %v): %v; hope that datastore gets fixed", PP(idsToRemove), PP(idsToUpdate), err)
 		}
 	}
 
@@ -351,12 +356,12 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 		}
 		// Finally, try to schedule again. If we can't then fuckall we'll try again with the entire payload.
 		if err := fcmSendToTokensFunc.EnqueueIn(ctx, delay, delay, notif, data, tokens); err != nil {
-			log.Errorf(ctx, "Unable to schedule retry of %v, %v to %+v in %v: %v", spew.Sdump(notif), spew.Sdump(data), tokens, delay, err)
+			log.Errorf(ctx, "Unable to schedule retry of %v, %v to %+v in %v: %v", PP(notif), PP(data), tokens, delay, err)
 			return err
 		}
 	}
 
-	log.Infof(ctx, "fcmSendToTokens(..., %v, %v, %+v) *** SUCCESS ***", spew.Sdump(notif), spew.Sdump(data), tokens)
+	log.Infof(ctx, "fcmSendToTokens(..., %v, %v, %+v) *** SUCCESS ***", PP(notif), PP(data), tokens)
 
 	return nil
 }
