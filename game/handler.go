@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -27,6 +28,9 @@ const (
 )
 
 const (
+	GetManifestJSRoute          = "GetManifestJS"
+	GetSWJSRoute                = "GetSWJS"
+	GetMainJSRoute              = "GetMainJS"
 	ConfigureRoute              = "AuthConfigure"
 	IndexRoute                  = "Index"
 	OpenGamesRoute              = "OpenGames"
@@ -212,6 +216,84 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func handleMainJS(w ResponseWriter, r Request) error {
+	w.Header().Set("Content-Type", "text/javascript; charset=UTF-8")
+	_, err := io.WriteString(w, `
+var fcmRegister = function(uid, authToken, iid) {
+  console.log("FCM not yet available");
+}
+if ('serviceWorker' in navigator) {
+	console.log('Service Worker is supported.');
+	navigator.serviceWorker.register('/js/sw.js').then(function(reg) {
+		console.log(reg);
+		reg.pushManager.subscribe({
+			userVisibleOnly: true
+		}).then(function(sub) {
+			console.log('Sub:', sub);
+			var parts = sub.endpoint.split(/\//);
+			var iid = parts[parts.length-1];
+			fcmRegister = function(uid, authToken, iid) {
+				$.post('/User/' + uid + '/UserConfig?token=' + authToken,
+				  JSON.stringify({
+            FCMTokens: [
+						  {
+					      Value: iid,
+					 	    Disabled: false,
+					 	    Note: "Configured via web interface at https://diplicity-engine.appspot.com/.",
+					 	    App: "diplicity-engine"
+							}
+					  ]
+					}),
+					function(data) {
+					  alert("Subscribing to FCM");
+					}
+				);
+			};
+			navigator.serviceWorker.addEventListener('message', function(event){
+				alert("Received Message: " + event);
+			});
+		});
+	}).catch(function(err) {
+		console.log(err);
+	});
+} else {
+	alert("Service Worker not supported in browser, example won't work.");
+}
+`)
+	return err
+}
+
+func handleSWJS(w ResponseWriter, r Request) error {
+	w.Header().Set("Content-Type", "text/javascript; charset=UTF-8")
+	_, err := io.WriteString(w, `
+console.log('Started', self);
+self.addEventListener('install', function(event) {
+  self.skipWaiting();
+  console.log('Installed', event);
+});
+self.addEventListener('activate', function(event) {
+  console.log('Activated', event);
+});
+self.addEventListener('push', function(event) {
+  console.log('Push message received in sw', event);
+	clients.matchAll().then(clients => {
+		for (var i = 0; i < clients.length; i++) {
+			clients[i].postMessage("message");
+		}
+	});
+});
+`)
+	return err
+}
+
+func handleManifestJS(w ResponseWriter, r Request) error {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	return json.NewEncoder(w).Encode(map[string]string{
+		"name":          "diplicity-engine",
+		"gcm_sender_id": "635122585664",
+	})
+}
+
 func SetupRouter(r *mux.Router) {
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
@@ -229,6 +311,9 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Games/My/Staging", []string{"GET"}, MyStagingGamesRoute, stagingGamesHandler.handlePrivate)
 	Handle(r, "/Games/My/Started", []string{"GET"}, MyStartedGamesRoute, startedGamesHandler.handlePrivate)
 	Handle(r, "/Games/My/Finished", []string{"GET"}, MyFinishedGamesRoute, finishedGamesHandler.handlePrivate)
+	Handle(r, "/js/main.js", []string{"GET"}, GetMainJSRoute, handleMainJS)
+	Handle(r, "/js/sw.js", []string{"GET"}, GetSWJSRoute, handleSWJS)
+	Handle(r, "/js/manifest.json", []string{"GET"}, GetManifestJSRoute, handleManifestJS)
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)
@@ -236,4 +321,18 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, MessageResource)
 	HandleResource(r, PhaseStateResource)
 	HandleResource(r, GameStateResource)
+	HeadCallback(func(head *Node) error {
+		head.AddEl("script", "src", "https://ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js")
+		mainJSURL, err := r.Get(GetMainJSRoute).URL()
+		if err != nil {
+			return err
+		}
+		head.AddEl("script", "src", mainJSURL.String())
+		manifestURL, err := r.Get(GetManifestJSRoute).URL()
+		if err != nil {
+			return err
+		}
+		head.AddEl("link", "rel", "manifest", "href", manifestURL.String())
+		return nil
+	})
 }
