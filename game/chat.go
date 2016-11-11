@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/go-fcm"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
@@ -172,6 +173,39 @@ type Message struct {
 	CreatedAt      time.Time
 }
 
+func (m *Message) NotifyRecipients(ctx context.Context, channel *Channel, game *Game) error {
+	sort.Sort(m.ChannelMembers)
+	memberIds := []string{}
+	for _, nat := range m.ChannelMembers {
+		for _, member := range game.Members {
+			if member.Nation == nat {
+				memberIds = append(memberIds, member.User.Id)
+				break
+			}
+		}
+	}
+	data, err := NewFCMData(map[string]interface{}{
+		"diplicityMessage": m,
+		"diplicityChannel": channel,
+		"diplicityGame":    game,
+	})
+	if err != nil {
+		return err
+	}
+	return FCMSendToUsersFunc.EnqueueIn(
+		ctx,
+		0,
+		&fcm.NotificationPayload{
+			Title:       fmt.Sprintf("%s: Message from %s", m.ChannelMembers.String(), m.Sender),
+			Body:        fmt.Sprintf(m.Body),
+			Tag:         "diplicity-engine-new-message",
+			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Channel/%s/Messages", game.ID.Encode(), m.ChannelMembers.String()),
+		},
+		data,
+		memberIds,
+	)
+}
+
 func (m *Message) Item(r Request) *Item {
 	return NewItem(m).SetName(string(m.Sender))
 }
@@ -229,19 +263,31 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 	}
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
 		channel := &Channel{}
-		if err := datastore.Get(ctx, channelID, channel); err == datastore.ErrNoSuchEntity {
-			channel.GameID = gameID
-			channel.Members = message.ChannelMembers
-			channel.NMessages = 0
+		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, channelID}, []interface{}{game, channel}); err != nil {
+			if merr, ok := err.(appengine.MultiError); ok {
+				if merr[0] == nil && merr[1] == datastore.ErrNoSuchEntity {
+					channel.GameID = gameID
+					channel.Members = message.ChannelMembers
+					channel.NMessages = 0
+				} else {
+					return merr
+				}
+			} else {
+				return err
+			}
 		}
+		game.ID = gameID
 		if message.ID, err = datastore.Put(ctx, datastore.NewIncompleteKey(ctx, messageKind, channelID), message); err != nil {
 			return err
 		}
 		channel.NMessages += 1
-		_, err = datastore.Put(ctx, channelID, channel)
-		return err
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		if _, err = datastore.Put(ctx, channelID, channel); err != nil {
+			return err
+		}
+		return message.NotifyRecipients(ctx, channel, game)
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}
 
