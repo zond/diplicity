@@ -232,23 +232,11 @@ if ('serviceWorker' in navigator) {
 			console.log('Sub:', sub);
 			var parts = sub.endpoint.split(/\//);
 			var iid = parts[parts.length-1];
-			fcmRegister = function(uid, authToken, iid) {
-				$.post('/User/' + uid + '/UserConfig?token=' + authToken,
-				  JSON.stringify({
-            FCMTokens: [
-						  {
-					      Value: iid,
-					 	    Disabled: false,
-					 	    Note: "Configured via web interface at https://diplicity-engine.appspot.com/.",
-					 	    App: "diplicity-engine"
-							}
-					  ]
-					}),
-					function(data) {
-					  alert("Subscribing to FCM");
-					}
-				);
-			};
+			if ($('#iid').length == 0) {
+				$('body').prepend('<div style="font-size: xx-small; font-weight: lighter;" id="iid">Your FCM token: ' + iid + '</div>');
+			} else {
+				$('#iid').text('Your FCM token: ' + iid);
+			}
 			navigator.serviceWorker.addEventListener('message', function(event){
 				alert("Received Message: " + event);
 			});
