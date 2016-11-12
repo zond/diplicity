@@ -2,7 +2,6 @@ package game
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -216,85 +215,6 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func handleMainJS(w ResponseWriter, r Request) error {
-	w.Header().Set("Content-Type", "text/javascript; charset=UTF-8")
-	_, err := io.WriteString(w, `
-const messaging = firebase.messaging();
-messaging.requestPermission().then(function() {
-	console.log('Notification permission granted.');
-	// Get Instance ID token. Initially this makes a network call, once retrieved
-	// subsequent calls to getToken will return from cache.
-	messaging.getToken()
-	.then(function(currentToken) {
-		if (currentToken) {
-			if ($('#fcm-token').length == 0) {
-				$('body').prepend('<div id="fcm-token" style="font-size: xx-small; font-weight: light;">Your FCM token: ' + currentToken + '</div>');
-			} else {
-				$('#fcm-token').text('Your FCM token: ' + currentToken);
-			}
-		} else {
-			$('#fcm-token').remove();
-		}
-	})
-	.catch(function(err) {
-		console.log('An error occurred while retrieving token. ', err);
-	});
-	// Callback fired if Instance ID token is updated.
-	messaging.onTokenRefresh(function() {
-		messaging.getToken()
-		.then(function(refreshedToken) {
-			console.log('Token refreshed.');
-		})
-		.catch(function(err) {
-			console.log('Unable to retrieve refreshed token ', err);
-		});
-	});
-	// Handle incoming messages. Called when:
-	// - a message is received while the app has focus
-	// - the user clicks on an app notification created by a sevice worker
-	//   'messaging.setBackgroundMessageHandler' handler.
-	messaging.onMessage(function(payload) {
-		console.log("Message received. ", payload);
-		alert(payload.notification.title + '\n' + payload.notification.body);
-		// ...
-	});
-}).catch(function(err) {
-	console.log('Unable to get permission to notify.', err);
-});
-`)
-	return err
-}
-
-func handleSWJS(w ResponseWriter, r Request) error {
-	w.Header().Set("Content-Type", "text/javascript; charset=UTF-8")
-	_, err := io.WriteString(w, `
-	// Give the service worker access to Firebase Messaging.
-	// Note that you can only use Firebase Messaging here, other Firebase libraries
-	// are not available in the service worker.
-	importScripts('https://www.gstatic.com/firebasejs/3.5.2/firebase-app.js');
-	importScripts('https://www.gstatic.com/firebasejs/3.5.2/firebase-messaging.js');
-
-	// Initialize the Firebase app in the service worker by passing in the
-	// messagingSenderId.
-	firebase.initializeApp({
-		'messagingSenderId': 'YOUR-SENDER-ID'
-	});
-
-	// Retrieve an instance of Firebase Messaging so that it can handle background
-	// messages.
-	const messaging = firebase.messaging();
-`)
-	return err
-}
-
-func handleManifestJS(w ResponseWriter, r Request) error {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	return json.NewEncoder(w).Encode(map[string]string{
-		"name":          "diplicity-engine",
-		"gcm_sender_id": "103953800507",
-	})
-}
-
 func SetupRouter(r *mux.Router) {
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
@@ -312,9 +232,6 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Games/My/Staging", []string{"GET"}, MyStagingGamesRoute, stagingGamesHandler.handlePrivate)
 	Handle(r, "/Games/My/Started", []string{"GET"}, MyStartedGamesRoute, startedGamesHandler.handlePrivate)
 	Handle(r, "/Games/My/Finished", []string{"GET"}, MyFinishedGamesRoute, finishedGamesHandler.handlePrivate)
-	Handle(r, "/js/main.js", []string{"GET"}, GetMainJSRoute, handleMainJS)
-	Handle(r, "/firebase-messaging-sw.js", []string{"GET"}, GetSWJSRoute, handleSWJS)
-	Handle(r, "/js/manifest.json", []string{"GET"}, GetManifestJSRoute, handleManifestJS)
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)
@@ -324,30 +241,12 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, GameStateResource)
 	HeadCallback(func(head *Node) error {
 		head.AddEl("script", "src", "https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js")
+		head.AddEl("script", "src", "https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js")
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.6.0/firebase.js")
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.5.2/firebase-app.js")
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.5.2/firebase-messaging.js")
-		head.AddEl("script").AddText(`
-  // Initialize Firebase
-  var config = {
-    apiKey: "AIzaSyB0rX7dts3Rk0UnDRR9A4vghO01mwCvLxY",
-    authDomain: "diplicity-engine.firebaseapp.com",
-    databaseURL: "https://diplicity-engine.firebaseio.com",
-    storageBucket: "diplicity-engine.appspot.com",
-    messagingSenderId: "635122585664"
-  };
-  firebase.initializeApp(config);
-`)
-		mainJSURL, err := r.Get(GetMainJSRoute).URL()
-		if err != nil {
-			return err
-		}
-		head.AddEl("script", "src", mainJSURL.String())
-		manifestURL, err := r.Get(GetManifestJSRoute).URL()
-		if err != nil {
-			return err
-		}
-		head.AddEl("link", "rel", "manifest", "href", manifestURL.String())
+		head.AddEl("script", "src", "/js/main.js")
+		head.AddEl("link", "rel", "manifest", "href", "/js/manifest.json")
 		return nil
 	})
 }

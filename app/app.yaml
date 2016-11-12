@@ -4,6 +4,11 @@ runtime: go
 api_version: go1
 
 handlers:
+- url: /(firebase-messaging-sw.js)
+  static_files: js/\1
+  upload: js/firebase-messaging-sw.js
+- url: /js
+  static_dir: js
 - url: /.*
   script: _go_app
   secure: always

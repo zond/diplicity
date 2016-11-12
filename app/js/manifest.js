@@ -1,0 +1,5 @@
+{		
+	"name":          "diplicity-engine",
+	"gcm_sender_id": "103953800507"
+}
+
