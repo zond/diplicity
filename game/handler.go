@@ -219,34 +219,48 @@ func handleConfigure(w ResponseWriter, r Request) error {
 func handleMainJS(w ResponseWriter, r Request) error {
 	w.Header().Set("Content-Type", "text/javascript; charset=UTF-8")
 	_, err := io.WriteString(w, `
-var fcmRegister = function(uid, authToken, iid) {
-  console.log("FCM not yet available");
-}
-if ('serviceWorker' in navigator) {
-	console.log('Service Worker is supported.');
-	navigator.serviceWorker.register('/js/sw.js').then(function(reg) {
-		console.log(reg);
-		reg.pushManager.subscribe({
-			userVisibleOnly: true
-		}).then(function(sub) {
-			console.log('Sub:', sub);
-			var parts = sub.endpoint.split(/\//);
-			var iid = parts[parts.length-1];
-			if ($('#iid').length == 0) {
-				$('body').prepend('<div style="font-size: xx-small; font-weight: lighter;" id="iid">Your FCM token: ' + iid + '</div>');
+const messaging = firebase.messaging();
+messaging.requestPermission().then(function() {
+	console.log('Notification permission granted.');
+	// Get Instance ID token. Initially this makes a network call, once retrieved
+	// subsequent calls to getToken will return from cache.
+	messaging.getToken()
+	.then(function(currentToken) {
+		if (currentToken) {
+			if ($('#fcm-token').length == 0) {
+				$('body').prepend('<div id="fcm-token" style="font-size: xx-small; font-weight: light;">Your FCM token: ' + currentToken + '</div>');
 			} else {
-				$('#iid').text('Your FCM token: ' + iid);
+				$('#fcm-token').text('Your FCM token: ' + currentToken);
 			}
-			navigator.serviceWorker.addEventListener('message', function(event){
-				alert("Received Message: " + event);
-			});
-		});
-	}).catch(function(err) {
-		console.log(err);
+		} else {
+			$('#fcm-token').remove();
+		}
+	})
+	.catch(function(err) {
+		console.log('An error occurred while retrieving token. ', err);
 	});
-} else {
-	alert("Service Worker not supported in browser, example won't work.");
-}
+	// Callback fired if Instance ID token is updated.
+	messaging.onTokenRefresh(function() {
+		messaging.getToken()
+		.then(function(refreshedToken) {
+			console.log('Token refreshed.');
+		})
+		.catch(function(err) {
+			console.log('Unable to retrieve refreshed token ', err);
+		});
+	});
+	// Handle incoming messages. Called when:
+	// - a message is received while the app has focus
+	// - the user clicks on an app notification created by a sevice worker
+	//   'messaging.setBackgroundMessageHandler' handler.
+	messaging.onMessage(function(payload) {
+		console.log("Message received. ", payload);
+		alert(payload.notification.title + '\n' + payload.notification.body);
+		// ...
+	});
+}).catch(function(err) {
+	console.log('Unable to get permission to notify.', err);
+});
 `)
 	return err
 }
@@ -254,22 +268,21 @@ if ('serviceWorker' in navigator) {
 func handleSWJS(w ResponseWriter, r Request) error {
 	w.Header().Set("Content-Type", "text/javascript; charset=UTF-8")
 	_, err := io.WriteString(w, `
-console.log('Started', self);
-self.addEventListener('install', function(event) {
-  self.skipWaiting();
-  console.log('Installed', event);
-});
-self.addEventListener('activate', function(event) {
-  console.log('Activated', event);
-});
-self.addEventListener('push', function(event) {
-  console.log('Push message received in sw', event);
-	clients.matchAll().then(clients => {
-		for (var i = 0; i < clients.length; i++) {
-			clients[i].postMessage("message");
-		}
+	// Give the service worker access to Firebase Messaging.
+	// Note that you can only use Firebase Messaging here, other Firebase libraries
+	// are not available in the service worker.
+	importScripts('https://www.gstatic.com/firebasejs/3.5.2/firebase-app.js');
+	importScripts('https://www.gstatic.com/firebasejs/3.5.2/firebase-messaging.js');
+
+	// Initialize the Firebase app in the service worker by passing in the
+	// messagingSenderId.
+	firebase.initializeApp({
+		'messagingSenderId': 'YOUR-SENDER-ID'
 	});
-});
+
+	// Retrieve an instance of Firebase Messaging so that it can handle background
+	// messages.
+	const messaging = firebase.messaging();
 `)
 	return err
 }
@@ -278,7 +291,7 @@ func handleManifestJS(w ResponseWriter, r Request) error {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	return json.NewEncoder(w).Encode(map[string]string{
 		"name":          "diplicity-engine",
-		"gcm_sender_id": "635122585664",
+		"gcm_sender_id": "103953800507",
 	})
 }
 
@@ -300,7 +313,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Games/My/Started", []string{"GET"}, MyStartedGamesRoute, startedGamesHandler.handlePrivate)
 	Handle(r, "/Games/My/Finished", []string{"GET"}, MyFinishedGamesRoute, finishedGamesHandler.handlePrivate)
 	Handle(r, "/js/main.js", []string{"GET"}, GetMainJSRoute, handleMainJS)
-	Handle(r, "/js/sw.js", []string{"GET"}, GetSWJSRoute, handleSWJS)
+	Handle(r, "/firebase-messaging-sw.js", []string{"GET"}, GetSWJSRoute, handleSWJS)
 	Handle(r, "/js/manifest.json", []string{"GET"}, GetManifestJSRoute, handleManifestJS)
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
@@ -310,7 +323,21 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, PhaseStateResource)
 	HandleResource(r, GameStateResource)
 	HeadCallback(func(head *Node) error {
-		head.AddEl("script", "src", "https://ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js")
+		head.AddEl("script", "src", "https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js")
+		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.6.0/firebase.js")
+		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.5.2/firebase-app.js")
+		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.5.2/firebase-messaging.js")
+		head.AddEl("script").AddText(`
+  // Initialize Firebase
+  var config = {
+    apiKey: "AIzaSyB0rX7dts3Rk0UnDRR9A4vghO01mwCvLxY",
+    authDomain: "diplicity-engine.firebaseapp.com",
+    databaseURL: "https://diplicity-engine.firebaseio.com",
+    storageBucket: "diplicity-engine.appspot.com",
+    messagingSenderId: "635122585664"
+  };
+  firebase.initializeApp(config);
+`)
 		mainJSURL, err := r.Get(GetMainJSRoute).URL()
 		if err != nil {
 			return err
