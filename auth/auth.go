@@ -138,7 +138,7 @@ func updateUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
 }
 
 type User struct {
-	Email         string `json:",omitempty"`
+	Email         string
 	FamilyName    string
 	Gender        string
 	GivenName     string

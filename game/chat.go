@@ -97,7 +97,7 @@ type Channel struct {
 	GameID         *datastore.Key
 	Members        Nations
 	NMessages      int
-	NMessagesSince NMessagesSince `datastore:"-" json:",omitempty"`
+	NMessagesSince NMessagesSince
 }
 
 func (c *Channel) Item(r Request) *Item {
