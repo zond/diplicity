@@ -80,8 +80,20 @@ type PhaseResolver struct {
 	TaskTriggered bool
 }
 
+func (p *PhaseResolver) SCCounts(s *state.State) map[dip.Nation]int {
+	res := map[dip.Nation]int{}
+	for _, nat := range s.SupplyCenters() {
+		if nat != "" {
+			res[nat] = res[nat] + 1
+		}
+	}
+	return res
+}
+
 func (p *PhaseResolver) Act() error {
 	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act()", p.Phase.GameID, p.Phase.PhaseOrdinal)
+
+	// Sanity check time and resolution status of the phase.
 
 	if p.TaskTriggered && p.Phase.DeadlineAt.After(time.Now()) {
 		log.Infof(p.Context, "Resolution postponed to %v by %v; rescheduling task", p.Phase.DeadlineAt, PP(p.Phase))
@@ -93,6 +105,16 @@ func (p *PhaseResolver) Act() error {
 		return nil
 	}
 
+	// Finish and save old phase.
+
+	p.Phase.Resolved = true
+	if err := p.Phase.Save(p.Context); err != nil {
+		log.Errorf(p.Context, "Unable to save old phase %v: %v; hope datastore gets fixed", PP(p.Phase), err)
+		return err
+	}
+
+	// Roll forward the game state.
+
 	log.Infof(p.Context, "PhaseStates at resolve time: %v", PP(p.PhaseStates))
 
 	orderMap, err := p.Phase.Orders(p.Context)
@@ -102,7 +124,8 @@ func (p *PhaseResolver) Act() error {
 	}
 	log.Infof(p.Context, "Orders at resolve time: %v", PP(orderMap))
 
-	s, err := p.Phase.State(p.Context, variants.Variants[p.Game.Variant], orderMap)
+	variant := variants.Variants[p.Game.Variant]
+	s, err := p.Phase.State(p.Context, variant, orderMap)
 	if err != nil {
 		log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", PP(p.Phase), err)
 		return err
@@ -111,22 +134,24 @@ func (p *PhaseResolver) Act() error {
 		log.Errorf(p.Context, "Unable to roll State forward for %v: %v; fix godip!", PP(p.Phase), err)
 		return err
 	}
+	scCounts := p.SCCounts(s)
+
+	// Create the new phase.
 
 	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1)
 	newPhase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
-	if err := newPhase.Save(p.Context); err != nil {
-		log.Errorf(p.Context, "Unable to save new Phase %v: %v; hope datastore will get fixed", PP(newPhase), err)
-		return err
-	}
 
-	if err := newPhase.NotifyMembers(p.Context, p.Game); err != nil {
-		log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
-		return err
-	}
+	// Check if we can roll forward again, and potentially create new phase states.
 
-	allReady := true
-	newPhaseStates := PhaseStates{}
-	for _, nat := range variants.Variants[p.Game.Variant].Nations {
+	// Prepare some data to collect.
+	allReady := true                    // All nations are ready to resolve the new phase as well.
+	var soloNation dip.Nation           // The nation, if any, reaching solo victory.
+	diasNations := []dip.Nation{}       // Nations wanting DIAS.
+	eliminatedNations := []dip.Nation{} // Nations without SCs.
+	newPhaseStates := PhaseStates{}     // The new phase states to save if we want to prepare resolution of a new phase.
+
+	for _, nat := range variant.Nations {
+		// Collect data on each nation.
 		_, hadOrders := orderMap[nat]
 		wasReady := false
 		wantedDIAS := false
@@ -135,20 +160,37 @@ func (p *PhaseResolver) Act() error {
 			if phaseState.Nation == nat {
 				wasReady = phaseState.ReadyToResolve
 				wantedDIAS = phaseState.WantsDIAS
+				if phaseState.WantsDIAS {
+					diasNations = append(diasNations, nat)
+				}
 				wasOnProbation = phaseState.OnProbation
 				break
 			}
 		}
 		newOptions := len(s.Phase().Options(s, nat))
+		if scCounts[nat] == 0 {
+			eliminatedNations = append(eliminatedNations, nat)
+		} else if scCounts[nat] >= variant.SoloSupplyCenters {
+			if soloNation != "" {
+				msg := fmt.Sprintf("Found that %q has >= variant.SoloSupplyCenters (%d) SCs, but %q was already marked as solo winner? WTF?; fix godip?", nat, variant.SoloSupplyCenters, soloNation)
+				log.Errorf(p.Context, msg)
+				return fmt.Errorf(msg)
+			}
+			log.Infof(p.Context, "Found that %q has >= variant.SoloSupplyCenters (%d) SCs, marking %q as solo winner", nat, variant.SoloSupplyCenters, nat)
+			soloNation = nat
+		}
 
+		// Log what we're doing.
 		stateString := fmt.Sprintf("wasReady = %v, wantedDIAS = %v, onProbation = %v, hadOrders = %v, newOptions = %v", wasReady, wantedDIAS, wasOnProbation, hadOrders, newOptions)
 		log.Infof(p.Context, "%v at phase change: %s", nat, stateString)
 
+		// Calculate states for next phase.
 		autoProbation := wasOnProbation || (!hadOrders && !wasReady)
 		autoReady := newOptions == 0 || autoProbation
 		autoDIAS := wantedDIAS || autoProbation
 		allReady = allReady && autoReady
 
+		// If the next phase state is non-default, we must save and append it.
 		if autoReady || autoDIAS {
 			newPhaseState := &PhaseState{
 				GameID:         p.Phase.GameID,
@@ -162,6 +204,39 @@ func (p *PhaseResolver) Act() error {
 			newPhaseStates = append(newPhaseStates, *newPhaseState)
 		}
 	}
+
+	log.Infof(p.Context, "Calculated key metrics: allReady: %v, soloNation: %q, diasNations: %+v, eliminatedNations: %+v", allReady, soloNation, diasNations, eliminatedNations)
+
+	// Check if the game should end.
+
+	if soloNation != "" || len(eliminatedNations)+len(diasNations) == len(variant.Nations) {
+		log.Infof(p.Context, "soloNation: %q, eliminatedNations: %+v, diasNations: %+v => game needs to end", soloNation, eliminatedNations, diasNations)
+		// Just to ensure we don't try to resolve it again, even by mistake.
+		newPhase.Resolved = true
+	}
+
+	// Notify about the new phase.
+
+	if err := newPhase.NotifyMembers(p.Context, p.Game); err != nil {
+		log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
+		return err
+	}
+
+	// Save the new phase.
+
+	if err := newPhase.Save(p.Context); err != nil {
+		log.Errorf(p.Context, "Unable to save new Phase %v: %v; hope datastore will get fixed", PP(newPhase), err)
+		return err
+	}
+
+	// Exit early if the new phase is already resolved.
+
+	if newPhase.Resolved {
+		log.Infof(p.Context, "New phase is already resolved, stopping early")
+		return nil
+	}
+
+	// Save the new phase states.
 
 	if len(newPhaseStates) > 0 {
 		ids := make([]*datastore.Key, len(newPhaseStates))
@@ -180,11 +255,7 @@ func (p *PhaseResolver) Act() error {
 		log.Infof(p.Context, "Saved %v to get things moving", PP(newPhaseStates))
 	}
 
-	p.Phase.Resolved = true
-	if err := p.Phase.Save(p.Context); err != nil {
-		log.Errorf(p.Context, "Unable to save old phase %v: %v; hope datastore gets fixed", PP(p.Phase), err)
-		return err
-	}
+	// If we can't roll forward again, schedule new resolution.
 
 	if !allReady {
 		if p.Game.PhaseLengthMinutes > 0 {
@@ -201,6 +272,8 @@ func (p *PhaseResolver) Act() error {
 
 		return nil
 	}
+
+	// Roll forward again.
 
 	log.Infof(p.Context, "Since all players are ready to resolve RIGHT NOW, rolling forward again")
 
