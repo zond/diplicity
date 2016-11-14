@@ -96,6 +96,7 @@ const (
 	unknownState nationState = iota
 	diasState
 	eliminatedState
+	nmrState
 )
 
 func (p *PhaseResolver) Act() error {
@@ -153,7 +154,7 @@ func (p *PhaseResolver) Act() error {
 
 	// Prepare some data to collect.
 	allReady := true                            // All nations are ready to resolve the new phase as well.
-	var soloNation dip.Nation                   // The nation, if any, reaching solo victory.
+	var soloWinner dip.Nation                   // The nation, if any, reaching solo victory.
 	quitNations := map[dip.Nation]nationState{} // One state per nation that wants to quit, with either dias or eliminated.
 	newPhaseStates := PhaseStates{}             // The new phase states to save if we want to prepare resolution of a new phase.
 
@@ -176,15 +177,16 @@ func (p *PhaseResolver) Act() error {
 		}
 		newOptions := len(s.Phase().Options(s, nat))
 		if scCounts[nat] == 0 {
+			// Overwrite DIAS with eliminated, you can't be part of a DIAS if you are eliminated...
 			quitNations[nat] = eliminatedState
 		} else if scCounts[nat] >= variant.SoloSupplyCenters {
-			if soloNation != "" {
-				msg := fmt.Sprintf("Found that %q has >= variant.SoloSupplyCenters (%d) SCs, but %q was already marked as solo winner? WTF?; fix godip?", nat, variant.SoloSupplyCenters, soloNation)
+			if soloWinner != "" {
+				msg := fmt.Sprintf("Found that %q has >= variant.SoloSupplyCenters (%d) SCs, but %q was already marked as solo winner? WTF?; fix godip?", nat, variant.SoloSupplyCenters, soloWinner)
 				log.Errorf(p.Context, msg)
 				return fmt.Errorf(msg)
 			}
 			log.Infof(p.Context, "Found that %q has >= variant.SoloSupplyCenters (%d) SCs, marking %q as solo winner", nat, variant.SoloSupplyCenters, nat)
-			soloNation = nat
+			soloWinner = nat
 		}
 
 		// Log what we're doing.
@@ -192,10 +194,19 @@ func (p *PhaseResolver) Act() error {
 		log.Infof(p.Context, "%v at phase change: %s", nat, stateString)
 
 		// Calculate states for next phase.
+		// When a player creates an order, the phase state for that order is updated to 'OnProbation = false'.
+		// When a player updates a phase state, it's always set to 'OnProbation = false'.
+		// Thus, if the player was on probation last phase, we know they didn't enter orders or update their phase state, and they are safe to put on probation again.
+		// The reason for the `||` is that they can still be ready to resolve, due to not having options!
 		autoProbation := wasOnProbation || (!hadOrders && !wasReady)
 		autoReady := newOptions == 0 || autoProbation
 		autoDIAS := wantedDIAS || autoProbation
 		allReady = allReady && autoReady
+
+		// Overwrite DIAS with NMR, but don't overwrite Eliminated with NMR.
+		if reason := quitNations[nat]; autoProbation && reason != eliminatedState {
+			quitNations[nat] = nmrState
+		}
 
 		// If the next phase state is non-default, we must save and append it.
 		if autoReady || autoDIAS {
@@ -212,12 +223,12 @@ func (p *PhaseResolver) Act() error {
 		}
 	}
 
-	log.Infof(p.Context, "Calculated key metrics: allReady: %v, soloNation: %q, quitNations: %+v", allReady, soloNation, quitNations)
+	log.Infof(p.Context, "Calculated key metrics: allReady: %v, soloWinner: %q, quitNations: %+v", allReady, soloWinner, quitNations)
 
 	// Check if the game should end.
 
-	if soloNation != "" || len(quitNations) == len(variant.Nations) {
-		log.Infof(p.Context, "soloNation: %q, quitNations: %+v => game needs to end", soloNation, quitNations)
+	if soloWinner != "" || len(quitNations) == len(variant.Nations) {
+		log.Infof(p.Context, "soloWinner: %q, quitNations: %+v => game needs to end", soloWinner, quitNations)
 		// Just to ensure we don't try to resolve it again, even by mistake.
 		newPhase.Resolved = true
 	}
@@ -244,6 +255,37 @@ func (p *PhaseResolver) Act() error {
 		p.Game.Closed = true
 		if err := p.Game.Save(p.Context); err != nil {
 			log.Errorf(p.Context, "Unable to save game as finished: %v; hope datastore will get fixed", err)
+			return err
+		}
+
+		diasMembers := []dip.Nation{}
+		nmrMembers := []dip.Nation{}
+		eliminatedMembers := []dip.Nation{}
+
+		for nat, state := range quitNations {
+			switch state {
+			case diasState:
+				diasMembers = append(diasMembers, nat)
+			case nmrState:
+				nmrMembers = append(nmrMembers, nat)
+			case eliminatedState:
+				eliminatedMembers = append(eliminatedMembers, nat)
+			default:
+				msg := fmt.Sprintf("Unknown nation state %v for %q! Fix the resolver!", state, nat)
+				log.Errorf(p.Context, msg)
+				return fmt.Errorf(msg)
+			}
+		}
+
+		gameResult := &GameResult{
+			GameID:            p.Game.ID,
+			SoloWinner:        soloWinner,
+			DIASMembers:       diasMembers,
+			NMRMembers:        nmrMembers,
+			EliminatedMembers: eliminatedMembers,
+		}
+		if err := gameResult.Save(p.Context); err != nil {
+			log.Errorf(p.Context, "Unable to save game result %v: %v; hope datastore gets fixed", PP(gameResult), err)
 			return err
 		}
 
