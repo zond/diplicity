@@ -90,6 +90,14 @@ func (p *PhaseResolver) SCCounts(s *state.State) map[dip.Nation]int {
 	return res
 }
 
+type nationState int
+
+const (
+	unknownState nationState = iota
+	diasState
+	eliminatedState
+)
+
 func (p *PhaseResolver) Act() error {
 	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act()", p.Phase.GameID, p.Phase.PhaseOrdinal)
 
@@ -144,11 +152,10 @@ func (p *PhaseResolver) Act() error {
 	// Check if we can roll forward again, and potentially create new phase states.
 
 	// Prepare some data to collect.
-	allReady := true                    // All nations are ready to resolve the new phase as well.
-	var soloNation dip.Nation           // The nation, if any, reaching solo victory.
-	diasNations := []dip.Nation{}       // Nations wanting DIAS.
-	eliminatedNations := []dip.Nation{} // Nations without SCs.
-	newPhaseStates := PhaseStates{}     // The new phase states to save if we want to prepare resolution of a new phase.
+	allReady := true                            // All nations are ready to resolve the new phase as well.
+	var soloNation dip.Nation                   // The nation, if any, reaching solo victory.
+	quitNations := map[dip.Nation]nationState{} // One state per nation that wants to quit, with either dias or eliminated.
+	newPhaseStates := PhaseStates{}             // The new phase states to save if we want to prepare resolution of a new phase.
 
 	for _, nat := range variant.Nations {
 		// Collect data on each nation.
@@ -161,7 +168,7 @@ func (p *PhaseResolver) Act() error {
 				wasReady = phaseState.ReadyToResolve
 				wantedDIAS = phaseState.WantsDIAS
 				if phaseState.WantsDIAS {
-					diasNations = append(diasNations, nat)
+					quitNations[nat] = diasState
 				}
 				wasOnProbation = phaseState.OnProbation
 				break
@@ -169,7 +176,7 @@ func (p *PhaseResolver) Act() error {
 		}
 		newOptions := len(s.Phase().Options(s, nat))
 		if scCounts[nat] == 0 {
-			eliminatedNations = append(eliminatedNations, nat)
+			quitNations[nat] = eliminatedState
 		} else if scCounts[nat] >= variant.SoloSupplyCenters {
 			if soloNation != "" {
 				msg := fmt.Sprintf("Found that %q has >= variant.SoloSupplyCenters (%d) SCs, but %q was already marked as solo winner? WTF?; fix godip?", nat, variant.SoloSupplyCenters, soloNation)
@@ -205,12 +212,12 @@ func (p *PhaseResolver) Act() error {
 		}
 	}
 
-	log.Infof(p.Context, "Calculated key metrics: allReady: %v, soloNation: %q, diasNations: %+v, eliminatedNations: %+v", allReady, soloNation, diasNations, eliminatedNations)
+	log.Infof(p.Context, "Calculated key metrics: allReady: %v, soloNation: %q, quitNations: %+v", allReady, soloNation, quitNations)
 
 	// Check if the game should end.
 
-	if soloNation != "" || len(eliminatedNations)+len(diasNations) == len(variant.Nations) {
-		log.Infof(p.Context, "soloNation: %q, eliminatedNations: %+v, diasNations: %+v => game needs to end", soloNation, eliminatedNations, diasNations)
+	if soloNation != "" || len(quitNations) == len(variant.Nations) {
+		log.Infof(p.Context, "soloNation: %q, quitNations: %+v => game needs to end", soloNation, quitNations)
 		// Just to ensure we don't try to resolve it again, even by mistake.
 		newPhase.Resolved = true
 	}
@@ -232,7 +239,16 @@ func (p *PhaseResolver) Act() error {
 	// Exit early if the new phase is already resolved.
 
 	if newPhase.Resolved {
-		log.Infof(p.Context, "New phase is already resolved, stopping early")
+		log.Infof(p.Context, "New phase is already resolved, marking game as finished and stopping early")
+		p.Game.Finished = true
+		p.Game.Closed = true
+		if err := p.Game.Save(p.Context); err != nil {
+			log.Errorf(p.Context, "Unable to save game as finished: %v; hope datastore will get fixed", err)
+			return err
+		}
+
+		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+
 		return nil
 	}
 
@@ -280,7 +296,14 @@ func (p *PhaseResolver) Act() error {
 	newPhase.DeadlineAt = time.Now()
 	p.Phase = newPhase
 	p.PhaseStates = newPhaseStates
-	return p.Act()
+	if err := p.Act(); err != nil {
+		log.Errorf(p.Context, "Unable to continue rolling forward: %v; fix the resolver!", err)
+		return err
+	}
+
+	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+
+	return nil
 }
 
 const (

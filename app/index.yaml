@@ -42,9 +42,37 @@ indexes:
   properties:
   - name: Finished
   - name: Members.User.Id
+  - name: Started
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Members.User.Id
+  - name: Started
+  - name: Variant
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Members.User.Id
   - name: Variant
   - name: CreatedAt
     direction: desc
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Started
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Started
+  - name: Variant
+  - name: CreatedAt
 
 - kind: Game
   properties:
@@ -57,12 +85,6 @@ indexes:
   properties:
   - name: Members.User.Id
   - name: Started
-  - name: CreatedAt
-
-- kind: Game
-  properties:
-  - name: Members.User.Id
-  - name: Started
   - name: NMembers
     direction: desc
   - name: CreatedAt
@@ -72,26 +94,8 @@ indexes:
   - name: Members.User.Id
   - name: Started
   - name: Variant
-  - name: CreatedAt
-
-- kind: Game
-  properties:
-  - name: Members.User.Id
-  - name: Started
-  - name: Variant
   - name: NMembers
     direction: desc
-  - name: CreatedAt
-
-- kind: Game
-  properties:
-  - name: Started
-  - name: CreatedAt
-
-- kind: Game
-  properties:
-  - name: Started
-  - name: Variant
   - name: CreatedAt
 
 - kind: Message
