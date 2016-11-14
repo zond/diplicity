@@ -127,10 +127,10 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		return nil, err
 	}
 
-	game := &Game{}
-	phase := &Phase{}
 	phaseState := &PhaseState{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		phase := &Phase{}
 		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
 			return err
 		}

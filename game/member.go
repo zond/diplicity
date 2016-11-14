@@ -53,8 +53,8 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 	}
 
 	var member *Member
-	game := &Game{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}
@@ -100,8 +100,8 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 	}
 
 	var member *Member
-	game := &Game{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}

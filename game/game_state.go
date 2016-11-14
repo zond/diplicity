@@ -98,9 +98,9 @@ func updateGameState(w ResponseWriter, r Request) (*GameState, error) {
 
 	nation := dip.Nation(r.Vars()["nation"])
 
-	game := &Game{}
 	gameState := &GameState{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}
