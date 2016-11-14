@@ -116,10 +116,10 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	game := &Game{}
-	phase := &Phase{}
 	order := &Order{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		phase := &Phase{}
 		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, orderID}, []interface{}{game, phase, order}); err != nil {
 			return err
 		}
@@ -174,10 +174,10 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	game := &Game{}
-	phase := &Phase{}
 	order := &Order{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		phase := &Phase{}
 		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, orderID}, []interface{}{game, phase, order}); err != nil {
 			return err
 		}
@@ -259,10 +259,10 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	game := &Game{}
-	phase := &Phase{}
 	order := &Order{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		phase := &Phase{}
 		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
 			return err
 		}
@@ -273,6 +273,21 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
 			return fmt.Errorf("can only create orders for member games")
+		}
+
+		keysToSave := []*datastore.Key{}
+		valuesToSave := []interface{}{}
+
+		phaseState := &PhaseState{}
+		phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
+		if err != nil {
+			return err
+		}
+		if err := datastore.Get(ctx, phaseStateID, phaseState); err == nil && phaseState.OnProbation {
+			phaseState.OnProbation = false
+			phaseState.Note = fmt.Sprintf("Auto updated to OnProbation = false due to order creation.")
+			keysToSave = append(keysToSave, phaseStateID)
+			valuesToSave = append(valuesToSave, phaseState)
 		}
 
 		err = Copy(order, r, "POST")
@@ -304,7 +319,15 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 			return fmt.Errorf("can't issue orders for others")
 		}
 
-		return order.Save(ctx)
+		orderID, err := OrderID(ctx, phaseID, dip.Province(order.Parts[0]))
+		if err != nil {
+			return err
+		}
+
+		keysToSave = append(keysToSave, orderID)
+		valuesToSave = append(valuesToSave, order)
+		_, err = datastore.PutMulti(ctx, keysToSave, valuesToSave)
+		return err
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
