@@ -476,6 +476,35 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 	return true, nil
 }
 
+func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
+	if r.Media() != "text/html" {
+		return true, errI
+	}
+
+	if herr, ok := errI.(HTTPErr); ok && herr.Status == 401 {
+		redirectURL := r.Req().URL
+		if r.Req().TLS == nil {
+			redirectURL.Scheme = "http"
+		} else {
+			redirectURL.Scheme = "https"
+		}
+		redirectURL.Host = r.Req().Host
+
+		loginURL, err := router.Get(LoginRoute).URL()
+		if err != nil {
+			return false, err
+		}
+		queryParams := loginURL.Query()
+		queryParams.Set("redirect-to", redirectURL.String())
+		loginURL.RawQuery = queryParams.Encode()
+
+		http.Redirect(w, r.Req(), loginURL.String(), 307)
+		return false, nil
+	}
+
+	return true, errI
+}
+
 func SetupRouter(r *mux.Router) {
 	router = r
 	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
@@ -483,4 +512,5 @@ func SetupRouter(r *mux.Router) {
 	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
 	HandleResource(router, UserConfigResource)
 	AddFilter(tokenFilter)
+	AddPostProc(loginRedirect)
 }
