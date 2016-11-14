@@ -224,7 +224,7 @@ func (r *Result) AssertEmpty(path ...string) *Result {
 }
 
 func (r *Result) AssertLen(l int, path ...string) *Result {
-	if val, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...); err != nil {
+	if val, err := jsonq.NewQuery(r.Body).Array(path...); err != nil {
 		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
 	} else if len(val) != l {
 		panic(fmt.Errorf("got %+v = %+v, want length %v", path, val, l))
