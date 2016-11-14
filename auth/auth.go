@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -110,8 +109,7 @@ func loadUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
 
 	user, ok := r.Values()["user"].(*User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	config := &UserConfig{}
@@ -130,8 +128,7 @@ func updateUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
 
 	user, ok := r.Values()["user"].(*User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	config := &UserConfig{}
@@ -250,7 +247,7 @@ func SetOAuth(ctx context.Context, oAuth *OAuth) error {
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		currentOAuth := &OAuth{}
 		if err := datastore.Get(ctx, getOAuthKey(ctx), currentOAuth); err == nil {
-			return fmt.Errorf("OAuth already configured")
+			return HTTPErr{"OAuth already configured", 400}
 		}
 		if _, err := datastore.Put(ctx, getOAuthKey(ctx), oAuth); err != nil {
 			return err
@@ -416,15 +413,17 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 		return true, nil
 	}
 
+	queryToken := true
 	token := r.Req().URL.Query().Get("token")
 	if token == "" {
+		queryToken = false
 		if authHeader := r.Req().Header.Get("Authorization"); authHeader != "" {
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 {
-				return false, fmt.Errorf("Authorization header not two parts joined by space")
+				return false, HTTPErr{"Authorization header not two parts joined by space", 400}
 			}
 			if strings.ToLower(parts[0]) != "bearer" {
-				return false, fmt.Errorf("Authorization header part 1 not 'bearer'")
+				return false, HTTPErr{"Authorization header part 1 not 'bearer'", 400}
 			}
 			token = parts[1]
 		}
@@ -449,8 +448,7 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 
 		plain, ok := secretbox.Open([]byte{}, b[24:], &nonceAry, &secretAry)
 		if !ok {
-			http.Error(w, "badly encrypted token", 403)
-			return false, nil
+			return false, HTTPErr{"badly encrypted token", 403}
 		}
 
 		user := &User{}
@@ -458,20 +456,21 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 			return false, err
 		}
 		if user.ValidUntil.Before(time.Now()) {
-			http.Error(w, "token timed out", 401)
-			return false, nil
+			return false, HTTPErr{"token timed out", 401}
 		}
 
 		r.Values()["user"] = user
 
-		r.DecorateLinks(func(l *Link, u *url.URL) error {
-			if l.Rel != "logout" {
-				q := u.Query()
-				q.Set("token", token)
-				u.RawQuery = q.Encode()
-			}
-			return nil
-		})
+		if queryToken {
+			r.DecorateLinks(func(l *Link, u *url.URL) error {
+				if l.Rel != "logout" {
+					q := u.Query()
+					q.Set("token", token)
+					u.RawQuery = q.Encode()
+				}
+				return nil
+			})
+		}
 
 	}
 	return true, nil

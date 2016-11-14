@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -215,8 +214,7 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -233,7 +231,7 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 
 	member, found := game.GetMember(user.Id)
 	if !found {
-		return nil, fmt.Errorf("can only create messages in member games")
+		return nil, HTTPErr{"can only create messages in member games", 404}
 	}
 
 	message := &Message{}
@@ -246,14 +244,12 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 	sort.Sort(message.ChannelMembers)
 
 	if !message.ChannelMembers.Includes(member.Nation) {
-		http.Error(w, "can only send messages to member channels", 403)
-		return nil, nil
+		return nil, HTTPErr{"can only send messages to member channels", 403}
 	}
 
 	for _, channelMember := range message.ChannelMembers {
 		if !Nations(variants.Variants[game.Variant].Nations).Includes(channelMember) {
-			http.Error(w, "unknown channel member", 400)
-			return nil, nil
+			return nil, HTTPErr{"unknown channel member", 400}
 		}
 	}
 
@@ -325,8 +321,7 @@ func listMessages(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil
+		return HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -359,8 +354,7 @@ func listMessages(w ResponseWriter, r Request) error {
 	}
 
 	if !channelMembers.Includes(nation) && !isPublic(game.Variant, channelMembers) {
-		http.Error(w, "can only list member channels", 403)
-		return nil
+		return HTTPErr{"can only list member channels", 403}
 	}
 
 	channelID, err := ChannelID(ctx, gameID, channelMembers)
@@ -386,8 +380,7 @@ func listChannels(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil
+		return HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

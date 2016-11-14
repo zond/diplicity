@@ -16,6 +16,8 @@ import (
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/urlfetch"
+
+	. "github.com/zond/goaeoas"
 )
 
 const (
@@ -49,7 +51,7 @@ func SetFCMConf(ctx context.Context, fcmConf *FCMConf) error {
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		currentFCMConf := &FCMConf{}
 		if err := datastore.Get(ctx, getFCMConfKey(ctx), currentFCMConf); err == nil {
-			return fmt.Errorf("FCMConf already configured")
+			return HTTPErr{"FCMConf already configured", 400}
 		}
 		if _, err := datastore.Put(ctx, getFCMConfKey(ctx), fcmConf); err != nil {
 			return err

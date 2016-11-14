@@ -2,7 +2,6 @@ package variants
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/zond/godip/state"
 	"github.com/zond/godip/variants"
@@ -72,8 +71,7 @@ func resolveVariant(w ResponseWriter, r Request) error {
 	variantName := r.Vars()["name"]
 	variant, found := variants.Variants[variantName]
 	if !found {
-		http.Error(w, fmt.Sprintf("Variant %q not found", variantName), 404)
-		return nil
+		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), 404}
 	}
 	p := &Phase{}
 	if err := Copy(p, r, "POST"); err != nil {
@@ -94,8 +92,7 @@ func startVariant(w ResponseWriter, r Request) error {
 	variantName := r.Vars()["name"]
 	variant, found := variants.Variants[variantName]
 	if !found {
-		http.Error(w, fmt.Sprintf("Variant %q not found", variantName), 404)
-		return nil
+		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), 404}
 	}
 	state, err := variant.Start()
 	if err != nil {

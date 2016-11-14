@@ -90,8 +90,7 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*game
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 	req.user = user
 

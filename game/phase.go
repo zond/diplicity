@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -459,8 +458,7 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -616,8 +614,7 @@ func listOptions(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil
+		return HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -644,7 +641,7 @@ func listOptions(w ResponseWriter, r Request) error {
 
 	member, isMember := game.GetMember(user.Id)
 	if !isMember {
-		return fmt.Errorf("can only load options for member games")
+		return HTTPErr{"can only load options for member games", 404}
 	}
 
 	state, err := phase.State(ctx, variants.Variants[game.Variant], nil)
@@ -753,8 +750,7 @@ func listPhases(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil
+		return HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

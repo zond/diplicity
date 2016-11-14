@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -91,8 +90,7 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -126,14 +124,14 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 		game.ID = gameID
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
-			return fmt.Errorf("can only delete orders in member games")
+			return HTTPErr{"can only delete orders in member games", 404}
 		}
 		if phase.Resolved {
-			return fmt.Errorf("can only delete orders for unresolved phases")
+			return HTTPErr{"can only delete orders for unresolved phases", 400}
 		}
 
 		if order.Nation != member.Nation {
-			return fmt.Errorf("can only update your own orders")
+			return HTTPErr{"can only update your own orders", 403}
 		}
 
 		return datastore.Delete(ctx, orderID)
@@ -149,8 +147,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -183,15 +180,15 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 		}
 		game.ID = gameID
 		if phase.Resolved {
-			return fmt.Errorf("can only update orders for unresolved phases")
+			return HTTPErr{"can only update orders for unresolved phases", 400}
 		}
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
-			return fmt.Errorf("can only update orders in member games")
+			return HTTPErr{"can only update orders in member games", 404}
 		}
 
 		if order.Nation != member.Nation {
-			return fmt.Errorf("can only update your own orders")
+			return HTTPErr{"can only update your own orders", 403}
 		}
 
 		err = Copy(order, r, "POST")
@@ -220,11 +217,11 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 			return err
 		}
 		if validNation != member.Nation {
-			return fmt.Errorf("can't issue orders for others")
+			return HTTPErr{"can't issue orders for others", 403}
 		}
 
 		if order.Parts[0] != srcProvince {
-			return fmt.Errorf("unable to change source province for order")
+			return HTTPErr{"unable to change source province for order", 400}
 		}
 
 		return order.Save(ctx)
@@ -240,8 +237,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -268,11 +264,11 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 		}
 		game.ID = gameID
 		if phase.Resolved {
-			return fmt.Errorf("can only create orders for unresolved phases")
+			return HTTPErr{"can only create orders for unresolved phases", 400}
 		}
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
-			return fmt.Errorf("can only create orders for member games")
+			return HTTPErr{"can only create orders for member games", 404}
 		}
 
 		keysToSave := []*datastore.Key{}
@@ -316,7 +312,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 			return err
 		}
 		if validNation != member.Nation {
-			return fmt.Errorf("can't issue orders for others")
+			return HTTPErr{"can't issue orders for others", 403}
 		}
 
 		orderID, err := OrderID(ctx, phaseID, dip.Province(order.Parts[0]))
@@ -340,8 +336,7 @@ func listOrders(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil
+		return HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

@@ -1,9 +1,6 @@
 package game
 
 import (
-	"fmt"
-	"net/http"
-
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
@@ -39,12 +36,11 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	if user.Id != r.Vars()["user_id"] {
-		return nil, fmt.Errorf("can only delete yourself")
+		return nil, HTTPErr{"can only delete yourself", 403}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -62,10 +58,10 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 		isMember := false
 		member, isMember = game.GetMember(user.Id)
 		if !isMember {
-			return fmt.Errorf("can only leave member games")
+			return HTTPErr{"can only leave member games", 404}
 		}
 		if !game.Leavable() {
-			return fmt.Errorf("game not leavable")
+			return HTTPErr{"game not leavable", 400}
 		}
 		newMembers := []Member{}
 		for _, oldMember := range game.Members {
@@ -90,8 +86,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -109,10 +104,10 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		isMember := false
 		member, isMember = game.GetMember(user.Id)
 		if isMember {
-			return fmt.Errorf("user already member")
+			return HTTPErr{"user already member", 400}
 		}
 		if !game.Joinable() {
-			return fmt.Errorf("game not joinable")
+			return HTTPErr{"game not joinable", 400}
 		}
 		member = &Member{
 			User: *user,

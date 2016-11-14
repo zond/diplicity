@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/variants"
@@ -87,8 +86,7 @@ func updateGameState(w ResponseWriter, r Request) (*GameState, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -107,11 +105,11 @@ func updateGameState(w ResponseWriter, r Request) (*GameState, error) {
 		game.ID = gameID
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
-			return fmt.Errorf("can only update phase state of member games")
+			return HTTPErr{"can only update phase state of member games", 404}
 		}
 
 		if member.Nation != nation {
-			return fmt.Errorf("can only update own game state")
+			return HTTPErr{"can only update own game state", 404}
 		}
 
 		err = Copy(gameState, r, "PUT")
@@ -135,8 +133,7 @@ func listGameStates(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil
+		return HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

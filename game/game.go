@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"net/url"
 	"reflect"
 	"time"
@@ -98,8 +97,7 @@ func loadGameResult(w ResponseWriter, r Request) (*GameResult, error) {
 
 	_, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -261,8 +259,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	game := &Game{}
@@ -271,11 +268,10 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		return nil, err
 	}
 	if _, found := variants.Variants[game.Variant]; !found {
-		http.Error(w, "unknown variant", 400)
-		return nil, nil
+		return nil, HTTPErr{"unknown variant", 400}
 	}
 	if game.PhaseLengthMinutes < 0 {
-		return nil, fmt.Errorf("no games with negative length allowed")
+		return nil, HTTPErr{"no games with negative length allowed", 400}
 	}
 	game.CreatedAt = time.Now()
 
@@ -341,8 +337,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		http.Error(w, "unauthorized", 401)
-		return nil, nil
+		return nil, HTTPErr{"unauthorized", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["id"])
