@@ -18,6 +18,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 	oauth2service "google.golang.org/api/oauth2/v2"
@@ -458,6 +459,8 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 		if user.ValidUntil.Before(time.Now()) {
 			return false, HTTPErr{"token timed out", 401}
 		}
+
+		log.Infof(ctx, "Request by %+v", user)
 
 		r.Values()["user"] = user
 
