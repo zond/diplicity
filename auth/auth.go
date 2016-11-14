@@ -92,6 +92,16 @@ func (u *UserConfig) Item(r Request) *Item {
 			"A note field, which the server will populate with the reason the token was disabled.",
 			"An app field, which the app populating the token can use to identify tokens belonging to it to avoid removing/updating tokens belonging to other apps.",
 		},
+		[]string{
+			"New phase notifications",
+			"New phase notifications will have the `[phase season] [phase year], [phase type]` as title, and `[game desc] has a new phase` as body.",
+			"The payload will be `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhase: [phase JSON], diplicityGame: [game JSON] }` compressed with libz.",
+		},
+		[]string{
+			"New message notifications",
+			"New message notifications will have `[channel members]: Message from [sender]` as title, and `[message body]` as body.",
+			"The payload will be `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON], diplicityChannel: [channel JSON], diplicityGame: [game JSON] }` compressed with libz.",
+		},
 	})
 }
 
