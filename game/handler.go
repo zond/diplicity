@@ -45,6 +45,7 @@ const (
 	ListOptionsRoute            = "ListOptions"
 	ListChannelsRoute           = "ListChannels"
 	ListMessagesRoute           = "ListMessages"
+	ListBansRoute               = "ListBans"
 	DevResolvePhaseTimeoutRoute = "DevResolvePhaseTimeout"
 )
 
@@ -231,6 +232,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Games/My/Staging", []string{"GET"}, MyStagingGamesRoute, stagingGamesHandler.handlePrivate)
 	Handle(r, "/Games/My/Started", []string{"GET"}, MyStartedGamesRoute, startedGamesHandler.handlePrivate)
 	Handle(r, "/Games/My/Finished", []string{"GET"}, MyFinishedGamesRoute, finishedGamesHandler.handlePrivate)
+	Handle(r, "/User/{user_id}/Bans", []string{"GET"}, ListBansRoute, listBans)
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)
@@ -239,6 +241,7 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, PhaseStateResource)
 	HandleResource(r, GameStateResource)
 	HandleResource(r, GameResultResource)
+	HandleResource(r, BanResource)
 	HeadCallback(func(head *Node) error {
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.6.0/firebase.js")
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.5.2/firebase-app.js")
