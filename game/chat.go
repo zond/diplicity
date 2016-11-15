@@ -349,8 +349,21 @@ func listMessages(w ResponseWriter, r Request) error {
 	game.ID = gameID
 
 	var nation dip.Nation
+	mutedNats := map[dip.Nation]struct{}{}
 	if member, found := game.GetMember(user.Id); found {
 		nation = member.Nation
+		gameStateID, err := GameStateID(ctx, gameID, nation)
+		if err != nil {
+			return err
+		}
+		gameState := &GameState{}
+		if err = datastore.Get(ctx, gameStateID, gameState); err == nil {
+			for _, nat := range gameState.Muted {
+				mutedNats[nat] = struct{}{}
+			}
+		} else if err != datastore.ErrNoSuchEntity {
+			return err
+		}
 	}
 
 	if !channelMembers.Includes(nation) && !isPublic(game.Variant, channelMembers) {
@@ -371,7 +384,14 @@ func listMessages(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	w.SetContent(messages.Item(r, gameID, channelMembers))
+	filteredMessages := make(Messages, 0, len(messages))
+	for _, msg := range messages {
+		if _, isMuted := mutedNats[msg.Sender]; !isMuted {
+			filteredMessages = append(filteredMessages, msg)
+		}
+	}
+
+	w.SetContent(filteredMessages.Item(r, gameID, channelMembers))
 	return nil
 }
 
