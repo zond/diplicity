@@ -41,6 +41,7 @@ func (g GameStates) Item(r Request, gameID *datastore.Key) *Item {
 		[]string{
 			"Muting",
 			"Adding another member nation to the 'Muted' list will hide all press from that member.",
+			"Note that messages from muted members will still count towards the totals in the channel listings.",
 		},
 	})
 	return gameStatesItem
@@ -50,6 +51,15 @@ type GameState struct {
 	GameID *datastore.Key
 	Nation dip.Nation
 	Muted  []dip.Nation `methods:"PUT"`
+}
+
+func (g *GameState) HasMuted(nat dip.Nation) bool {
+	for _, mut := range g.Muted {
+		if mut == nat {
+			return true
+		}
+	}
+	return false
 }
 
 func GameStateID(ctx context.Context, gameID *datastore.Key, nation dip.Nation) (*datastore.Key, error) {
