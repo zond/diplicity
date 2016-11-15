@@ -14,12 +14,32 @@ func TestUserConfig(t *testing.T) {
 			"Disabled": false,
 			"Note":     "",
 			"App":      String("app"),
+			"PhaseConfig": map[string]interface{}{
+				"ClickActionTemplate": "",
+				"TitleTemplate":       "",
+				"BodyTemplate":        "",
+			},
+			"MessageConfig": map[string]interface{}{
+				"ClickActionTemplate": "",
+				"TitleTemplate":       "",
+				"BodyTemplate":        "",
+			},
 		},
 		map[string]interface{}{
 			"Value":    String("token"),
 			"Disabled": false,
 			"Note":     "",
 			"App":      String("app"),
+			"PhaseConfig": map[string]interface{}{
+				"ClickActionTemplate": "",
+				"TitleTemplate":       "",
+				"BodyTemplate":        "",
+			},
+			"MessageConfig": map[string]interface{}{
+				"ClickActionTemplate": "",
+				"TitleTemplate":       "",
+				"BodyTemplate":        "",
+			},
 		},
 	}
 	env.GetRoute(game.IndexRoute).Success().
