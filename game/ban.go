@@ -35,7 +35,12 @@ func (b Bans) Item(r Request, userId string) *Item {
 		Rel:         "self",
 		Route:       ListBansRoute,
 		RouteParams: []string{"user_id", userId},
-	})).AddLink(r.NewLink(BanResource.Link("create", Create, []string{"user_id", userId})))
+	})).AddLink(r.NewLink(BanResource.Link("create", Create, []string{"user_id", userId}))).SetDesc([][]string{
+		[]string{
+			"Bans",
+			"Bans prevent players from seeing or joining each others games. If you never want to risk playing with a given user again, create a ban with both your IDs.",
+		},
+	})
 	return bansItem
 }
 
