@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
@@ -173,9 +174,52 @@ type Message struct {
 }
 
 func (m *Message) NotifyRecipients(ctx context.Context, channel *Channel, game *Game) error {
+	// Build a slice of game state IDs.
+	stateIDs := []*datastore.Key{}
+	for _, nat := range m.ChannelMembers {
+		stateID, err := GameStateID(ctx, m.GameID, nat)
+		if err != nil {
+			return err
+		}
+		stateIDs = append(stateIDs, stateID)
+	}
+
+	// Load the game states for this slice.
+	states := make(GameStates, len(stateIDs))
+	err := datastore.GetMulti(ctx, stateIDs, states)
+	log.Infof(ctx, "****** load multi produced %v", err)
+
+	// Populate a list of nations that haven't muted the sender.
+	unmutedMembers := []dip.Nation{}
+	if err == nil {
+		for _, state := range states {
+			if !state.HasMuted(m.Sender) {
+				unmutedMembers = append(unmutedMembers, state.Nation)
+			}
+		}
+	} else {
+		if merr, ok := err.(appengine.MultiError); ok {
+			for index, serr := range merr {
+				if serr != datastore.ErrNoSuchEntity {
+					return err
+				}
+				if serr == nil {
+					if !states[index].HasMuted(m.Sender) {
+						unmutedMembers = append(unmutedMembers, states[index].Nation)
+					}
+				} else {
+					unmutedMembers = append(unmutedMembers, states[index].Nation)
+				}
+			}
+		} else if err != datastore.ErrNoSuchEntity {
+			return err
+		}
+	}
+
+	// Use this unmuted list to build a set of user IDs to send the message to.
 	sort.Sort(m.ChannelMembers)
 	memberIds := []string{}
-	for _, nat := range m.ChannelMembers {
+	for _, nat := range unmutedMembers {
 		for _, member := range game.Members {
 			if member.Nation == nat {
 				memberIds = append(memberIds, member.User.Id)
@@ -183,6 +227,8 @@ func (m *Message) NotifyRecipients(ctx context.Context, channel *Channel, game *
 			}
 		}
 	}
+
+	// Create the message payload and enqueue it's sending.
 	data, err := NewFCMData(map[string]interface{}{
 		"diplicityMessage": m,
 		"diplicityChannel": channel,
