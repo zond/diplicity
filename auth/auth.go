@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aymerick/raymond"
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/nacl/secretbox"
 	"golang.org/x/net/context"
@@ -49,11 +50,38 @@ var (
 	router        *mux.Router
 )
 
+type FCMNotificationConfig struct {
+	ClickActionTemplate string `methods:"PUT"`
+	TitleTemplate       string `methods:"PUT"`
+	BodyTemplate        string `methods:"PUT"`
+}
+
+func (f *FCMNotificationConfig) Validate() error {
+	if f.ClickActionTemplate != "" {
+		if _, err := raymond.Parse(f.ClickActionTemplate); err != nil {
+			return err
+		}
+	}
+	if f.TitleTemplate != "" {
+		if _, err := raymond.Parse(f.TitleTemplate); err != nil {
+			return err
+		}
+	}
+	if f.BodyTemplate != "" {
+		if _, err := raymond.Parse(f.BodyTemplate); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type FCMToken struct {
-	Value    string `methods:"PUT"`
-	Disabled bool   `methods:"PUT"`
-	Note     string `methods:"PUT"`
-	App      string `methods:"PUT"`
+	Value         string                `methods:"PUT"`
+	Disabled      bool                  `methods:"PUT"`
+	Note          string                `methods:"PUT"`
+	App           string                `methods:"PUT"`
+	MessageConfig FCMNotificationConfig `methods:"PUT"`
+	PhaseConfig   FCMNotificationConfig `methods:"PUT"`
 }
 
 type UserConfig struct {
@@ -137,6 +165,15 @@ func updateUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
 		return nil, err
 	}
 	config.UserId = user.Id
+
+	for _, token := range config.FCMTokens {
+		if err := token.MessageConfig.Validate(); err != nil {
+			return nil, err
+		}
+		if err := token.PhaseConfig.Validate(); err != nil {
+			return nil, err
+		}
+	}
 
 	if _, err := datastore.Put(ctx, config.ID(ctx), config); err != nil {
 		return nil, err
