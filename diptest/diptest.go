@@ -200,7 +200,7 @@ func (r *Result) AssertEq(val interface{}, path ...string) *Result {
 	if found, err := jsonq.NewQuery(r.Body).Interface(path...); err != nil {
 		panic(fmt.Errorf("looking for %+v in %v: %v", path, pp(r.Body), err))
 	} else if diff := pretty.Diff(found, val); len(diff) > 0 {
-		panic(fmt.Errorf("got %+v = %v, want %v; diff %v", path, found, val, spew.Sdump(diff)))
+		panic(fmt.Errorf("got %+v = %v, want %v; diff %v", path, found, val, pp(diff)))
 	}
 	return r
 }
@@ -249,44 +249,86 @@ func pp(i interface{}) string {
 	return string(b)
 }
 
-func (r *Result) AssertNotFind(path []string, subPath []string, subMatch interface{}) *Result {
-	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
-	if err != nil {
+func (r *Result) AssertNotFind(subMatch interface{}, paths ...[]string) *Result {
+	res, err := r.find(subMatch, paths)
+	if err == nil {
+		panic(fmt.Errorf("found %+v like %v = %v", paths, subMatch, pp(r.Body)))
+	} else if _, ok := err.(findErr); !ok {
 		panic(err)
 	}
-	for _, obj := range ary {
-		found, err := jsonq.NewQuery(obj).Interface(subPath...)
-		if err == nil && found == subMatch {
-			panic(fmt.Errorf("found %+v with %+v = %q in %v", path, subPath, subMatch, pp(r.Body)))
-		}
-	}
-	return r
+	return res
 }
 
 func (r *Result) AssertNotRel(rel string, path ...string) *Result {
-	r.AssertNotFind(path, []string{"Rel"}, rel)
+	r.AssertNotFind(rel, path, []string{"Rel"})
 	return r
 }
 
 func (r *Result) AssertRel(rel string, path ...string) *Result {
-	r.Find(path, []string{"Rel"}, rel)
+	r.Find(rel, path, []string{"Rel"})
 	return r
 }
 
-func (r *Result) Find(path []string, subPath []string, subMatch interface{}) *Result {
-	ary, err := jsonq.NewQuery(r.Body).ArrayOfObjects(path...)
+type findErr string
+
+func (f findErr) Error() string {
+	return string(f)
+}
+
+func (r *Result) find(match interface{}, paths [][]string) (*Result, error) {
+	if len(paths) == 1 {
+		obj, err := jsonq.NewQuery(r.Body).Interface(paths[0]...)
+		if err != nil {
+			if strings.Contains(err.Error(), "on non-object <nil>") {
+				return nil, findErr(err.Error())
+			}
+			panic(err)
+		}
+		if diff := pretty.Diff(obj, match); fmt.Sprintf("%#v", obj) != fmt.Sprintf("%#v", match) && len(diff) > 0 {
+			return nil, fmt.Errorf(pp(diff))
+		}
+		return r, nil
+	}
+	ary, err := jsonq.NewQuery(r.Body).Array(paths[0]...)
+	if err != nil {
+		if strings.Contains(err.Error(), "Nil value found at") {
+			return nil, findErr(err.Error())
+		}
+		panic(err)
+	}
+	var errs []error
+	for _, obj := range ary {
+		cpy := *r
+		cpy.Body = obj
+		subR, err := cpy.find(match, paths[1:])
+		if err == nil {
+			return subR, nil
+		}
+		errs = append(errs, err)
+	}
+	return r, findErr(fmt.Sprintf("Found no %+v like %v in %v: %v", paths, match, pp(r.Body), pp(errs)))
+}
+
+func (r *Result) Find(subMatch interface{}, paths ...[]string) *Result {
+	res, err := r.find(subMatch, paths)
 	if err != nil {
 		panic(err)
 	}
-	for _, obj := range ary {
-		found, err := jsonq.NewQuery(obj).Interface(subPath...)
-		if err == nil && fmt.Sprint(found) == fmt.Sprint(subMatch) {
-			cpy := *r
-			cpy.Body = obj
-			return &cpy
-		}
+	return res
+}
+
+func (r *Result) FollowLink() *Req {
+	obj := r.Body.(map[string]interface{})
+	us := obj["URL"].(string)
+	u, err := url.Parse(us)
+	if err != nil {
+		panic(fmt.Errorf("trying to parse %q: %v", us, err))
 	}
-	panic(fmt.Errorf("Found no %+v with %+v = %v in %v", path, subPath, subMatch, pp(r.Body)))
+	return &Req{
+		env:    r.Env,
+		url:    u,
+		method: obj["Method"].(string),
+	}
 }
 
 func (r *Result) Follow(rel string, path ...string) *Req {
@@ -296,15 +338,9 @@ func (r *Result) Follow(rel string, path ...string) *Req {
 	}
 	for _, obj := range ary {
 		if rel == obj["Rel"] {
-			u, err := url.Parse(obj["URL"].(string))
-			if err != nil {
-				panic(fmt.Errorf("trying to parse %q: %v", obj["URL"].(string), err))
-			}
-			return &Req{
-				env:    r.Env,
-				url:    u,
-				method: obj["Method"].(string),
-			}
+			cpy := *r
+			cpy.Body = obj
+			return cpy.FollowLink()
 		}
 	}
 	panic(fmt.Errorf("found no Rel %q in %v, %v", rel, r.URL, pp(r.Body)))

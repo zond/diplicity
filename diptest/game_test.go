@@ -20,16 +20,16 @@ func TestCreateLeaveGame(t *testing.T) {
 			AssertEq(gameDesc, "Properties", "Desc")
 
 		env.GetRoute(game.MyStagingGamesRoute).Success().
-			Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 	})
 
 	t.Run("TestLeaveAndDestroyGame", func(t *testing.T) {
 		env.GetRoute(game.OpenGamesRoute).Success().
-			Find([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc).
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 			Follow("leave", "Links").Success()
 
 		env.GetRoute(game.MyStagingGamesRoute).Success().
-			AssertNotFind([]string{"Properties"}, []string{"Properties", "Desc"}, gameDesc)
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 	})
 }
 

@@ -40,7 +40,7 @@ func testOrders(t *testing.T) {
 
 	phase := g.
 		Follow("phases", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
+		Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
 
 	t.Run("TestOrdersIsolated", func(t *testing.T) {
 		phase.Follow("orders", "Links").Success().
@@ -48,9 +48,9 @@ func testOrders(t *testing.T) {
 
 		otherPlayerPhase := startedGameEnvs[1].GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc).
+			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 			Follow("phases", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
+			Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
 
 		otherPlayerPhase.Follow("orders", "Links").Success().
 			AssertEmpty("Properties")
@@ -60,7 +60,7 @@ func testOrders(t *testing.T) {
 		}).Success()
 
 		phase.Follow("orders", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Nation"}, nation)
+			Find(nation, []string{"Properties"}, []string{"Properties", "Nation"})
 
 		otherPlayerPhase.Follow("orders", "Links").Success().
 			AssertEmpty("Properties")
@@ -69,7 +69,7 @@ func testOrders(t *testing.T) {
 	t.Run("TestDeleteOrder", func(t *testing.T) {
 
 		phase.Follow("orders", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Nation"}, nation).
+			Find(nation, []string{"Properties"}, []string{"Properties", "Nation"}).
 			Follow("delete", "Links").Success()
 
 		phase.Follow("orders", "Links").Success().

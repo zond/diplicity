@@ -27,26 +27,26 @@ func testChat(t *testing.T) {
 		}).Success()
 
 		startedGames[0].Follow("channels", "Links").Success().
-			Find([]string{"Properties"}, []string{"Name"}, chanName)
+			Find(chanName, []string{"Properties"}, []string{"Name"})
 		startedGames[1].Follow("channels", "Links").Success().
-			Find([]string{"Properties"}, []string{"Name"}, chanName)
+			Find(chanName, []string{"Properties"}, []string{"Name"})
 		startedGames[2].Follow("channels", "Links").Success().AssertEmpty("Properties")
 
 		startedGames[0].Follow("channels", "Links").Success().
-			Find([]string{"Properties"}, []string{"Name"}, chanName).
+			Find(chanName, []string{"Properties"}, []string{"Name"}).
 			Follow("messages", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Body"}, msg1)
+			Find(msg1, []string{"Properties"}, []string{"Properties", "Body"})
 
 		startedGames[1].Follow("channels", "Links").Success().
-			Find([]string{"Properties"}, []string{"Name"}, chanName).
+			Find(chanName, []string{"Properties"}, []string{"Name"}).
 			Follow("messages", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Body"}, msg1)
+			Find(msg1, []string{"Properties"}, []string{"Properties", "Body"})
 	})
 
 	t.Run("TestNonMemberSeeingPublicChannelMessages", func(t *testing.T) {
 		outsiderGame := NewEnv().SetUID(String("fake")).GetRoute(game.IndexRoute).Success().
 			Follow("started-games", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Desc"}, startedGameDesc)
+			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
 		outsiderGame.Follow("channels", "Links").Success().
 			AssertEmpty("Properties")
@@ -62,17 +62,18 @@ func testChat(t *testing.T) {
 		sortedNations := make([]string, len(startedGameNats))
 		copy(sortedNations, startedGameNats)
 		sort.Sort(sort.StringSlice(sortedNations))
+		chanName := strings.Join(sortedNations, ",")
 
 		for i := range startedGameEnvs {
 			startedGames[i].Follow("channels", "Links").Success().
-				Find([]string{"Properties"}, []string{"Name"}, strings.Join(sortedNations, ",")).
+				Find(chanName, []string{"Properties"}, []string{"Name"}).
 				Follow("messages", "Links").Success().
-				Find([]string{"Properties"}, []string{"Properties", "Body"}, msg2)
+				Find(msg2, []string{"Properties"}, []string{"Properties", "Body"})
 		}
 
 		outsiderGame.Follow("channels", "Links").Success().
-			Find([]string{"Properties"}, []string{"Name"}, strings.Join(sortedNations, ",")).
+			Find(chanName, []string{"Properties"}, []string{"Name"}).
 			Follow("messages", "Links").Success().
-			Find([]string{"Properties"}, []string{"Properties", "Body"}, msg2)
+			Find(msg2, []string{"Properties"}, []string{"Properties", "Body"})
 	})
 }

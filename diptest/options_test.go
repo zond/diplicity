@@ -28,7 +28,7 @@ func testOptions(t *testing.T) {
 
 	phase := g.
 		Follow("phases", "Links").Success().
-		Find([]string{"Properties"}, []string{"Properties", "Season"}, "Spring")
+		Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
 
 	phase.Follow("options", "Links").Success().
 		AssertEq("SrcProvince", "Properties", prov, "Next", "Hold", "Next", prov, "Type")

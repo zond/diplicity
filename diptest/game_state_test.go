@@ -9,25 +9,25 @@ func testGameState(t *testing.T) {
 	nat1 := startedGameNats[1]
 
 	g0.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
-		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nat0).
+		Find(nat0, []string{"Properties"}, []string{"Properties", "Nation"}).
 		Follow("update", "Links").Body(map[string]interface{}{
 		"Muted": []string{nat1},
 	}).Success()
 
 	g0.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
-		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nat0).
+		Find(nat0, []string{"Properties"}, []string{"Properties", "Nation"}).
 		AssertEq([]interface{}{nat1}, "Properties", "Muted")
 
 	g0.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
-		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nat1).
+		Find(nat1, []string{"Properties"}, []string{"Properties", "Nation"}).
 		AssertNil("Properties", "Muted").AssertNil("Links")
 
 	g1.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
-		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nat0).
+		Find(nat0, []string{"Properties"}, []string{"Properties", "Nation"}).
 		AssertEq([]interface{}{nat1}, "Properties", "Muted")
 
 	g1.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
-		Find([]string{"Properties"}, []string{"Properties", "Nation"}, nat1).
+		Find(nat1, []string{"Properties"}, []string{"Properties", "Nation"}).
 		AssertNil("Properties", "Muted")
 
 }
