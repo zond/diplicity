@@ -27,13 +27,13 @@ const (
 
 func init() {
 	FCMSendToUsersFunc = NewDelayFunc("game-fcmSendToUsers", fcmSendToUsers)
-	fcmSendToTokensFunc = NewDelayFunc("game-fcmSendToTokens", fcmSendToTokens)
+	FCMSendToTokensFunc = NewDelayFunc("game-fcmSendToTokens", fcmSendToTokens)
 	manageFCMTokensFunc = NewDelayFunc("game-manageFCMTokens", manageFCMTokens)
 }
 
 var (
 	FCMSendToUsersFunc  *DelayFunc
-	fcmSendToTokensFunc *DelayFunc
+	FCMSendToTokensFunc *DelayFunc
 	manageFCMTokensFunc *DelayFunc
 	prodFCMConf         *FCMConf
 	prodFCMConfLock     = sync.RWMutex{}
@@ -226,7 +226,7 @@ func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data *F
 	log.Infof(ctx, "UIDs %+v expanded to Tokens %+v", uids, tokens)
 
 	if len(tokens) > 0 {
-		if err := fcmSendToTokensFunc.EnqueueIn(ctx, 0, time.Duration(0), notif, data, tokens); err != nil {
+		if err := FCMSendToTokensFunc.EnqueueIn(ctx, 0, time.Duration(0), notif, data, tokens); err != nil {
 			// Safe to retry, nothing got sent.
 			log.Errorf(ctx, "Unable to schedule sending of messages: %v; hope datastore gets fixed", err)
 			return err
@@ -357,7 +357,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 			delay = at.Sub(time.Now())
 		}
 		// Finally, try to schedule again. If we can't then fuckall we'll try again with the entire payload.
-		if err := fcmSendToTokensFunc.EnqueueIn(ctx, delay, delay, notif, data, tokens); err != nil {
+		if err := FCMSendToTokensFunc.EnqueueIn(ctx, delay, delay, notif, data, tokens); err != nil {
 			log.Errorf(ctx, "Unable to schedule retry of %v, %v to %+v in %v: %v", PP(notif), PP(data), tokens, delay, err)
 			return err
 		}
