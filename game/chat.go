@@ -198,13 +198,12 @@ func (m *Message) NotifyRecipients(ctx context.Context, channel *Channel, game *
 	} else {
 		if merr, ok := err.(appengine.MultiError); ok {
 			for index, serr := range merr {
-				if serr != datastore.ErrNoSuchEntity {
-					return err
-				}
 				if serr == nil {
 					if !states[index].HasMuted(m.Sender) {
 						unmutedMembers = append(unmutedMembers, states[index].Nation)
 					}
+				} else if serr != datastore.ErrNoSuchEntity {
+					return err
 				} else {
 					unmutedMembers = append(unmutedMembers, states[index].Nation)
 				}
