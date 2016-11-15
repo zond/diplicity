@@ -12,7 +12,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
@@ -187,7 +186,6 @@ func (m *Message) NotifyRecipients(ctx context.Context, channel *Channel, game *
 	// Load the game states for this slice.
 	states := make(GameStates, len(stateIDs))
 	err := datastore.GetMulti(ctx, stateIDs, states)
-	log.Infof(ctx, "****** load multi produced %v", err)
 
 	// Populate a list of nations that haven't muted the sender.
 	unmutedMembers := []dip.Nation{}
