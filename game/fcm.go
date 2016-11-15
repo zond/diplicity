@@ -216,7 +216,7 @@ func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data *F
 					return merr
 				}
 			}
-		} else {
+		} else if err != datastore.ErrNoSuchEntity {
 			// Safe to retry, nothing got sent.
 			log.Errorf(ctx, "Unable to load user configs for tokens: %v; hope datastore gets fixed", err)
 			return err

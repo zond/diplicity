@@ -152,6 +152,10 @@ func (g *Games) RemoveBanned(ctx context.Context, uid string) error {
 		return nil
 	}
 
+	if err == datastore.ErrNoSuchEntity {
+		return nil
+	}
+
 	merr, ok := err.(appengine.MultiError)
 	if !ok {
 		return err
