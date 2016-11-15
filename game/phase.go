@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aymerick/raymond"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
 	"github.com/zond/godip/state"
@@ -20,11 +21,140 @@ import (
 )
 
 var (
-	timeoutResolvePhaseFunc *DelayFunc
+	timeoutResolvePhaseFunc           *DelayFunc
+	sendPhaseNotificationsToUsersFunc *DelayFunc
+	sendPhaseNotificationsToFCMFunc   *DelayFunc
 )
 
 func init() {
 	timeoutResolvePhaseFunc = NewDelayFunc("game-timeoutResolvePhase", timeoutResolvePhase)
+	sendPhaseNotificationsToUsersFunc = NewDelayFunc("game-sendPhaseNotificationsToUsers", sendPhaseNotificationsToUsers)
+	sendPhaseNotificationsToFCMFunc = NewDelayFunc("game-sendPhaseNotificationsToFCM", sendPhaseNotificationsToFCM)
+}
+
+func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, userId string, finishedTokens map[string]struct{}) error {
+	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %v, %v, %q, %+v)", gameID, phaseOrdinal, userId, finishedTokens)
+
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		log.Errorf(ctx, "PhaseID(..., %v, %v): %v; fix the PhaseID func", gameID, phaseOrdinal, err)
+		return err
+	}
+
+	userConfigID := auth.UserConfigID(ctx, auth.UserID(ctx, userId))
+
+	game := &Game{}
+	phase := &Phase{}
+	userConfig := &auth.UserConfig{}
+	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, userConfigID}, []interface{}{game, phase, userConfig})
+	if err != nil {
+		if merr, ok := err.(appengine.MultiError); ok {
+			if merr[2] == datastore.ErrNoSuchEntity {
+				log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
+				return nil
+			}
+			log.Errorf(ctx, "Unable to load game, phase and user config: %v; hope datastore gets fixed", err)
+			return err
+		} else {
+			log.Errorf(ctx, "Unable to load game, phase and user config: %v; hope datastore gets fixed", err)
+			return err
+		}
+	}
+
+	data := map[string]interface{}{
+		"diplicityPhase": phase,
+		"diplicityGame":  game,
+	}
+
+	dataPayload, err := NewFCMData(data)
+	if err != nil {
+		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", data, err)
+		return err
+	}
+
+	for _, fcmToken := range userConfig.FCMTokens {
+		if fcmToken.Disabled {
+			continue
+		}
+		if _, done := finishedTokens[fcmToken.Value]; done {
+			continue
+		}
+		finishedTokens[fcmToken.Value] = struct{}{}
+		notificationPayload := &fcm.NotificationPayload{
+			Title:       fmt.Sprintf("%s %d, %s", phase.Season, phase.Year, phase.Type),
+			Body:        fmt.Sprintf("%s has a new phase.", game.Desc),
+			Tag:         "diplicity-engine-new-phase",
+			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Phase/%d", game.ID.Encode(), phase.PhaseOrdinal),
+		}
+
+		if customTitle, err := raymond.Render(fcmToken.PhaseConfig.TitleTemplate, data); err == nil {
+			notificationPayload.Title = customTitle
+		}
+		if customBody, err := raymond.Render(fcmToken.PhaseConfig.BodyTemplate, data); err == nil {
+			notificationPayload.Body = customBody
+		}
+		if customClickAction, err := raymond.Render(fcmToken.PhaseConfig.ClickActionTemplate, data); err == nil {
+			notificationPayload.ClickAction = customClickAction
+		}
+
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			if err := FCMSendToTokensFunc.EnqueueIn(
+				ctx,
+				0,
+				notificationPayload,
+				dataPayload,
+				map[string][]string{
+					userId: []string{fcmToken.Value},
+				},
+			); err != nil {
+				log.Errorf(ctx, "Unable to enqueue actual sending of notification to %v/%v: %v; fix FCMSendToUsers or hope datastore gets fixed", userId, fcmToken.Value, err)
+				return err
+			}
+
+			if len(userConfig.FCMTokens) > len(finishedTokens) {
+				if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, gameID, phaseOrdinal, userId, finishedTokens); err != nil {
+					log.Errorf(ctx, "Unable to enqueue sending of rest of notifications: %v; hope datastore gets fixed", err)
+					return err
+				}
+			}
+
+			return nil
+		}, &datastore.TransactionOptions{XG: true}); err != nil {
+			log.Errorf(ctx, "Unable to commit send tx: %v", err)
+			return err
+		}
+		log.Infof(ctx, "Successfully sent a notification and enqueued sending the rest, exiting")
+		return nil
+	}
+
+	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %v, %v, %q, %+v) *** SUCCESS ***", gameID, phaseOrdinal, userId, finishedTokens)
+
+	return nil
+}
+
+func sendPhaseNotificationsToUsers(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, uids []string) error {
+	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %v, %v, %+v)", gameID, phaseOrdinal, uids)
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, gameID, phaseOrdinal, uids[0], map[string]struct{}{}); err != nil {
+			log.Errorf(ctx, "Unable to enqueue sending to %q: %v; hope datastore gets fixed", uids[0], err)
+			return err
+		}
+		if len(uids) > 1 {
+			if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, gameID, phaseOrdinal, uids[1:]); err != nil {
+				log.Errorf(ctx, "Unable to enqueue sending to rest: %v; hope datastore gets fixed", err)
+				return err
+			}
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
+		log.Errorf(ctx, "Unable to commit send tx: %v", err)
+		return err
+	}
+
+	log.Infof(ctx, "sendPhaseNotifications(..., %v, %v, %+v) *** SUCCESS ***", gameID, phaseOrdinal, uids)
+
+	return nil
 }
 
 func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
@@ -588,25 +718,7 @@ func (p *Phase) NotifyMembers(ctx context.Context, game *Game) error {
 	for i, member := range game.Members {
 		memberIds[i] = member.User.Id
 	}
-	data, err := NewFCMData(map[string]interface{}{
-		"diplicityPhase": p,
-		"diplicityGame":  game,
-	})
-	if err != nil {
-		return err
-	}
-	return FCMSendToUsersFunc.EnqueueIn(
-		ctx,
-		0,
-		&fcm.NotificationPayload{
-			Title:       fmt.Sprintf("%s %d, %s", p.Season, p.Year, p.Type),
-			Body:        fmt.Sprintf("%s has a new phase.", game.Desc),
-			Tag:         "diplicity-engine-new-phase",
-			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Phase/%d", game.ID.Encode(), p.PhaseOrdinal),
-		},
-		data,
-		memberIds,
-	)
+	return sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, p.GameID, p.PhaseOrdinal, memberIds)
 }
 
 func listOptions(w ResponseWriter, r Request) error {
