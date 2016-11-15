@@ -167,3 +167,47 @@ func TestBans(t *testing.T) {
 		AssertLen(0, "Properties")
 
 }
+
+func testBanEfficacy(t *testing.T) {
+	newEnv := NewEnv().SetUID(String("fake"))
+
+	newEnv.GetRoute(game.IndexRoute).Success().
+		Follow("started-games", "Links").Success().
+		Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+		Follow("bans", "Links").Success().
+		Follow("create", "Links").Body(map[string]interface{}{
+		"UserIds": []string{startedGameEnvs[0].GetUID(), newEnv.GetUID()},
+	}).Success()
+
+	newEnv.GetRoute(game.IndexRoute).Success().
+		Follow("started-games", "Links").Success().
+		AssertNotFind(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	newGameDesc := String("game")
+	newEnv.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").
+		Body(map[string]string{
+		"Variant": "Classical",
+		"Desc":    newGameDesc,
+	}).Success().
+		AssertEq(newGameDesc, "Properties", "Desc")
+
+	startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+		Follow("open-games", "Links").Success().
+		AssertNotFind(newGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+		Follow("bans", "Links").Success().
+		Find("unsign", []string{"Properties"}, []string{"Links"}, []string{"Rel"}).
+		FollowLink().Success()
+
+	newEnv.GetRoute(game.IndexRoute).Success().
+		Follow("started-games", "Links").Success().
+		Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+		Follow("open-games", "Links").Success().
+		Find(newGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+}

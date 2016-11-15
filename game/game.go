@@ -131,6 +131,51 @@ var GameResource = &Resource{
 
 type Games []Game
 
+func (g *Games) RemoveBanned(ctx context.Context, uid string) error {
+	banIDs := []*datastore.Key{}
+	gameIndices := []int{}
+	for gameIndex, game := range *g {
+		for _, member := range game.Members {
+			banID, err := BanID(ctx, []string{uid, member.User.Id})
+			if err != nil {
+				return err
+			}
+			gameIndices = append(gameIndices, gameIndex)
+			banIDs = append(banIDs, banID)
+		}
+	}
+	bans := make([]Ban, len(banIDs))
+	err := datastore.GetMulti(ctx, banIDs, bans)
+
+	if err == nil {
+		*g = Games{}
+		return nil
+	}
+
+	merr, ok := err.(appengine.MultiError)
+	if !ok {
+		return err
+	}
+
+	gameBans := make([]bool, len(*g))
+	for banIndex, serr := range merr {
+		if serr == nil {
+			gameBans[gameIndices[banIndex]] = true
+		} else if serr != datastore.ErrNoSuchEntity {
+			return err
+		}
+	}
+
+	newGames := Games{}
+	for gameIndex, game := range *g {
+		if !gameBans[gameIndex] {
+			newGames = append(newGames, game)
+		}
+	}
+	*g = newGames
+	return nil
+}
+
 func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit int, name string, desc []string, route string) *Item {
 	gameItems := make(List, len(g))
 	for i := range g {

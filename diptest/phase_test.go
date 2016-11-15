@@ -74,6 +74,7 @@ func TestStartGame(t *testing.T) {
 		t.Run("TestChat", testChat)
 		t.Run("TestPhaseState", testPhaseState)
 		t.Run("TestReadyResolution", testReadyResolution)
+		t.Run("TestBanEfficacy", testBanEfficacy)
 	})
 }
 

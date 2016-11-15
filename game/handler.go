@@ -125,14 +125,25 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*game
 	return req, nil
 }
 
-func (req *gamesReq) handle() error {
+func (req *gamesReq) refill(games *Games) error {
 	var err error
-	games := Games{}
-	for err == nil && len(games) < req.limit {
+	for err == nil && len(*games) < req.limit {
 		game := Game{}
 		game.ID, err = req.iter.Next(&game)
 		if err == nil {
-			games = append(games, game)
+			*games = append(*games, game)
+		}
+	}
+	return err
+}
+
+func (req *gamesReq) handle(private bool) error {
+	var err error
+	games := Games{}
+	for err == nil && len(games) < req.limit {
+		err = req.refill(&games)
+		if filtErr := games.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
+			return filtErr
 		}
 	}
 
@@ -151,7 +162,7 @@ func (h *gamesHandler) handlePublic(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	return req.handle()
+	return req.handle(false)
 }
 
 func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
@@ -160,7 +171,7 @@ func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	return req.handle()
+	return req.handle(true)
 }
 
 var (

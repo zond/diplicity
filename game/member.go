@@ -94,6 +94,18 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		return nil, err
 	}
 
+	game := &Game{}
+	if err := datastore.Get(ctx, gameID, game); err != nil {
+		return nil, err
+	}
+	filterList := Games{*game}
+	if err := filterList.RemoveBanned(ctx, user.Id); err != nil {
+		return nil, err
+	}
+	if len(filterList) == 0 {
+		return nil, HTTPErr{"banned from this game", 403}
+	}
+
 	var member *Member
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
