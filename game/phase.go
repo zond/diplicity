@@ -46,7 +46,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 
 	game := &Game{}
 	phase := &Phase{}
-	user := &User{}
+	user := &auth.User{}
 	userConfig := &auth.UserConfig{}
 	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, userConfigID, userID}, []interface{}{game, phase, userConfig, user})
 	if err != nil {
@@ -55,10 +55,10 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 				log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 				return nil
 			}
-			log.Errorf(ctx, "Unable to load game, phase and user config: %v; hope datastore gets fixed", err)
+			log.Errorf(ctx, "Unable to load game, phase, user and user config: %v; hope datastore gets fixed", err)
 			return err
 		} else {
-			log.Errorf(ctx, "Unable to load game, phase and user config: %v; hope datastore gets fixed", err)
+			log.Errorf(ctx, "Unable to load game, phase, user and user config: %v; hope datastore gets fixed", err)
 			return err
 		}
 	}

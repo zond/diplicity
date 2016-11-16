@@ -9,3 +9,7 @@ queue:
   rate: 500/s
 - name: game-sendPhaseNotificationsToUsers
   rate: 500/s
+- name: game-sendMsgNotificationsToUsers
+  rate: 500/s
+- name: game-sendMsgNotificationsToFCM
+  rate: 500/s

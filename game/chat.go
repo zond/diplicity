@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
@@ -21,6 +22,139 @@ const (
 	messageKind = "Message"
 	channelKind = "Channel"
 )
+
+var (
+	sendMsgNotificationsToUsersFunc *DelayFunc
+	sendMsgNotificationsToFCMFunc   *DelayFunc
+)
+
+func init() {
+	sendMsgNotificationsToUsersFunc = NewDelayFunc("game-sendMsgNotificationsToUsers", sendMsgNotificationsToUsers)
+	sendMsgNotificationsToFCMFunc = NewDelayFunc("game-sendMsgNotificationsToFCM", sendMsgNotificationsToFCM)
+}
+
+func sendMsgNotificationsToFCM(ctx context.Context, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string, finishedTokens map[string]struct{}) error {
+	log.Infof(ctx, "sendMsgNotificationsToFCM(..., %v, %+v, %v, %q, %+v)", gameID, channelMembers, messageID, userId, finishedTokens)
+
+	channelID, err := ChannelID(ctx, gameID, channelMembers)
+	if err != nil {
+		log.Errorf(ctx, "ChannelID(..., %v, %v): %v; fix the ChannelID func", gameID, channelMembers, err)
+		return err
+	}
+
+	userID := auth.UserID(ctx, userId)
+
+	userConfigID := auth.UserConfigID(ctx, userID)
+
+	game := &Game{}
+	channel := &Channel{}
+	message := &Message{}
+	user := &auth.User{}
+	userConfig := &auth.UserConfig{}
+	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, channelID, messageID, userConfigID, userID}, []interface{}{game, channel, message, userConfig, user})
+	if err != nil {
+		if merr, ok := err.(appengine.MultiError); ok {
+			if merr[3] == datastore.ErrNoSuchEntity {
+				log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
+				return nil
+			}
+			log.Errorf(ctx, "Unable to load game, channel, message, user and user config: %v; hope datastore gets fixed", err)
+			return err
+		} else {
+			log.Errorf(ctx, "Unable to load game, channel, message, user and user config: %v; hope datastore gets fixed", err)
+			return err
+		}
+	}
+
+	data := map[string]interface{}{
+		"diplicityGame":    game,
+		"diplicityChannel": channel,
+		"diplicityMessage": message,
+		"diplicityUser":    user,
+	}
+
+	dataPayload, err := NewFCMData(data)
+	if err != nil {
+		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", data, err)
+		return err
+	}
+
+	for _, fcmToken := range userConfig.FCMTokens {
+		if fcmToken.Disabled {
+			continue
+		}
+		if _, done := finishedTokens[fcmToken.Value]; done {
+			continue
+		}
+		finishedTokens[fcmToken.Value] = struct{}{}
+		notificationPayload := &fcm.NotificationPayload{
+			Title:       fmt.Sprintf("%s: Message from %s", message.ChannelMembers.String(), message.Sender),
+			Body:        fmt.Sprintf(message.Body),
+			Tag:         "diplicity-engine-new-message",
+			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Channel/%s/Messages", game.ID.Encode(), message.ChannelMembers.String()),
+		}
+
+		fcmToken.MessageConfig.Customize(ctx, notificationPayload, data)
+
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			if err := FCMSendToTokensFunc.EnqueueIn(
+				ctx,
+				0,
+				notificationPayload,
+				dataPayload,
+				map[string][]string{
+					userId: []string{fcmToken.Value},
+				},
+			); err != nil {
+				log.Errorf(ctx, "Unable to enqueue actual sending of notification to %v/%v: %v; fix FCMSendToUsers or hope datastore gets fixed", userId, fcmToken.Value, err)
+				return err
+			}
+
+			if len(userConfig.FCMTokens) > len(finishedTokens) {
+				if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, gameID, channelMembers, messageID, userId, finishedTokens); err != nil {
+					log.Errorf(ctx, "Unable to enqueue sending of rest of notifications: %v; hope datastore gets fixed", err)
+					return err
+				}
+			}
+
+			return nil
+		}, &datastore.TransactionOptions{XG: true}); err != nil {
+			log.Errorf(ctx, "Unable to commit send tx: %v", err)
+			return err
+		}
+		log.Infof(ctx, "Successfully sent a notification and enqueued sending the rest, exiting")
+		return nil
+	}
+
+	log.Infof(ctx, "sendMsgNotificationsToFCM(..., %v, %+v, %v, %q, %+v) *** SUCCESS ***", gameID, channelMembers, messageID, userId, finishedTokens)
+
+	return nil
+}
+
+func sendMsgNotificationsToUsers(ctx context.Context, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, uids []string) error {
+	log.Infof(ctx, "sendMsgNotificationsToUsers(..., %v, %+v, %v, %+v)", gameID, channelMembers, messageID, uids)
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, gameID, channelMembers, messageID, uids[0], map[string]struct{}{}); err != nil {
+			log.Errorf(ctx, "Unable to enqueue sending to %q: %v; hope datastore gets fixed", uids[0], err)
+			return err
+		}
+		if len(uids) > 1 {
+			if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, gameID, channelMembers, messageID, uids[1:]); err != nil {
+				log.Errorf(ctx, "Unable to enqueue sending to rest: %v; hope datastore gets fixed", err)
+				return err
+			}
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
+		log.Errorf(ctx, "Unable to commit send tx: %v", err)
+		return err
+	}
+
+	log.Infof(ctx, "sendMsgNotifications(..., %v, %+v, %v, %+v) *** SUCCESS ***", gameID, channelMembers, messageID, uids)
+
+	return nil
+}
 
 type Nations []dip.Nation
 
@@ -225,27 +359,7 @@ func (m *Message) NotifyRecipients(ctx context.Context, channel *Channel, game *
 		}
 	}
 
-	// Create the message payload and enqueue it's sending.
-	data, err := NewFCMData(map[string]interface{}{
-		"diplicityMessage": m,
-		"diplicityChannel": channel,
-		"diplicityGame":    game,
-	})
-	if err != nil {
-		return err
-	}
-	return FCMSendToUsersFunc.EnqueueIn(
-		ctx,
-		0,
-		&fcm.NotificationPayload{
-			Title:       fmt.Sprintf("%s: Message from %s", m.ChannelMembers.String(), m.Sender),
-			Body:        fmt.Sprintf(m.Body),
-			Tag:         "diplicity-engine-new-message",
-			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Channel/%s/Messages", game.ID.Encode(), m.ChannelMembers.String()),
-		},
-		data,
-		memberIds,
-	)
+	return sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, m.GameID, m.ChannelMembers, m.ID, memberIds)
 }
 
 func (m *Message) Item(r Request) *Item {
