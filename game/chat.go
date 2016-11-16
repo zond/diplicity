@@ -65,6 +65,7 @@ func sendMsgNotificationsToFCM(ctx context.Context, gameID *datastore.Key, chann
 			return err
 		}
 	}
+	game.ID = gameID
 
 	data := map[string]interface{}{
 		"diplicityGame":    game,
@@ -100,6 +101,7 @@ func sendMsgNotificationsToFCM(ctx context.Context, gameID *datastore.Key, chann
 			if err := FCMSendToTokensFunc.EnqueueIn(
 				ctx,
 				0,
+				time.Duration(0),
 				notificationPayload,
 				dataPayload,
 				map[string][]string{
@@ -357,6 +359,10 @@ func (m *Message) NotifyRecipients(ctx context.Context, channel *Channel, game *
 				break
 			}
 		}
+	}
+
+	if len(memberIds) == 0 {
+		return nil
 	}
 
 	return sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, m.GameID, m.ChannelMembers, m.ID, memberIds)
