@@ -40,12 +40,15 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 		return err
 	}
 
-	userConfigID := auth.UserConfigID(ctx, auth.UserID(ctx, userId))
+	userID := auth.UserID(ctx, userId)
+
+	userConfigID := auth.UserConfigID(ctx, userID)
 
 	game := &Game{}
 	phase := &Phase{}
+	user := &User{}
 	userConfig := &auth.UserConfig{}
-	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, userConfigID}, []interface{}{game, phase, userConfig})
+	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, userConfigID, userID}, []interface{}{game, phase, userConfig, user})
 	if err != nil {
 		if merr, ok := err.(appengine.MultiError); ok {
 			if merr[2] == datastore.ErrNoSuchEntity {
@@ -63,6 +66,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 	data := map[string]interface{}{
 		"diplicityPhase": phase,
 		"diplicityGame":  game,
+		"diplicityUser":  user,
 	}
 
 	dataPayload, err := NewFCMData(data)

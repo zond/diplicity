@@ -142,7 +142,7 @@ func (u *UserConfig) Item(r Request) *Item {
 		[]string{
 			"New phase notifications",
 			"New phase notifications will have the `[phase season] [phase year], [phase type]` as title, and `[game desc] has a new phase` as body.",
-			"The payload will be `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhase: [phase JSON], diplicityGame: [game JSON] }` compressed with libz.",
+			"The payload will be `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhase: [phase JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz.",
 		},
 		[]string{
 			"New message notifications",
