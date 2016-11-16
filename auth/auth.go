@@ -20,6 +20,7 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/mail"
 
 	"github.com/zond/go-fcm"
 	. "github.com/zond/goaeoas"
@@ -100,6 +101,55 @@ func (f *FCMNotificationConfig) Validate() error {
 	return nil
 }
 
+type MailNotificationConfig struct {
+	SubjectTemplate  string `methods:"PUT"`
+	TextBodyTemplate string `methods:"PUT"`
+	HTMLBodyTemplate string `methods:"PUT"`
+}
+
+func (m *MailNotificationConfig) Validate() error {
+	if m.SubjectTemplate != "" {
+		if _, err := raymond.Parse(m.SubjectTemplate); err != nil {
+			return err
+		}
+	}
+	if m.TextBodyTemplate != "" {
+		if _, err := raymond.Parse(m.TextBodyTemplate); err != nil {
+			return err
+		}
+	}
+	if m.HTMLBodyTemplate != "" {
+		if _, err := raymond.Parse(m.HTMLBodyTemplate); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *MailNotificationConfig) Customize(ctx context.Context, msg *mail.Message, data interface{}) {
+	if m.SubjectTemplate != "" {
+		if customSubject, err := raymond.Render(m.SubjectTemplate, data); err == nil {
+			msg.Subject = customSubject
+		} else {
+			log.Infof(ctx, "Broken SubjectTemplate %q: %v", m.SubjectTemplate, err)
+		}
+	}
+	if m.TextBodyTemplate != "" {
+		if customTextBody, err := raymond.Render(m.TextBodyTemplate, data); err == nil {
+			msg.Body = customTextBody
+		} else {
+			log.Infof(ctx, "Broken TextBodyTemplate %q: %v", m.TextBodyTemplate, err)
+		}
+	}
+	if m.HTMLBodyTemplate != "" {
+		if customHTMLBody, err := raymond.Render(m.HTMLBodyTemplate, data); err == nil {
+			msg.HTMLBody = customHTMLBody
+		} else {
+			log.Infof(ctx, "Broken HTMLBodyTemplate %q: %v", m.HTMLBodyTemplate, err)
+		}
+	}
+}
+
 type FCMToken struct {
 	Value         string                `methods:"PUT"`
 	Disabled      bool                  `methods:"PUT"`
@@ -110,8 +160,10 @@ type FCMToken struct {
 }
 
 type UserConfig struct {
-	UserId    string
-	FCMTokens []FCMToken `methods:"PUT"`
+	UserId            string
+	FCMTokens         []FCMToken             `methods:"PUT"`
+	MailMessageConfig MailNotificationConfig `methods:"PUT"`
+	MailPhaseConfig   MailNotificationConfig `methods:"PUT"`
 }
 
 var UserConfigResource = &Resource{
