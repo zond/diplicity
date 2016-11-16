@@ -58,20 +58,26 @@ type FCMNotificationConfig struct {
 }
 
 func (f *FCMNotificationConfig) Customize(ctx context.Context, notif *fcm.NotificationPayload, data interface{}) {
-	if customTitle, err := raymond.Render(f.TitleTemplate, data); err == nil {
-		notif.Title = customTitle
-	} else {
-		log.Infof(ctx, "Broken TitleTemplate %q: %v", f.TitleTemplate, err)
+	if f.TitleTemplate != "" {
+		if customTitle, err := raymond.Render(f.TitleTemplate, data); err == nil {
+			notif.Title = customTitle
+		} else {
+			log.Infof(ctx, "Broken TitleTemplate %q: %v", f.TitleTemplate, err)
+		}
 	}
-	if customBody, err := raymond.Render(f.BodyTemplate, data); err == nil {
-		notif.Body = customBody
-	} else {
-		log.Infof(ctx, "Broken BodyTemplate %q: %v", f.BodyTemplate, err)
+	if f.BodyTemplate != "" {
+		if customBody, err := raymond.Render(f.BodyTemplate, data); err == nil {
+			notif.Body = customBody
+		} else {
+			log.Infof(ctx, "Broken BodyTemplate %q: %v", f.BodyTemplate, err)
+		}
 	}
-	if customClickAction, err := raymond.Render(f.ClickActionTemplate, data); err == nil {
-		notif.ClickAction = customClickAction
-	} else {
-		log.Infof(ctx, "Broken ClickActionTemplate %q: %v", f.ClickActionTemplate, err)
+	if f.ClickActionTemplate != "" {
+		if customClickAction, err := raymond.Render(f.ClickActionTemplate, data); err == nil {
+			notif.ClickAction = customClickAction
+		} else {
+			log.Infof(ctx, "Broken ClickActionTemplate %q: %v", f.ClickActionTemplate, err)
+		}
 	}
 }
 
@@ -417,7 +423,7 @@ func handleOAuth2Callback(w ResponseWriter, r Request) error {
 	}
 	user := infoToUser(userInfo)
 	user.ValidUntil = time.Now().Add(time.Hour * 24)
-	if _, err := datastore.Put(ctx, datastore.NewKey(ctx, userKind, user.Id, 0, nil), user); err != nil {
+	if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
 		return err
 	}
 
@@ -445,6 +451,8 @@ func handleLogout(w ResponseWriter, r Request) error {
 }
 
 func tokenFilter(w ResponseWriter, r Request) (bool, error) {
+	ctx := appengine.NewContext(r.Req())
+
 	if fakeID := r.Req().URL.Query().Get("fake-id"); (TestMode || appengine.IsDevAppServer()) && fakeID != "" {
 		user := &User{
 			Email:         "fake@fake.fake",
@@ -454,6 +462,10 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 			Name:          "Fakey Fakeson",
 			VerifiedEmail: true,
 			ValidUntil:    time.Now().Add(time.Hour * 24),
+		}
+
+		if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
+			return false, err
 		}
 
 		r.Values()["user"] = user
@@ -487,8 +499,6 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 	}
 
 	if token != "" {
-		ctx := appengine.NewContext(r.Req())
-
 		b, err := base64.URLEncoding.DecodeString(token)
 		if err != nil {
 			return false, err
