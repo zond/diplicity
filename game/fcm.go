@@ -276,8 +276,10 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 				}
 			}
 		}
-		if err := manageFCMTokensFunc.EnqueueIn(ctx, 0, idsToRemove, idsToUpdate); err != nil {
-			log.Errorf(ctx, "Unable to schedule repair of FCM tokens (to remove: %v, to update: %v): %v; hope that datastore gets fixed", PP(idsToRemove), PP(idsToUpdate), err)
+		if len(idsToRemove) > 0 || len(idsToUpdate) > 0 {
+			if err := manageFCMTokensFunc.EnqueueIn(ctx, 0, idsToRemove, idsToUpdate); err != nil {
+				log.Errorf(ctx, "Unable to schedule repair of FCM tokens (to remove: %v, to update: %v): %v; hope that datastore gets fixed", PP(idsToRemove), PP(idsToUpdate), err)
+			}
 		}
 	}
 
