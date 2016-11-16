@@ -21,6 +21,7 @@ import (
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
 
+	"github.com/zond/go-fcm"
 	. "github.com/zond/goaeoas"
 	oauth2service "google.golang.org/api/oauth2/v2"
 )
@@ -54,6 +55,24 @@ type FCMNotificationConfig struct {
 	ClickActionTemplate string `methods:"PUT"`
 	TitleTemplate       string `methods:"PUT"`
 	BodyTemplate        string `methods:"PUT"`
+}
+
+func (f *FCMNotificationConfig) Customize(ctx context.Context, notif *fcm.NotificationPayload, data interface{}) {
+	if customTitle, err := raymond.Render(f.TitleTemplate, data); err == nil {
+		notif.Title = customTitle
+	} else {
+		log.Infof(ctx, "Broken TitleTemplate %q: %v", f.TitleTemplate, err)
+	}
+	if customBody, err := raymond.Render(f.BodyTemplate, data); err == nil {
+		notif.Body = customBody
+	} else {
+		log.Infof(ctx, "Broken BodyTemplate %q: %v", f.BodyTemplate, err)
+	}
+	if customClickAction, err := raymond.Render(f.ClickActionTemplate, data); err == nil {
+		notif.ClickAction = customClickAction
+	} else {
+		log.Infof(ctx, "Broken ClickActionTemplate %q: %v", f.ClickActionTemplate, err)
+	}
 }
 
 func (f *FCMNotificationConfig) Validate() error {

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aymerick/raymond"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
 	"github.com/zond/godip/state"
@@ -87,15 +86,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Phase/%d", game.ID.Encode(), phase.PhaseOrdinal),
 		}
 
-		if customTitle, err := raymond.Render(fcmToken.PhaseConfig.TitleTemplate, data); err == nil {
-			notificationPayload.Title = customTitle
-		}
-		if customBody, err := raymond.Render(fcmToken.PhaseConfig.BodyTemplate, data); err == nil {
-			notificationPayload.Body = customBody
-		}
-		if customClickAction, err := raymond.Render(fcmToken.PhaseConfig.ClickActionTemplate, data); err == nil {
-			notificationPayload.ClickAction = customClickAction
-		}
+		fcmToken.PhaseConfig.Customize(ctx, notificationPayload, data)
 
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			if err := FCMSendToTokensFunc.EnqueueIn(

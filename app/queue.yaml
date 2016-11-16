@@ -1,8 +1,6 @@
 queue:
 - name: game-timeoutResolvePhase
   rate: 500/s
-- name: game-fcmSendToUsers
-  rate: 500/s
 - name: game-fcmSendToTokens
   rate: 500/s
 - name: game-manageFCMTokens

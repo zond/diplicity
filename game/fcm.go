@@ -12,7 +12,6 @@ import (
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
 	"golang.org/x/net/context"
-	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/urlfetch"
@@ -26,13 +25,11 @@ const (
 )
 
 func init() {
-	FCMSendToUsersFunc = NewDelayFunc("game-fcmSendToUsers", fcmSendToUsers)
 	FCMSendToTokensFunc = NewDelayFunc("game-fcmSendToTokens", fcmSendToTokens)
 	manageFCMTokensFunc = NewDelayFunc("game-manageFCMTokens", manageFCMTokens)
 }
 
 var (
-	FCMSendToUsersFunc  *DelayFunc
 	FCMSendToTokensFunc *DelayFunc
 	manageFCMTokensFunc *DelayFunc
 	prodFCMConf         *FCMConf
@@ -180,65 +177,6 @@ func NewFCMData(payload interface{}) (*FCMData, error) {
 	return &FCMData{
 		DiplicityJSON: buf.Bytes(),
 	}, nil
-}
-
-func fcmSendToUsers(ctx context.Context, notif *fcm.NotificationPayload, data *FCMData, uids []string) error {
-	log.Infof(ctx, "fcmSendToUsers(..., %v, %v, %+v)", PP(notif), PP(data), uids)
-
-	userConfigs := make([]auth.UserConfig, len(uids))
-	ids := make([]*datastore.Key, len(uids))
-	for i, uid := range uids {
-		ids[i] = auth.UserConfigID(ctx, auth.UserID(ctx, uid))
-	}
-
-	tokens := map[string][]string{}
-
-	if err := datastore.GetMulti(ctx, ids, userConfigs); err == nil {
-		for _, userConfig := range userConfigs {
-			for _, fcmToken := range userConfig.FCMTokens {
-				if !fcmToken.Disabled && fcmToken.Value != "" {
-					tokens[userConfig.UserId] = append(tokens[userConfig.UserId], fcmToken.Value)
-				}
-			}
-		}
-	} else {
-		if merr, ok := err.(appengine.MultiError); ok {
-			for i, err := range merr {
-				if err == nil {
-					for _, fcmToken := range userConfigs[i].FCMTokens {
-						if !fcmToken.Disabled && fcmToken.Value != "" {
-							tokens[userConfigs[i].UserId] = append(tokens[userConfigs[i].UserId], fcmToken.Value)
-						}
-					}
-				} else if err != datastore.ErrNoSuchEntity {
-					// Safe to retry, nothing got sent.
-					log.Errorf(ctx, "Unable to load user configs for tokens: %v (%v); hope datastore gets fixed", merr, err)
-					return merr
-				}
-			}
-		} else if err != datastore.ErrNoSuchEntity {
-			// Safe to retry, nothing got sent.
-			log.Errorf(ctx, "Unable to load user configs for tokens: %v; hope datastore gets fixed", err)
-			return err
-		}
-	}
-
-	log.Infof(ctx, "UIDs %+v expanded to Tokens %+v", uids, tokens)
-
-	if len(tokens) > 0 {
-		if err := FCMSendToTokensFunc.EnqueueIn(ctx, 0, time.Duration(0), notif, data, tokens); err != nil {
-			// Safe to retry, nothing got sent.
-			log.Errorf(ctx, "Unable to schedule sending of messages: %v; hope datastore gets fixed", err)
-			return err
-		}
-		log.Infof(ctx, "Enqueued sending to tokens")
-	} else {
-		log.Infof(ctx, "Skipping sending to empty token list")
-	}
-
-	log.Infof(ctx, "fcmSendToUsers(..., %v, %v, %+v) *** SUCCESS ***", PP(notif), PP(data), uids)
-
-	return nil
 }
 
 func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.NotificationPayload, data *FCMData, tokens map[string][]string) error {
