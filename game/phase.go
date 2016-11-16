@@ -62,6 +62,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 			return err
 		}
 	}
+	game.ID = gameID
 
 	data := map[string]interface{}{
 		"diplicityPhase": phase,
@@ -96,6 +97,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 			if err := FCMSendToTokensFunc.EnqueueIn(
 				ctx,
 				0,
+				time.Duration(0),
 				notificationPayload,
 				dataPayload,
 				map[string][]string{
@@ -712,6 +714,9 @@ func (p *Phase) NotifyMembers(ctx context.Context, game *Game) error {
 	memberIds := make([]string, len(game.Members))
 	for i, member := range game.Members {
 		memberIds[i] = member.User.Id
+	}
+	if len(memberIds) == 0 {
+		return nil
 	}
 	return sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, p.GameID, p.PhaseOrdinal, memberIds)
 }
