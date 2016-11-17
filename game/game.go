@@ -223,7 +223,7 @@ type GameData struct {
 	Started            bool           // Game has started.
 	Closed             bool           // Game is no longer joinable..
 	Finished           bool           // Game has reached its end.
-	Desc               string         `methods:"POST"`
+	Desc               string         `methods:"POST" datastore:",noindex"`
 	Variant            string         `methods:"POST"`
 	PhaseLengthMinutes time.Duration  `methods:"POST"`
 	NMembers           int

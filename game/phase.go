@@ -149,7 +149,7 @@ func sendPhaseNotificationsToUsers(ctx context.Context, gameID *datastore.Key, p
 		return err
 	}
 
-	log.Infof(ctx, "sendPhaseNotifications(..., %v, %v, %+v) *** SUCCESS ***", gameID, phaseOrdinal, uids)
+	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %v, %v, %+v) *** SUCCESS ***", gameID, phaseOrdinal, uids)
 
 	return nil
 }

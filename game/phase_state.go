@@ -65,7 +65,7 @@ type PhaseState struct {
 	ReadyToResolve bool `methods:"PUT"`
 	WantsDIAS      bool `methods:"PUT"`
 	OnProbation    bool
-	Note           string
+	Note           string `datastore:",noindex"`
 }
 
 func PhaseStateID(ctx context.Context, phaseID *datastore.Key, nation dip.Nation) (*datastore.Key, error) {

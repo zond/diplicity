@@ -153,7 +153,7 @@ func sendMsgNotificationsToUsers(ctx context.Context, gameID *datastore.Key, cha
 		return err
 	}
 
-	log.Infof(ctx, "sendMsgNotifications(..., %v, %+v, %v, %+v) *** SUCCESS ***", gameID, channelMembers, messageID, uids)
+	log.Infof(ctx, "sendMsgNotificationsToUsers(..., %v, %+v, %v, %+v) *** SUCCESS ***", gameID, channelMembers, messageID, uids)
 
 	return nil
 }
@@ -232,7 +232,7 @@ type Channel struct {
 	GameID         *datastore.Key
 	Members        Nations
 	NMessages      int
-	NMessagesSince NMessagesSince
+	NMessagesSince NMessagesSince `datastore:"-"`
 }
 
 func (c *Channel) Item(r Request) *Item {
@@ -304,7 +304,7 @@ type Message struct {
 	GameID         *datastore.Key
 	ChannelMembers Nations `methods:"POST"`
 	Sender         dip.Nation
-	Body           string `methods:"POST"`
+	Body           string `methods:"POST" datastore:",noindex"`
 	CreatedAt      time.Time
 }
 

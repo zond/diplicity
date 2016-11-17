@@ -53,9 +53,9 @@ var (
 )
 
 type FCMNotificationConfig struct {
-	ClickActionTemplate string `methods:"PUT"`
-	TitleTemplate       string `methods:"PUT"`
-	BodyTemplate        string `methods:"PUT"`
+	ClickActionTemplate string `methods:"PUT" datastore:",noindex"`
+	TitleTemplate       string `methods:"PUT" datastore:",noindex"`
+	BodyTemplate        string `methods:"PUT" datastore:",noindex"`
 }
 
 func (f *FCMNotificationConfig) Customize(ctx context.Context, notif *fcm.NotificationPayload, data interface{}) {
@@ -102,9 +102,10 @@ func (f *FCMNotificationConfig) Validate() error {
 }
 
 type MailNotificationConfig struct {
-	SubjectTemplate  string `methods:"PUT"`
-	TextBodyTemplate string `methods:"PUT"`
-	HTMLBodyTemplate string `methods:"PUT"`
+	EmailEnabled     bool
+	SubjectTemplate  string `datastore:",noindex"`
+	TextBodyTemplate string `datastore:",noindex"`
+	HTMLBodyTemplate string `datastore:",noindex"`
 }
 
 func (m *MailNotificationConfig) Validate() error {
@@ -153,7 +154,7 @@ func (m *MailNotificationConfig) Customize(ctx context.Context, msg *mail.Messag
 type FCMToken struct {
 	Value         string                `methods:"PUT"`
 	Disabled      bool                  `methods:"PUT"`
-	Note          string                `methods:"PUT"`
+	Note          string                `methods:"PUT" datastore:",noindex"`
 	App           string                `methods:"PUT"`
 	MessageConfig FCMNotificationConfig `methods:"PUT"`
 	PhaseConfig   FCMNotificationConfig `methods:"PUT"`
