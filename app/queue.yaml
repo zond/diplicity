@@ -13,3 +13,5 @@ queue:
   rate: 500/s
 - name: game-sendMsgNotificationsToFCM
   rate: 500/s
+- name: game-sendMsgNotificationsToMail
+  rate: 500/s

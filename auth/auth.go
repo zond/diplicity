@@ -20,7 +20,7 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/mail"
+	"gopkg.in/sendgrid/sendgrid-go.v2"
 
 	"github.com/zond/go-fcm"
 	. "github.com/zond/goaeoas"
@@ -34,6 +34,7 @@ const (
 	LogoutRoute         = "Logout"
 	RedirectRoute       = "Redirect"
 	OAuth2CallbackRoute = "OAuth2Callback"
+	UnsubscribeRoute    = "Unsubscribe"
 )
 
 const (
@@ -102,10 +103,10 @@ func (f *FCMNotificationConfig) Validate() error {
 }
 
 type MailNotificationConfig struct {
-	EmailEnabled     bool
-	SubjectTemplate  string `datastore:",noindex"`
-	TextBodyTemplate string `datastore:",noindex"`
-	HTMLBodyTemplate string `datastore:",noindex"`
+	Enabled          bool   `methods:"PUT"`
+	SubjectTemplate  string `methods:"PUT" datastore:",noindex"`
+	TextBodyTemplate string `methods:"PUT" datastore:",noindex"`
+	HTMLBodyTemplate string `methods:"PUT" datastore:",noindex"`
 }
 
 func (m *MailNotificationConfig) Validate() error {
@@ -127,7 +128,7 @@ func (m *MailNotificationConfig) Validate() error {
 	return nil
 }
 
-func (m *MailNotificationConfig) Customize(ctx context.Context, msg *mail.Message, data interface{}) {
+func (m *MailNotificationConfig) Customize(ctx context.Context, msg *sendgrid.SGMail, data interface{}) {
 	if m.SubjectTemplate != "" {
 		if customSubject, err := raymond.Render(m.SubjectTemplate, data); err == nil {
 			msg.Subject = customSubject
@@ -137,14 +138,14 @@ func (m *MailNotificationConfig) Customize(ctx context.Context, msg *mail.Messag
 	}
 	if m.TextBodyTemplate != "" {
 		if customTextBody, err := raymond.Render(m.TextBodyTemplate, data); err == nil {
-			msg.Body = customTextBody
+			msg.SetText(customTextBody)
 		} else {
 			log.Infof(ctx, "Broken TextBodyTemplate %q: %v", m.TextBodyTemplate, err)
 		}
 	}
 	if m.HTMLBodyTemplate != "" {
 		if customHTMLBody, err := raymond.Render(m.HTMLBodyTemplate, data); err == nil {
-			msg.HTMLBody = customHTMLBody
+			msg.SetHTML(customHTMLBody)
 		} else {
 			log.Infof(ctx, "Broken HTMLBodyTemplate %q: %v", m.HTMLBodyTemplate, err)
 		}
@@ -433,12 +434,8 @@ func handleLogin(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func encodeToken(ctx context.Context, user *User) (string, error) {
+func EncodeString(ctx context.Context, s string) (string, error) {
 	nacl, err := getNaCl(ctx)
-	if err != nil {
-		return "", err
-	}
-	plain, err := json.Marshal(user)
 	if err != nil {
 		return "", err
 	}
@@ -448,8 +445,16 @@ func encodeToken(ctx context.Context, user *User) (string, error) {
 	}
 	var secretAry [32]byte
 	copy(secretAry[:], nacl.Secret)
-	cipher := secretbox.Seal(nonceAry[:], plain, &nonceAry, &secretAry)
+	cipher := secretbox.Seal(nonceAry[:], []byte(s), &nonceAry, &secretAry)
 	return base64.URLEncoding.EncodeToString(cipher), nil
+}
+
+func EncodeToken(ctx context.Context, user *User) (string, error) {
+	plain, err := json.Marshal(user)
+	if err != nil {
+		return "", err
+	}
+	return EncodeString(ctx, string(plain))
 }
 
 func handleOAuth2Callback(w ResponseWriter, r Request) error {
@@ -480,7 +485,7 @@ func handleOAuth2Callback(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	userToken, err := encodeToken(ctx, user)
+	userToken, err := EncodeToken(ctx, user)
 	if err != nil {
 		return err
 	}
@@ -507,8 +512,12 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 	ctx := appengine.NewContext(r.Req())
 
 	if fakeID := r.Req().URL.Query().Get("fake-id"); (TestMode || appengine.IsDevAppServer()) && fakeID != "" {
+		fakeEmail := r.Req().URL.Query().Get("fake-email")
+		if fakeEmail == "" {
+			fakeEmail = "fake@fake.fake"
+		}
 		user := &User{
-			Email:         "fake@fake.fake",
+			Email:         fakeEmail,
 			FamilyName:    "Fakeson",
 			GivenName:     "Fakey",
 			Id:            fakeID,
@@ -627,12 +636,17 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 	return true, errI
 }
 
+func unsubscribe(w ResponseWriter, r Request) error {
+	return nil
+}
+
 func SetupRouter(r *mux.Router) {
 	router = r
+	HandleResource(router, UserConfigResource)
 	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
 	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
 	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
-	HandleResource(router, UserConfigResource)
+	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
 	AddFilter(tokenFilter)
 	AddPostProc(loginRedirect)
 }

@@ -202,8 +202,9 @@ var (
 )
 
 type configuration struct {
-	OAuth   *auth.OAuth
-	FCMConf *FCMConf
+	OAuth    *auth.OAuth
+	FCMConf  *FCMConf
+	SendGrid *SendGrid
 }
 
 func handleConfigure(w ResponseWriter, r Request) error {
@@ -223,10 +224,16 @@ func handleConfigure(w ResponseWriter, r Request) error {
 			return err
 		}
 	}
+	if conf.SendGrid != nil {
+		if err := SetSendGrid(ctx, conf.SendGrid); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func SetupRouter(r *mux.Router) {
+	router = r
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channel/{channel_members}/Messages", []string{"GET"}, ListMessagesRoute, listMessages)

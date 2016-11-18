@@ -31,6 +31,10 @@ To run it locally
 
 When running the server locally, you can use the query parameter `fake-id` to set a fake user ID for your requests. This makes it possible and easy to test interaction between users without creating multiple Google accounts or even running multiple browsers.
 
+#### Faking user email
+
+When running the server locally, you can also use the query parameter `fake-email` to set the fake email of the fake user ID. This makes it possible and easy to test the email notification system.
+
 ## Running the tests
 
 To run the tests

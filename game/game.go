@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/url"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/zond/diplicity/auth"
@@ -18,13 +19,55 @@ import (
 	"google.golang.org/appengine/taskqueue"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 const (
-	gameKind       = "Game"
-	gameResultKind = "GameResult"
+	gameKind     = "Game"
+	sendGridKind = "SendGrid"
 )
+
+var (
+	prodSendGrid     *SendGrid
+	prodSendGridLock = sync.RWMutex{}
+)
+
+type SendGrid struct {
+	APIKey string
+}
+
+func getSendGridKey(ctx context.Context) *datastore.Key {
+	return datastore.NewKey(ctx, sendGridKind, prodKey, 0, nil)
+}
+
+func SetSendGrid(ctx context.Context, sendGrid *SendGrid) error {
+	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		currentSendGrid := &SendGrid{}
+		if err := datastore.Get(ctx, getSendGridKey(ctx), currentSendGrid); err == nil {
+			return HTTPErr{"SendGrid already configured", 400}
+		}
+		if _, err := datastore.Put(ctx, getSendGridKey(ctx), sendGrid); err != nil {
+			return err
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: false})
+}
+
+func GetSendGrid(ctx context.Context) (*SendGrid, error) {
+	prodSendGridLock.RLock()
+	if prodSendGrid != nil {
+		defer prodSendGridLock.RUnlock()
+		return prodSendGrid, nil
+	}
+	prodSendGridLock.RUnlock()
+	prodSendGridLock.Lock()
+	defer prodSendGridLock.Unlock()
+	foundSendGrid := &SendGrid{}
+	if err := datastore.Get(ctx, getSendGridKey(ctx), foundSendGrid); err != nil {
+		return nil, err
+	}
+	prodSendGrid = foundSendGrid
+	return prodSendGrid, nil
+}
 
 func PP(i interface{}) string {
 	b, err := json.MarshalIndent(i, "  ", "  ")
@@ -69,59 +112,6 @@ func (d *DelayFunc) EnqueueAt(ctx context.Context, taskETA time.Time, args ...in
 
 func (d *DelayFunc) EnqueueIn(ctx context.Context, taskDelay time.Duration, args ...interface{}) error {
 	return d.EnqueueAt(ctx, time.Now().Add(taskDelay), args...)
-}
-
-type GameResult struct {
-	GameID            *datastore.Key
-	SoloWinner        dip.Nation
-	DIASMembers       []dip.Nation
-	NMRMembers        []dip.Nation
-	EliminatedMembers []dip.Nation
-}
-
-func GameResultID(ctx context.Context, gameID *datastore.Key) *datastore.Key {
-	return datastore.NewKey(ctx, gameResultKind, "result", 0, gameID)
-}
-
-func (g *GameResult) ID(ctx context.Context) *datastore.Key {
-	return GameResultID(ctx, g.GameID)
-}
-
-func (g *GameResult) Save(ctx context.Context) error {
-	_, err := datastore.Put(ctx, g.ID(ctx), g)
-	return err
-}
-
-func loadGameResult(w ResponseWriter, r Request) (*GameResult, error) {
-	ctx := appengine.NewContext(r.Req())
-
-	_, ok := r.Values()["user"].(*auth.User)
-	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
-	}
-
-	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
-	if err != nil {
-		return nil, err
-	}
-
-	gameResultID := GameResultID(ctx, gameID)
-
-	gameResult := &GameResult{}
-	if err := datastore.Get(ctx, gameResultID, gameResult); err != nil {
-		return nil, err
-	}
-
-	return gameResult, nil
-}
-
-var GameResultResource = &Resource{
-	Load:     loadGameResult,
-	FullPath: "/Game/{game_id}/GameResult",
-}
-
-func (g *GameResult) Item(r Request) *Item {
-	return NewItem(g).SetName("game-result").AddLink(r.NewLink(GameResultResource.Link("self", Load, []string{"game_id", g.GameID.Encode()})))
 }
 
 var GameResource = &Resource{
