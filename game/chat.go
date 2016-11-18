@@ -158,6 +158,8 @@ func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *data
 	qp.Set("t", unsubToken)
 	unsubscribeURL.RawQuery = qp.Encode()
 
+	msgContext.data["unsubscribeURL"] = unsubscribeURL.String()
+
 	msg := sendgrid.NewMail()
 	msg.SetText(fmt.Sprintf("%s\n\nVisit %s to stop receiving email like this.", msgContext.message.Body, unsubscribeURL.String()))
 	msg.SetSubject(fmt.Sprintf("%s: Message from %s", msgContext.message.ChannelMembers.String(), msgContext.message.Sender))
