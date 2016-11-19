@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -52,6 +53,14 @@ var (
 	prodNaClLock  = sync.RWMutex{}
 	router        *mux.Router
 )
+
+func PP(i interface{}) string {
+	b, err := json.MarshalIndent(i, "  ", "  ")
+	if err != nil {
+		panic(fmt.Errorf("trying to marshal %+v: %v", i, err))
+	}
+	return string(b)
+}
 
 type FCMNotificationConfig struct {
 	ClickActionTemplate string `methods:"PUT" datastore:",noindex"`
@@ -435,18 +444,55 @@ func handleLogin(w ResponseWriter, r Request) error {
 }
 
 func EncodeString(ctx context.Context, s string) (string, error) {
-	nacl, err := getNaCl(ctx)
+	b, err := EncodeBytes(ctx, []byte(s))
 	if err != nil {
 		return "", err
 	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+func EncodeBytes(ctx context.Context, b []byte) ([]byte, error) {
+	nacl, err := getNaCl(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var nonceAry [24]byte
 	if _, err := io.ReadFull(rand.Reader, nonceAry[:]); err != nil {
-		return "", err
+		return nil, err
 	}
 	var secretAry [32]byte
 	copy(secretAry[:], nacl.Secret)
-	cipher := secretbox.Seal(nonceAry[:], []byte(s), &nonceAry, &secretAry)
-	return base64.URLEncoding.EncodeToString(cipher), nil
+	cipher := secretbox.Seal(nonceAry[:], b, &nonceAry, &secretAry)
+	return cipher, nil
+}
+
+func DecodeString(ctx context.Context, s string) (string, error) {
+	sb, err := base64.URLEncoding.DecodeString(s)
+	if err != nil {
+		return "", err
+	}
+	b, err := DecodeBytes(ctx, sb)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func DecodeBytes(ctx context.Context, b []byte) ([]byte, error) {
+	var nonceAry [24]byte
+	copy(nonceAry[:], b)
+	nacl, err := getNaCl(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var secretAry [32]byte
+	copy(secretAry[:], nacl.Secret)
+
+	plain, ok := secretbox.Open([]byte{}, b[24:], &nonceAry, &secretAry)
+	if !ok {
+		return nil, HTTPErr{"badly encrypted token", 403}
+	}
+	return plain, nil
 }
 
 func EncodeToken(ctx context.Context, user *User) (string, error) {
@@ -512,9 +558,17 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 	ctx := appengine.NewContext(r.Req())
 
 	if fakeID := r.Req().URL.Query().Get("fake-id"); (TestMode || appengine.IsDevAppServer()) && fakeID != "" {
-		fakeEmail := r.Req().URL.Query().Get("fake-email")
-		if fakeEmail == "" {
-			fakeEmail = "fake@fake.fake"
+		fakeEmail := "fake@fake.fake"
+		if providedFake := r.Req().URL.Query().Get("fake-email"); providedFake != "" {
+			fakeEmail = providedFake
+			r.DecorateLinks(func(l *Link, u *url.URL) error {
+				if l.Rel != "logout" {
+					q := u.Query()
+					q.Set("fake-email", fakeEmail)
+					u.RawQuery = q.Encode()
+				}
+				return nil
+			})
 		}
 		user := &User{
 			Email:         fakeEmail,
@@ -561,27 +615,13 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 	}
 
 	if token != "" {
-		b, err := base64.URLEncoding.DecodeString(token)
+		plain, err := DecodeString(ctx, token)
 		if err != nil {
 			return false, err
-		}
-
-		var nonceAry [24]byte
-		copy(nonceAry[:], b)
-		nacl, err := getNaCl(ctx)
-		if err != nil {
-			return false, err
-		}
-		var secretAry [32]byte
-		copy(secretAry[:], nacl.Secret)
-
-		plain, ok := secretbox.Open([]byte{}, b[24:], &nonceAry, &secretAry)
-		if !ok {
-			return false, HTTPErr{"badly encrypted token", 403}
 		}
 
 		user := &User{}
-		if err := json.Unmarshal(plain, user); err != nil {
+		if err := json.Unmarshal([]byte(plain), user); err != nil {
 			return false, err
 		}
 		if user.ValidUntil.Before(time.Now()) {
@@ -637,7 +677,32 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 }
 
 func unsubscribe(w ResponseWriter, r Request) error {
-	return nil
+	ctx := appengine.NewContext(r.Req())
+
+	decodedUserId, err := DecodeString(ctx, r.Req().URL.Query().Get("t"))
+	if err != nil {
+		return err
+	}
+
+	if decodedUserId != r.Vars()["user_id"] {
+		return HTTPErr{"can only unsubscribe yourself", 403}
+	}
+
+	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		userConfigID := UserConfigID(ctx, UserID(ctx, r.Vars()["user_id"]))
+		userConfig := &UserConfig{}
+		if err := datastore.Get(ctx, userConfigID, userConfig); err != nil {
+			return err
+		}
+		if !userConfig.MailMessageConfig.Enabled && !userConfig.MailPhaseConfig.Enabled {
+			log.Infof(ctx, "%v is turned off for both message and phase mail, exiting", PP(userConfig))
+			return nil
+		}
+		userConfig.MailMessageConfig.Enabled = false
+		userConfig.MailPhaseConfig.Enabled = false
+		_, err := datastore.Put(ctx, userConfigID, userConfig)
+		return err
+	}, &datastore.TransactionOptions{XG: false})
 }
 
 func SetupRouter(r *mux.Router) {
