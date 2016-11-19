@@ -47,6 +47,7 @@ const (
 	ListMessagesRoute           = "ListMessages"
 	ListBansRoute               = "ListBans"
 	DevResolvePhaseTimeoutRoute = "DevResolvePhaseTimeout"
+	ReceiveMailRoute            = "ReceiveMail"
 )
 
 type gamesHandler struct {
@@ -251,6 +252,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Games/My/Started", []string{"GET"}, MyStartedGamesRoute, startedGamesHandler.handlePrivate)
 	Handle(r, "/Games/My/Finished", []string{"GET"}, MyFinishedGamesRoute, finishedGamesHandler.handlePrivate)
 	Handle(r, "/User/{user_id}/Bans", []string{"GET"}, ListBansRoute, listBans)
+	Handle(r, "/_ah/mail", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)

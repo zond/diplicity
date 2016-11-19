@@ -1,15 +1,21 @@
 package game
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/mail"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
+	"github.com/jhillyerd/enmime"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
 	"github.com/zond/godip/variants"
@@ -34,7 +40,10 @@ var (
 	sendMsgNotificationsToFCMFunc   *DelayFunc
 	sendMsgNotificationsToMailFunc  *DelayFunc
 
-	noConfigError = errors.New("user has no config")
+	noConfigError      = errors.New("user has no config")
+	fromAddressPattern = "replies+%s@diplicity-engine.appspotmail.com"
+	fromAddressReg     = regexp.MustCompile("^replies\\+([^@]+)@diplicity-engine.appspotmail.com")
+	errorFromAddr      = "noreply@oort.se"
 )
 
 func init() {
@@ -137,6 +146,27 @@ func GetUnsubscribeURL(ctx context.Context, r *mux.Router, reqURL string, userId
 	return unsubscribeURL, nil
 }
 
+func sendEmailError(ctx context.Context, to string, errorMessage string) error {
+	sendGridConf, err := GetSendGrid(ctx)
+	if err != nil {
+		return err
+	}
+
+	msg := sendgrid.NewMail()
+	msg.SetText(fmt.Sprint("Your recent mail to diplicity was not successfully parsed.\n\nAn error message follows.\n\n%v", errorMessage))
+	msg.SetSubject("Unsuccessfully parsed")
+	msg.AddTo(to)
+	msg.SetFrom(errorFromAddr)
+
+	client := sendgrid.NewSendGridClientWithApiKey(sendGridConf.APIKey)
+	client.Client = urlfetch.Client(ctx)
+	if err := client.Send(msg); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) error {
 	log.Infof(ctx, "sendMsgNotificationsToMail(..., %q, %v, %+v, %v, %q)", reqURL, gameID, channelMembers, messageID, userId)
 
@@ -183,13 +213,13 @@ func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *data
 	msg.AddRecipient(recipEmail)
 	msg.AddToName(channelMembers.String())
 
-	fromToken, err := auth.EncodeString(ctx, fmt.Sprintf("%s,%s", userId, messageID.Encode()))
+	fromToken, err := auth.EncodeString(ctx, fmt.Sprintf("%s,%s", msgContext.member.Nation, messageID.Encode()))
 	if err != nil {
 		log.Errorf(ctx, "Unable to create auth token for reply address: %v; fix EncodeString or hope datastore gets fixed", err)
 		return err
 	}
 
-	fromAddress := fmt.Sprintf("replies+%s@diplicity-engine.appspotmail.com", fromToken)
+	fromAddress := fmt.Sprintf(fromAddressPattern, fromToken)
 	fromEmail, err := mail.ParseAddress(fromAddress)
 	if err != nil {
 		log.Errorf(ctx, "Unable to parse reply email address %q: %v; fix the address generation", fromAddress, err)
@@ -540,6 +570,51 @@ func (m *Message) Item(r Request) *Item {
 	return NewItem(m).SetName(string(m.Sender))
 }
 
+func createMessageHelper(ctx context.Context, r Request, message *Message) error {
+	message.CreatedAt = time.Now()
+	sort.Sort(message.ChannelMembers)
+
+	channelID, err := ChannelID(ctx, message.GameID, message.ChannelMembers)
+	if err != nil {
+		return err
+	}
+
+	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		channel := &Channel{}
+		if err := datastore.GetMulti(ctx, []*datastore.Key{message.GameID, channelID}, []interface{}{game, channel}); err != nil {
+			if merr, ok := err.(appengine.MultiError); ok {
+				if merr[0] == nil && merr[1] == datastore.ErrNoSuchEntity {
+					channel.GameID = message.GameID
+					channel.Members = message.ChannelMembers
+					channel.NMessages = 0
+				} else {
+					return merr
+				}
+			} else {
+				return err
+			}
+		}
+		game.ID = message.GameID
+		if message.ID, err = datastore.Put(ctx, datastore.NewIncompleteKey(ctx, messageKind, channelID), message); err != nil {
+			return err
+		}
+		channel.NMessages += 1
+		if _, err = datastore.Put(ctx, channelID, channel); err != nil {
+			return err
+		}
+
+		completeURL := r.Req().URL
+		completeURL.Host = r.Req().Host
+		if r.Req().TLS == nil {
+			completeURL.Scheme = "http"
+		} else {
+			completeURL.Scheme = "https"
+		}
+		return message.NotifyRecipients(ctx, completeURL.String(), channel, game)
+	}, &datastore.TransactionOptions{XG: true})
+}
+
 func createMessage(w ResponseWriter, r Request) (*Message, error) {
 	ctx := appengine.NewContext(r.Req())
 
@@ -569,10 +644,6 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 	if err := Copy(message, r, "POST"); err != nil {
 		return nil, err
 	}
-	message.GameID = gameID
-	message.Sender = member.Nation
-	message.CreatedAt = time.Now()
-	sort.Sort(message.ChannelMembers)
 
 	if !message.ChannelMembers.Includes(member.Nation) {
 		return nil, HTTPErr{"can only send messages to member channels", 403}
@@ -584,45 +655,10 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 		}
 	}
 
-	channelID, err := ChannelID(ctx, gameID, message.ChannelMembers)
-	if err != nil {
-		return nil, err
-	}
+	message.GameID = gameID
+	message.Sender = member.Nation
 
-	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		game := &Game{}
-		channel := &Channel{}
-		if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, channelID}, []interface{}{game, channel}); err != nil {
-			if merr, ok := err.(appengine.MultiError); ok {
-				if merr[0] == nil && merr[1] == datastore.ErrNoSuchEntity {
-					channel.GameID = gameID
-					channel.Members = message.ChannelMembers
-					channel.NMessages = 0
-				} else {
-					return merr
-				}
-			} else {
-				return err
-			}
-		}
-		game.ID = gameID
-		if message.ID, err = datastore.Put(ctx, datastore.NewIncompleteKey(ctx, messageKind, channelID), message); err != nil {
-			return err
-		}
-		channel.NMessages += 1
-		if _, err = datastore.Put(ctx, channelID, channel); err != nil {
-			return err
-		}
-
-		completeURL := r.Req().URL
-		completeURL.Host = r.Req().Host
-		if r.Req().TLS == nil {
-			completeURL.Scheme = "http"
-		} else {
-			completeURL.Scheme = "https"
-		}
-		return message.NotifyRecipients(ctx, completeURL.String(), channel, game)
-	}, &datastore.TransactionOptions{XG: true}); err != nil {
+	if err := createMessageHelper(ctx, r, message); err != nil {
 		return nil, err
 	}
 
@@ -812,4 +848,119 @@ func listChannels(w ResponseWriter, r Request) error {
 
 	w.SetContent(channels.Item(r, gameID))
 	return nil
+}
+
+func receiveMail(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	b, err := ioutil.ReadAll(r.Req().Body)
+	if err != nil {
+		log.Errorf(ctx, "Unable to read body from request %v: %v", spew.Sdump(r.Req()), err)
+		return err
+	}
+
+	msg, err := mail.ReadMessage(bytes.NewBuffer(b))
+	if err != nil {
+		log.Errorf(ctx, "Unable to parse mail from %q: %v", string(b), err)
+		return err
+	}
+
+	from := msg.Header.Get("From")
+
+	enmsg, err := enmime.EnvelopeFromMessage(msg)
+	if err != nil {
+		e := fmt.Sprintf("Unable to parse %v into a mime message: %v", PP(msg), err)
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
+	}
+
+	toAddress, err := mail.ParseAddress(enmsg.GetHeader("To"))
+	if err != nil {
+		e := fmt.Sprintf("Unable to parse recipient address of %v: %v", PP(msg.Header), err)
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
+	}
+
+	match := fromAddressReg.FindStringSubmatch(toAddress.Address)
+	if len(match) == 0 {
+		e := fmt.Sprintf("Recipient address of %v doesn't match %v.", PP(msg.Header), fromAddressReg)
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
+	}
+
+	fromToken := match[1]
+	plainToken, err := auth.DecodeString(ctx, fromToken)
+	if err != nil {
+		e := fmt.Sprintf("Unable to successfully decrypt token %q in %q: %v.", match[1], match[0], err)
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
+	}
+
+	parts := strings.Split(plainToken, ",")
+	if len(parts) != 2 {
+		e := fmt.Sprintf("Decrypted token %q is not two strings joined by ','.", fromToken)
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
+	}
+
+	fromNation := parts[0]
+	messageID, err := datastore.DecodeKey(parts[1])
+	if err != nil {
+		e := fmt.Sprintf("Unable to decode message ID %q: %v.", parts[1], err)
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
+	}
+
+	message := &Message{}
+	if err := datastore.Get(ctx, messageID, message); err != nil {
+		e := fmt.Sprintf("Unable to load original message from datastore, unable to create reply: %v", err)
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
+	}
+
+	paragraphs := []string{}
+	paragraph := []string{}
+	for _, line := range strings.Split(enmsg.Text, "\n") {
+		paragraph = append(paragraph, line)
+		if strings.TrimSpace(line) == "" {
+			paragraphs = append(paragraphs, strings.Join(paragraph, "\n"))
+			paragraph = []string{}
+		}
+	}
+	paragraphs = append(paragraphs, strings.Join(paragraph, "\n"))
+
+	foundFirstLine := false
+	okLines := []string{}
+	for _, line := range paragraphs {
+		if !foundFirstLine {
+			if strings.TrimSpace(line) != "" {
+				foundFirstLine = true
+			} else {
+				continue
+			}
+		}
+
+		if strings.Contains(line, toAddress.Address) {
+			for i := len(okLines); i > 0; i-- {
+				if strings.TrimSpace(okLines[i-1]) == "" {
+					okLines = okLines[:i-1]
+				} else {
+					break
+				}
+			}
+			break
+		}
+		okLines = append(okLines, strings.TrimRightFunc(line, unicode.IsSpace))
+	}
+
+	newMessage := &Message{
+		GameID:         message.GameID,
+		ChannelMembers: message.ChannelMembers,
+		Sender:         dip.Nation(fromNation),
+		Body:           strings.Join(okLines, "\n"),
+	}
+
+	log.Infof(ctx, "Received %v via email", PP(newMessage))
+
+	return createMessageHelper(ctx, r, newMessage)
 }
