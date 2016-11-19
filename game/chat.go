@@ -129,7 +129,7 @@ func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *data
 		return err
 	}
 
-	if !msgContext.userConfig.MailMessageConfig.Enabled {
+	if !msgContext.userConfig.MailConfig.Enabled {
 		log.Infof(ctx, "%q hasn't enabled mail notifications for mail, will skip sending notification", userId)
 		return nil
 	}
@@ -165,7 +165,7 @@ func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *data
 	msg.SetSubject(fmt.Sprintf("%s: Message from %s", msgContext.message.ChannelMembers.String(), msgContext.message.Sender))
 	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
 
-	msgContext.userConfig.MailMessageConfig.Customize(ctx, msg, msgContext.data)
+	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.data)
 
 	recipEmail, err := mail.ParseAddress(msgContext.user.Email)
 	if err != nil {
@@ -293,7 +293,7 @@ func sendMsgNotificationsToUsers(ctx context.Context, reqURL string, gameID *dat
 			return err
 		}
 		if len(uids) > 1 {
-			if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, gameID, channelMembers, messageID, uids[1:]); err != nil {
+			if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, reqURL, gameID, channelMembers, messageID, uids[1:]); err != nil {
 				log.Errorf(ctx, "Unable to enqueue sending to rest: %v; hope datastore gets fixed", err)
 				return err
 			}
@@ -493,7 +493,7 @@ func (m *Message) NotifyRecipients(ctx context.Context, reqURL string, channel *
 				} else if serr != datastore.ErrNoSuchEntity {
 					return err
 				} else {
-					unmutedMembers = append(unmutedMembers, states[index].Nation)
+					unmutedMembers = append(unmutedMembers, m.ChannelMembers[index])
 				}
 			}
 		} else if err != datastore.ErrNoSuchEntity {
@@ -514,10 +514,18 @@ func (m *Message) NotifyRecipients(ctx context.Context, reqURL string, channel *
 	}
 
 	if len(memberIds) == 0 {
+		log.Infof(ctx, "Message had no unmuted recipients, skipping notifications")
 		return nil
 	}
 
-	return sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, reqURL, m.GameID, m.ChannelMembers, m.ID, memberIds)
+	if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, reqURL, m.GameID, m.ChannelMembers, m.ID, memberIds); err != nil {
+		log.Errorf(ctx, "Unable to schedule notification tasks: %v", err)
+		return err
+	}
+
+	log.Infof(ctx, "Successfully scheduled notifications to %+v", memberIds)
+
+	return nil
 }
 
 func (m *Message) Item(r Request) *Item {

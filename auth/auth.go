@@ -112,7 +112,6 @@ func (f *FCMNotificationConfig) Validate() error {
 }
 
 type MailNotificationConfig struct {
-	Enabled          bool   `methods:"PUT"`
 	SubjectTemplate  string `methods:"PUT" datastore:",noindex"`
 	TextBodyTemplate string `methods:"PUT" datastore:",noindex"`
 	HTMLBodyTemplate string `methods:"PUT" datastore:",noindex"`
@@ -170,11 +169,22 @@ type FCMToken struct {
 	PhaseConfig   FCMNotificationConfig `methods:"PUT"`
 }
 
+type UnsubscribeConfig struct {
+	RedirectTemplate string `methods:"PUT"`
+	HTMLTemplate     string `methods:"PUT"`
+}
+
+type MailConfig struct {
+	Enabled           bool                   `methods:"PUT"`
+	UnsubscribeConfig UnsubscribeConfig      `methods:"PUT"`
+	MessageConfig     MailNotificationConfig `methods:"PUT"`
+	PhaseConfig       MailNotificationConfig `methods:"PUT"`
+}
+
 type UserConfig struct {
-	UserId            string
-	FCMTokens         []FCMToken             `methods:"PUT"`
-	MailMessageConfig MailNotificationConfig `methods:"PUT"`
-	MailPhaseConfig   MailNotificationConfig `methods:"PUT"`
+	UserId     string
+	FCMTokens  []FCMToken `methods:"PUT"`
+	MailConfig MailConfig `methods:"PUT"`
 }
 
 var UserConfigResource = &Resource{
@@ -694,12 +704,11 @@ func unsubscribe(w ResponseWriter, r Request) error {
 		if err := datastore.Get(ctx, userConfigID, userConfig); err != nil {
 			return err
 		}
-		if !userConfig.MailMessageConfig.Enabled && !userConfig.MailPhaseConfig.Enabled {
-			log.Infof(ctx, "%v is turned off for both message and phase mail, exiting", PP(userConfig))
+		if !userConfig.MailConfig.Enabled {
+			log.Infof(ctx, "%v is turned off mail, exiting", PP(userConfig))
 			return nil
 		}
-		userConfig.MailMessageConfig.Enabled = false
-		userConfig.MailPhaseConfig.Enabled = false
+		userConfig.MailConfig.Enabled = false
 		_, err := datastore.Put(ctx, userConfigID, userConfig)
 		return err
 	}, &datastore.TransactionOptions{XG: false})
