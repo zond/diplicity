@@ -810,6 +810,8 @@ p {
 	border-radius: 10px;
 	margin-left: 50px;
 	background: #f3961c;
+	bottom: 43px;
+	left: -70px;
 }
 p:after {
 	content: "";
