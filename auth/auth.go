@@ -212,21 +212,36 @@ func (u *UserConfig) Item(r Request) *Item {
 		},
 		[]string{
 			"FCM tokens",
-			"Each FCM token has several field.",
+			"Each FCM token has several fields.",
 			"A value, which is the registration ID received when registering with FCM.",
 			"A disabled flag which will turn notification to that token off, and which the server toggles if FCM returns errors when notifications are sent to that token.",
 			"A note field, which the server will populate with the reason the token was disabled.",
 			"An app field, which the app populating the token can use to identify tokens belonging to it to avoid removing/updating tokens belonging to other apps.",
+			"Two template fields, one for phase and one for message notifications.",
 		},
 		[]string{
-			"New phase notifications",
+			"FCM templates",
+			"The FCM templates define the title, body and click action of the FCM notifications sent out.",
+			"They are parsed by a Handlebars parser (https://github.com/aymerick/raymond), using the context objects containing the same data as the data payload of the FCM notifications.",
+		},
+		[]string{
+			"New phase FCM notifications",
 			"New phase notifications will have the `[phase season] [phase year], [phase type]` as title, and `[game desc] has a new phase` as body.",
 			"The payload will be `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhase: [phase JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz.",
 		},
 		[]string{
-			"New message notifications",
+			"New message FCM notifications",
 			"New message notifications will have `[channel members]: Message from [sender]` as title, and `[message body]` as body.",
 			"The payload will be `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON], diplicityChannel: [channel JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz.",
+		},
+		[]string{
+			"Email config",
+			"A user has an email config, defining if and how this user should receive email about new phases and messages.",
+			"The email config contains several fields.",
+			"An enabled flag which turns email notifications on.",
+			"Information about whether the unsubscribe link in the email should render some HTML or redirect to another host, defined by two Handlebars templates, one for the redirect link and one for the HTML to display.",
+			"Two template fields, one for phase and one for message notifications.",
+			"All templates will be parsed by the same parser as the FCM templates, using context objects containing the same data as the data payload of the FCM notifications + ` unsubscribeURL: [URL to unsubscribe] `.",
 		},
 	})
 }
