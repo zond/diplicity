@@ -249,17 +249,15 @@ func (u *UserConfig) Item(r Request) *Item {
 		[]string{
 			"FCM templates",
 			"The FCM templates define the title, body and click action of the FCM notifications sent out.",
-			"They are parsed by a Handlebars parser (https://github.com/aymerick/raymond), using the context objects containing the same data as the data payload of the FCM notifications.",
+			"They are parsed by a Handlebars parser (https://github.com/aymerick/raymond), using context objects containing the same data as the data payload of the FCM notifications.",
 		},
 		[]string{
 			"New phase FCM notifications",
-			"New phase notifications will have the `[phase season] [phase year], [phase type]` as title, and `[game desc] has a new phase` as body.",
-			"The payload will be `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhase: [phase JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz.",
+			"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhase: [phase JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz.",
 		},
 		[]string{
 			"New message FCM notifications",
-			"New message notifications will have `[channel members]: Message from [sender]` as title, and `[message body]` as body.",
-			"The payload will be `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON], diplicityChannel: [channel JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz.",
+			"FCM notifications for new messages will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON], diplicityChannel: [channel JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz.",
 		},
 		[]string{
 			"Email config",
