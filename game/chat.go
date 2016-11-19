@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
 	"github.com/zond/godip/variants"
@@ -111,6 +112,31 @@ func getMsgNotificationContext(ctx context.Context, gameID *datastore.Key, chann
 	return res, nil
 }
 
+func GetUnsubscribeURL(ctx context.Context, r *mux.Router, reqURL string, userId string) (*url.URL, error) {
+	unsubscribeURL, err := r.Get(auth.UnsubscribeRoute).URL("user_id", userId)
+	if err != nil {
+		return nil, err
+	}
+
+	reqU, err := url.Parse(reqURL)
+	if err != nil {
+		return nil, err
+	}
+	unsubscribeURL.Host = reqU.Host
+	unsubscribeURL.Scheme = reqU.Scheme
+
+	unsubToken, err := auth.EncodeString(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	qp := unsubscribeURL.Query()
+	qp.Set("t", unsubToken)
+	unsubscribeURL.RawQuery = qp.Encode()
+
+	return unsubscribeURL, nil
+}
+
 func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) error {
 	log.Infof(ctx, "sendMsgNotificationsToMail(..., %q, %v, %+v, %v, %q)", reqURL, gameID, channelMembers, messageID, userId)
 
@@ -134,29 +160,11 @@ func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *data
 		return nil
 	}
 
-	unsubscribeURL, err := router.Get(auth.UnsubscribeRoute).URL("user_id", userId)
+	unsubscribeURL, err := GetUnsubscribeURL(ctx, router, reqURL, userId)
 	if err != nil {
-		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix gorilla muxer?", userId, err)
+		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix GetUnsubscribeURL", userId, err)
 		return err
 	}
-
-	reqU, err := url.Parse(reqURL)
-	if err != nil {
-		log.Errorf(ctx, "Unable to parse reqURL %q: %v; unable to recover, exiting", reqURL, err)
-		return nil
-	}
-	unsubscribeURL.Host = reqU.Host
-	unsubscribeURL.Scheme = reqU.Scheme
-
-	unsubToken, err := auth.EncodeString(ctx, userId)
-	if err != nil {
-		log.Errorf(ctx, "Unable to create auth token for unsubscribe URL: %v; fix EncodeString or hope datastore gets fixed", err)
-		return err
-	}
-
-	qp := unsubscribeURL.Query()
-	qp.Set("t", unsubToken)
-	unsubscribeURL.RawQuery = qp.Encode()
 
 	msgContext.data["unsubscribeURL"] = unsubscribeURL.String()
 

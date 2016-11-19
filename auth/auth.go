@@ -174,11 +174,38 @@ type UnsubscribeConfig struct {
 	HTMLTemplate     string `methods:"PUT"`
 }
 
+func (u *UnsubscribeConfig) Validate() error {
+	if u.RedirectTemplate != "" {
+		if _, err := raymond.Parse(u.RedirectTemplate); err != nil {
+			return err
+		}
+	}
+	if u.HTMLTemplate != "" {
+		if _, err := raymond.Parse(u.HTMLTemplate); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type MailConfig struct {
 	Enabled           bool                   `methods:"PUT"`
 	UnsubscribeConfig UnsubscribeConfig      `methods:"PUT"`
 	MessageConfig     MailNotificationConfig `methods:"PUT"`
 	PhaseConfig       MailNotificationConfig `methods:"PUT"`
+}
+
+func (m *MailConfig) Validate() error {
+	if err := m.MessageConfig.Validate(); err != nil {
+		return err
+	}
+	if err := m.PhaseConfig.Validate(); err != nil {
+		return err
+	}
+	if err := m.UnsubscribeConfig.Validate(); err != nil {
+		return err
+	}
+	return nil
 }
 
 type UserConfig struct {
@@ -286,6 +313,10 @@ func updateUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
 		if err := token.PhaseConfig.Validate(); err != nil {
 			return nil, err
 		}
+	}
+
+	if err := config.MailConfig.Validate(); err != nil {
+		return nil, err
 	}
 
 	if _, err := datastore.Put(ctx, config.ID(ctx), config); err != nil {
@@ -464,7 +495,7 @@ func handleLogin(w ResponseWriter, r Request) error {
 
 	loginURL := conf.AuthCodeURL(r.Req().URL.Query().Get("redirect-to"))
 
-	http.Redirect(w, r.Req(), loginURL, 303)
+	http.Redirect(w, r.Req(), loginURL, 307)
 	return nil
 }
 
@@ -570,12 +601,12 @@ func handleOAuth2Callback(w ResponseWriter, r Request) error {
 	query.Set("token", userToken)
 	redirectURL.RawQuery = query.Encode()
 
-	http.Redirect(w, r.Req(), redirectURL.String(), 303)
+	http.Redirect(w, r.Req(), redirectURL.String(), 307)
 	return nil
 }
 
 func handleLogout(w ResponseWriter, r Request) error {
-	http.Redirect(w, r.Req(), r.Req().URL.Query().Get("redirect-to"), 303)
+	http.Redirect(w, r.Req(), r.Req().URL.Query().Get("redirect-to"), 307)
 	return nil
 }
 
@@ -713,20 +744,105 @@ func unsubscribe(w ResponseWriter, r Request) error {
 		return HTTPErr{"can only unsubscribe yourself", 403}
 	}
 
-	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		userConfigID := UserConfigID(ctx, UserID(ctx, r.Vars()["user_id"]))
-		userConfig := &UserConfig{}
-		if err := datastore.Get(ctx, userConfigID, userConfig); err != nil {
+	userID := UserID(ctx, r.Vars()["user_id"])
+
+	userConfigID := UserConfigID(ctx, userID)
+
+	user := &User{}
+	userConfig := &UserConfig{}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		if err := datastore.GetMulti(ctx, []*datastore.Key{userID, userConfigID}, []interface{}{user, userConfig}); err != nil {
 			return err
 		}
 		if !userConfig.MailConfig.Enabled {
-			log.Infof(ctx, "%v is turned off mail, exiting", PP(userConfig))
 			return nil
 		}
 		userConfig.MailConfig.Enabled = false
 		_, err := datastore.Put(ctx, userConfigID, userConfig)
 		return err
-	}, &datastore.TransactionOptions{XG: false})
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		return err
+	}
+
+	if redirTemplate := userConfig.MailConfig.UnsubscribeConfig.RedirectTemplate; redirTemplate != "" {
+		redirURL, err := raymond.Render(redirTemplate, map[string]interface{}{
+			"user":       user,
+			"userConfig": userConfig,
+		})
+		if err != nil {
+			return err
+		}
+		http.Redirect(w, r.Req(), redirURL, 307)
+		return nil
+	}
+
+	if htmlTemplate := userConfig.MailConfig.UnsubscribeConfig.HTMLTemplate; htmlTemplate != "" {
+		html, err := raymond.Render(htmlTemplate, map[string]interface{}{
+			"user":       user,
+			"userConfig": userConfig,
+		})
+		if err != nil {
+			return err
+		}
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		_, err = io.WriteString(w, html)
+		return err
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+	fmt.Fprintf(w, `
+<html>
+<head>
+<title>Unsubscribed</title>
+<style>
+p {
+	position: relative;
+	padding: 15px;
+	margin: 1em 0 3em;
+	color: #000;
+	background: #f3961c;
+	background: -webkit-gradient(linear, 0 0, 0 100%%, from(#f9d835), to(#f3961c));
+	background: -moz-linear-gradient(#f9d835, #f3961c);
+	background: -o-linear-gradient(#f9d835, #f3961c);
+	background: linear-gradient(#f9d835, #f3961c);
+	-webkit-border-radius: 10px;
+	-moz-border-radius: 10px;
+	border-radius: 10px;
+	margin-left: 50px;
+	background: #f3961c;
+}
+p:after {
+	content: "";
+	position: absolute;
+	bottom: -15px;
+	left: 50px;
+	border-width: 15px 15px 0;
+	border-style: solid;
+	border-color: #f3961c transparent;
+	display: block;
+	width: 0;
+	top: 16px;
+	left: -50px;
+	bottom: auto;
+	border-width: 10px 50px 10px 0;
+	border-color: transparent #f3961c;
+}
+</style>
+</head>
+<body>
+<table><tr>
+<td>
+<img src="/img/otto.png">
+</td>
+<td valign="bottom">
+<p class="bubble left">%v has been unsubscribed from diplicity mail.</p>
+</td>
+</tr></table>
+</body>
+</html>
+`, user.Name)
+
+	return nil
 }
 
 func SetupRouter(r *mux.Router) {
