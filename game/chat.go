@@ -491,12 +491,12 @@ func (m *Message) NotifyRecipients(ctx context.Context, reqURL string, channel *
 		if merr, ok := err.(appengine.MultiError); ok {
 			for index, serr := range merr {
 				if serr == nil {
-					if states[index].Nation != m.Sender && !states[index].HasMuted(m.Sender) {
+					if m.ChannelMembers[index] != m.Sender && !states[index].HasMuted(m.Sender) {
 						unmutedMembers = append(unmutedMembers, states[index].Nation)
 					}
 				} else if serr != datastore.ErrNoSuchEntity {
 					return err
-				} else {
+				} else if m.ChannelMembers[index] != m.Sender {
 					unmutedMembers = append(unmutedMembers, m.ChannelMembers[index])
 				}
 			}
@@ -506,7 +506,6 @@ func (m *Message) NotifyRecipients(ctx context.Context, reqURL string, channel *
 	}
 
 	// Use this unmuted list to build a set of user IDs to send the message to.
-	sort.Sort(m.ChannelMembers)
 	memberIds := []string{}
 	for _, nat := range unmutedMembers {
 		for _, member := range game.Members {
