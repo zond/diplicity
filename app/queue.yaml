@@ -1,4 +1,6 @@
 queue:
+- name: game-updateUserStats
+  rate: 500/s
 - name: game-timeoutResolvePhase
   rate: 500/s
 - name: game-fcmSendToTokens

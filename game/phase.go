@@ -523,6 +523,17 @@ func (p *PhaseResolver) Act() error {
 			return err
 		}
 
+		deltas := make([]UserStats, len(p.Game.Members))
+		for i, m := range p.Game.Members {
+			deltas[i] = UserStats{
+				UserId:        m.User.Id,
+				FinishedGames: 1,
+			}
+		}
+		if err := UpdateUserStatsFunc.EnqueueIn(p.Context, 0, deltas); err != nil {
+			return err
+		}
+
 		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
 
 		return nil

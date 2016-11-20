@@ -379,6 +379,17 @@ func (g *Game) Start(ctx context.Context, r Request) error {
 		return err
 	}
 
+	deltas := make([]UserStats, len(g.Members))
+	for i, m := range g.Members {
+		deltas[i] = UserStats{
+			UserId:       m.User.Id,
+			StartedGames: 1,
+		}
+	}
+	if err := UpdateUserStatsFunc.EnqueueIn(ctx, 0, deltas); err != nil {
+		return err
+	}
+
 	return nil
 }
 
