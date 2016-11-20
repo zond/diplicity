@@ -5,9 +5,11 @@ queue:
   rate: 500/s
 - name: game-manageFCMTokens
   rate: 500/s
+- name: game-sendPhaseNotificationsToUsers
+  rate: 500/s
 - name: game-sendPhaseNotificationsToFCM
   rate: 500/s
-- name: game-sendPhaseNotificationsToUsers
+- name: game-sendPhaseNotificationsToMail
   rate: 500/s
 - name: game-sendMsgNotificationsToUsers
   rate: 500/s
