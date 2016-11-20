@@ -62,6 +62,31 @@ func PP(i interface{}) string {
 	return string(b)
 }
 
+func GetUnsubscribeURL(ctx context.Context, r *mux.Router, reqURL string, userId string) (*url.URL, error) {
+	unsubscribeURL, err := r.Get(UnsubscribeRoute).URL("user_id", userId)
+	if err != nil {
+		return nil, err
+	}
+
+	reqU, err := url.Parse(reqURL)
+	if err != nil {
+		return nil, err
+	}
+	unsubscribeURL.Host = reqU.Host
+	unsubscribeURL.Scheme = reqU.Scheme
+
+	unsubToken, err := EncodeString(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	qp := unsubscribeURL.Query()
+	qp.Set("t", unsubToken)
+	unsubscribeURL.RawQuery = qp.Encode()
+
+	return unsubscribeURL, nil
+}
+
 type FCMNotificationConfig struct {
 	ClickActionTemplate string `methods:"PUT" datastore:",noindex"`
 	TitleTemplate       string `methods:"PUT" datastore:",noindex"`

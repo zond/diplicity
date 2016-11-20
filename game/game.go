@@ -2,10 +2,12 @@ package game
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/url"
 	"reflect"
+	"regexp"
 	"sync"
 	"time"
 
@@ -29,6 +31,11 @@ const (
 var (
 	prodSendGrid     *SendGrid
 	prodSendGridLock = sync.RWMutex{}
+
+	noConfigError      = errors.New("user has no config")
+	fromAddressPattern = "replies+%s@diplicity-engine.appspotmail.com"
+	fromAddressReg     = regexp.MustCompile("^replies\\+([^@]+)@diplicity-engine.appspotmail.com")
+	noreplyFromAddr    = "noreply@oort.se"
 )
 
 type SendGrid struct {
@@ -336,7 +343,7 @@ func (g *Game) Redact() {
 	}
 }
 
-func (g *Game) Start(ctx context.Context) error {
+func (g *Game) Start(ctx context.Context, r Request) error {
 	variant := variants.Variants[g.Variant]
 	s, err := variant.Start()
 	if err != nil {
@@ -349,7 +356,11 @@ func (g *Game) Start(ctx context.Context) error {
 		g.Members[memberIndex].Nation = variants.Variants[g.Variant].Nations[nationIndex]
 	}
 
-	phase := NewPhase(s, g.ID, 1)
+	scheme := "http"
+	if r.Req().TLS != nil {
+		scheme = "https"
+	}
+	phase := NewPhase(s, g.ID, 1, r.Req().Host, scheme)
 	phase.DeadlineAt = time.Now().Add(time.Minute * g.PhaseLengthMinutes)
 	if err := phase.Save(ctx); err != nil {
 		return err

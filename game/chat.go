@@ -2,19 +2,15 @@ package game
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/mail"
-	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/gorilla/mux"
 	"github.com/jhillyerd/enmime"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
@@ -39,11 +35,6 @@ var (
 	sendMsgNotificationsToUsersFunc *DelayFunc
 	sendMsgNotificationsToFCMFunc   *DelayFunc
 	sendMsgNotificationsToMailFunc  *DelayFunc
-
-	noConfigError      = errors.New("user has no config")
-	fromAddressPattern = "replies+%s@diplicity-engine.appspotmail.com"
-	fromAddressReg     = regexp.MustCompile("^replies\\+([^@]+)@diplicity-engine.appspotmail.com")
-	errorFromAddr      = "noreply@oort.se"
 )
 
 func init() {
@@ -121,31 +112,6 @@ func getMsgNotificationContext(ctx context.Context, gameID *datastore.Key, chann
 	return res, nil
 }
 
-func GetUnsubscribeURL(ctx context.Context, r *mux.Router, reqURL string, userId string) (*url.URL, error) {
-	unsubscribeURL, err := r.Get(auth.UnsubscribeRoute).URL("user_id", userId)
-	if err != nil {
-		return nil, err
-	}
-
-	reqU, err := url.Parse(reqURL)
-	if err != nil {
-		return nil, err
-	}
-	unsubscribeURL.Host = reqU.Host
-	unsubscribeURL.Scheme = reqU.Scheme
-
-	unsubToken, err := auth.EncodeString(ctx, userId)
-	if err != nil {
-		return nil, err
-	}
-
-	qp := unsubscribeURL.Query()
-	qp.Set("t", unsubToken)
-	unsubscribeURL.RawQuery = qp.Encode()
-
-	return unsubscribeURL, nil
-}
-
 func sendEmailError(ctx context.Context, to string, errorMessage string) error {
 	sendGridConf, err := GetSendGrid(ctx)
 	if err != nil {
@@ -156,7 +122,7 @@ func sendEmailError(ctx context.Context, to string, errorMessage string) error {
 	msg.SetText(fmt.Sprint("Your recent mail to diplicity was not successfully parsed.\n\nAn error message follows.\n\n%v", errorMessage))
 	msg.SetSubject("Unsuccessfully parsed")
 	msg.AddTo(to)
-	msg.SetFrom(errorFromAddr)
+	msg.SetFrom(noreplyFromAddr)
 
 	client := sendgrid.NewSendGridClientWithApiKey(sendGridConf.APIKey)
 	client.Client = urlfetch.Client(ctx)
@@ -190,9 +156,9 @@ func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *data
 		return nil
 	}
 
-	unsubscribeURL, err := GetUnsubscribeURL(ctx, router, reqURL, userId)
+	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, reqURL, userId)
 	if err != nil {
-		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix GetUnsubscribeURL", userId, err)
+		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix auth.GetUnsubscribeURL", userId, err)
 		return err
 	}
 
