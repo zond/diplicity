@@ -29,18 +29,20 @@ import (
 var TestMode = false
 
 const (
-	LoginRoute          = "Login"
-	LogoutRoute         = "Logout"
-	RedirectRoute       = "Redirect"
-	OAuth2CallbackRoute = "OAuth2Callback"
-	UnsubscribeRoute    = "Unsubscribe"
+	LoginRoute           = "Login"
+	LogoutRoute          = "Logout"
+	RedirectRoute        = "Redirect"
+	OAuth2CallbackRoute  = "OAuth2Callback"
+	UnsubscribeRoute     = "Unsubscribe"
+	ApproveRedirectRoute = "ApproveRedirect"
 )
 
 const (
-	userKind  = "User"
-	naClKind  = "NaCl"
-	oAuthKind = "OAuth"
-	prodKey   = "prod"
+	userKind        = "User"
+	naClKind        = "NaCl"
+	oAuthKind       = "OAuth"
+	redirectURLKind = "RedirectURL"
+	prodKey         = "prod"
 )
 
 var (
@@ -82,6 +84,15 @@ func GetUnsubscribeURL(ctx context.Context, r *mux.Router, reqURL string, userId
 	unsubscribeURL.RawQuery = qp.Encode()
 
 	return unsubscribeURL, nil
+}
+
+type RedirectURL struct {
+	UserId      string
+	RedirectURL string
+}
+
+func (r *RedirectURL) ID(ctx context.Context) *datastore.Key {
+	return datastore.NewKey(ctx, redirectURLKind, fmt.Sprintf("%s,%s", r.UserId, r.RedirectURL), 0, nil)
 }
 
 type User struct {
@@ -214,15 +225,15 @@ func getOAuth(ctx context.Context) (*OAuth, error) {
 }
 
 func getOAuth2Config(ctx context.Context, r Request) (*oauth2.Config, error) {
-	scheme := "http"
-	if r.Req().TLS != nil {
-		scheme = "https"
-	}
 	redirectURL, err := router.Get(OAuth2CallbackRoute).URL()
 	if err != nil {
 		return nil, err
 	}
-	redirectURL.Scheme = scheme
+	if r.Req().TLS == nil {
+		redirectURL.Scheme = "http"
+	} else {
+		redirectURL.Scheme = "https"
+	}
 	redirectURL.Host = r.Req().Host
 
 	oauth, err := getOAuth(ctx)
@@ -345,12 +356,48 @@ func handleOAuth2Callback(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	userToken, err := EncodeToken(ctx, user)
+	redirectURL, err := url.Parse(r.Req().URL.Query().Get("state"))
 	if err != nil {
 		return err
 	}
 
-	redirectURL, err := url.Parse(r.Req().URL.Query().Get("state"))
+	strippedRedirectURL := *redirectURL
+	strippedRedirectURL.RawQuery = ""
+	strippedRedirectURL.Path = ""
+
+	approvedURL := &RedirectURL{
+		UserId:      user.Id,
+		RedirectURL: strippedRedirectURL.String(),
+	}
+	if err := datastore.Get(ctx, approvedURL.ID(ctx), approvedURL); err == datastore.ErrNoSuchEntity {
+		requestedURL := r.Req().URL
+		requestedURL.Host = r.Req().Host
+		if r.Req().TLS == nil {
+			requestedURL.Scheme = "http"
+		} else {
+			requestedURL.Scheme = "https"
+		}
+		requestedURL.RawQuery = ""
+		requestedURL.Path = ""
+
+		cipher, err := EncodeString(ctx, fmt.Sprintf("%s,%s", redirectURL.String(), user.Id))
+		if err != nil {
+			return err
+		}
+		approveURL, err := router.Get(ApproveRedirectRoute).URL()
+		if err != nil {
+			return err
+		}
+
+		renderMessage(w, "Approval requested", fmt.Sprintf(`%s wants to act on your behalf on %s. Is this OK? Your decision will be remembered.</br>
+<form method="GET" action="%s"><input type="hidden" name="state" value="%s"><input type="submit" value="Yes"/></form>
+<form method="GET" action="%s"><input type="submit" value="No"/></form>`, strippedRedirectURL.String(), requestedURL.String(), approveURL.String(), cipher, redirectURL.String()))
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	userToken, err := EncodeToken(ctx, user)
 	if err != nil {
 		return err
 	}
@@ -490,6 +537,111 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 	return true, errI
 }
 
+func handleApproveRedirect(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	plain, err := DecodeString(ctx, r.Req().URL.Query().Get("state"))
+	if err != nil {
+		return err
+	}
+
+	parts := strings.Split(plain, ",")
+	if len(parts) != 2 {
+		return fmt.Errorf("plain text token is not two strings joined by ','")
+	}
+
+	toApproveURL, err := url.Parse(parts[0])
+	if err != nil {
+		return err
+	}
+
+	strippedToApproveURL := *toApproveURL
+	strippedToApproveURL.RawQuery = ""
+	strippedToApproveURL.Path = ""
+
+	userId := parts[1]
+
+	approvedURL := &RedirectURL{
+		UserId:      userId,
+		RedirectURL: strippedToApproveURL.String(),
+	}
+
+	if _, err := datastore.Put(ctx, approvedURL.ID(ctx), approvedURL); err != nil {
+		return err
+	}
+
+	loginURL, err := router.Get(LoginRoute).URL()
+	q := loginURL.Query()
+	q.Set("redirect-to", toApproveURL.String())
+	loginURL.RawQuery = q.Encode()
+
+	http.Redirect(w, r.Req(), loginURL.String(), 307)
+
+	return nil
+}
+
+func renderMessage(w ResponseWriter, title, msg string) {
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+	fmt.Fprintf(w, `
+<html>
+<head>
+<title>%s</title>
+<style>
+form {
+	display: inline;
+	margin: 0px;
+	padding: 0px;
+}
+.bubble {
+	position: relative;
+	padding: 15px;
+	margin: 1em 0 3em;
+	color: #000;
+	background: #f3961c;
+	background: -webkit-gradient(linear, 0 0, 0 100%%, from(#f9d835), to(#f3961c));
+	background: -moz-linear-gradient(#f9d835, #f3961c);
+	background: -o-linear-gradient(#f9d835, #f3961c);
+	background: linear-gradient(#f9d835, #f3961c);
+	-webkit-border-radius: 10px;
+	-moz-border-radius: 10px;
+	border-radius: 10px;
+	margin-left: 50px;
+	background: #f3961c;
+	bottom: 43px;
+	left: -70px;
+}
+.bubble:after {
+	content: "";
+	position: absolute;
+	bottom: -15px;
+	left: 50px;
+	border-width: 15px 15px 0;
+	border-style: solid;
+	border-color: #f3961c transparent;
+	display: block;
+	width: 0;
+	top: 16px;
+	left: -50px;
+	bottom: auto;
+	border-width: 10px 50px 10px 0;
+	border-color: transparent #f3961c;
+}
+</style>
+</head>
+<body>
+<table><tr>
+<td>
+<img src="/img/otto.png">
+</td>
+<td valign="bottom">
+<div class="bubble">%s</div>
+</td>
+</tr></table>
+</body>
+</html>
+`, title, msg)
+}
+
 func unsubscribe(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -547,60 +699,7 @@ func unsubscribe(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
-	fmt.Fprintf(w, `
-<html>
-<head>
-<title>Unsubscribed</title>
-<style>
-p {
-	position: relative;
-	padding: 15px;
-	margin: 1em 0 3em;
-	color: #000;
-	background: #f3961c;
-	background: -webkit-gradient(linear, 0 0, 0 100%%, from(#f9d835), to(#f3961c));
-	background: -moz-linear-gradient(#f9d835, #f3961c);
-	background: -o-linear-gradient(#f9d835, #f3961c);
-	background: linear-gradient(#f9d835, #f3961c);
-	-webkit-border-radius: 10px;
-	-moz-border-radius: 10px;
-	border-radius: 10px;
-	margin-left: 50px;
-	background: #f3961c;
-	bottom: 43px;
-	left: -70px;
-}
-p:after {
-	content: "";
-	position: absolute;
-	bottom: -15px;
-	left: 50px;
-	border-width: 15px 15px 0;
-	border-style: solid;
-	border-color: #f3961c transparent;
-	display: block;
-	width: 0;
-	top: 16px;
-	left: -50px;
-	bottom: auto;
-	border-width: 10px 50px 10px 0;
-	border-color: transparent #f3961c;
-}
-</style>
-</head>
-<body>
-<table><tr>
-<td>
-<img src="/img/otto.png">
-</td>
-<td valign="bottom">
-<p class="bubble left">%v has been unsubscribed from diplicity mail.</p>
-</td>
-</tr></table>
-</body>
-</html>
-`, user.Name)
+	renderMessage(w, "Unsubscribed", fmt.Sprintf("%v has been unsubscribed from diplicity mail.", user.Name))
 
 	return nil
 }
@@ -611,6 +710,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
 	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
 	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
+	Handle(router, "/Auth/ApproveRedirect", []string{"GET"}, ApproveRedirectRoute, handleApproveRedirect)
 	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
 	AddFilter(tokenFilter)
 	AddPostProc(loginRedirect)
