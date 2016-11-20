@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"net/mail"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/urlfetch"
+	"gopkg.in/sendgrid/sendgrid-go.v2"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
@@ -23,60 +26,153 @@ var (
 	timeoutResolvePhaseFunc           *DelayFunc
 	sendPhaseNotificationsToUsersFunc *DelayFunc
 	sendPhaseNotificationsToFCMFunc   *DelayFunc
+	sendPhaseNotificationsToMailFunc  *DelayFunc
 )
 
 func init() {
 	timeoutResolvePhaseFunc = NewDelayFunc("game-timeoutResolvePhase", timeoutResolvePhase)
 	sendPhaseNotificationsToUsersFunc = NewDelayFunc("game-sendPhaseNotificationsToUsers", sendPhaseNotificationsToUsers)
 	sendPhaseNotificationsToFCMFunc = NewDelayFunc("game-sendPhaseNotificationsToFCM", sendPhaseNotificationsToFCM)
+	sendPhaseNotificationsToMailFunc = NewDelayFunc("game-sendPhaseNotificationsToMail", sendPhaseNotificationsToMail)
+}
+
+type phaseNotificationContext struct {
+	userID       *datastore.Key
+	userConfigID *datastore.Key
+	phaseID      *datastore.Key
+	game         *Game
+	phase        *Phase
+	member       *Member
+	user         *auth.User
+	userConfig   *auth.UserConfig
+	data         map[string]interface{}
+}
+
+func getPhaseNotificationContext(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, userId string) (*phaseNotificationContext, error) {
+	res := &phaseNotificationContext{}
+
+	var err error
+	res.phaseID, err = PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		log.Errorf(ctx, "PhaseID(..., %v, %v): %v; fix the PhaseID func", gameID, phaseOrdinal, err)
+		return nil, err
+	}
+
+	res.userID = auth.UserID(ctx, userId)
+
+	res.userConfigID = auth.UserConfigID(ctx, res.userID)
+
+	res.game = &Game{}
+	res.phase = &Phase{}
+	res.user = &auth.User{}
+	res.userConfig = &auth.UserConfig{}
+	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, res.phaseID, res.userConfigID, res.userID}, []interface{}{res.game, res.phase, res.userConfig, res.user})
+	if err != nil {
+		if merr, ok := err.(appengine.MultiError); ok {
+			if merr[2] == datastore.ErrNoSuchEntity {
+				log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
+				return nil, noConfigError
+			}
+			log.Errorf(ctx, "Unable to load game, phase, user and user config: %v; hope datastore gets fixed", err)
+			return nil, err
+		} else {
+			log.Errorf(ctx, "Unable to load game, phase, user and user config: %v; hope datastore gets fixed", err)
+			return nil, err
+		}
+	}
+	res.game.ID = gameID
+
+	res.data = map[string]interface{}{
+		"diplicityPhase": res.phase,
+		"diplicityGame":  res.game,
+		"diplicityUser":  res.user,
+	}
+
+	return res, nil
+}
+
+func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string) error {
+	log.Infof(ctx, "sendPhaseNotificationsToMail(..., %q, %q, %v, %v, %q)", host, scheme, gameID, phaseOrdinal, userId)
+
+	sendGridConf, err := GetSendGrid(ctx)
+	if err != nil {
+		log.Errorf(ctx, "Unable to load sendgrid API key: %v; upload one or hope datastore gets fixed", err)
+		return err
+	}
+
+	msgContext, err := getPhaseNotificationContext(ctx, gameID, phaseOrdinal, userId)
+	if err == noConfigError {
+		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
+		return nil
+	} else if err != nil {
+		log.Errorf(ctx, "Unable to get msg notification context: %v; fix getPhaseNotificationContext or hope datastore gets fixed", err)
+		return err
+	}
+
+	if !msgContext.userConfig.MailConfig.Enabled {
+		log.Infof(ctx, "%q hasn't enabled mail notifications for mail, will skip sending notification", userId)
+		return nil
+	}
+
+	reqURL := fmt.Sprintf("%s://%s", scheme, host)
+
+	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, reqURL, userId)
+	if err != nil {
+		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix auth.GetUnsubscribeURL", userId, err)
+		return err
+	}
+
+	msgContext.data["unsubscribeURL"] = unsubscribeURL.String()
+
+	msg := sendgrid.NewMail()
+	msg.SetText(fmt.Sprintf("%s has a new phase.\n\nVisit %s to stop receiving email like this.", msgContext.game.Desc, unsubscribeURL.String()))
+	msg.SetSubject(fmt.Sprintf("%s %d, %s", msgContext.phase.Season, msgContext.phase.Year, msgContext.phase.Type))
+	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
+
+	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.data)
+
+	recipEmail, err := mail.ParseAddress(msgContext.user.Email)
+	if err != nil {
+		log.Errorf(ctx, "Unable to parse email address of %v: %v; unable to recover, exiting", PP(msgContext.user), err)
+		return nil
+	}
+	msg.AddRecipient(recipEmail)
+	msg.AddToName(string(msgContext.member.Nation))
+
+	msg.SetFrom(noreplyFromAddr)
+
+	client := sendgrid.NewSendGridClientWithApiKey(sendGridConf.APIKey)
+	client.Client = urlfetch.Client(ctx)
+	if err := client.Send(msg); err != nil {
+		log.Errorf(ctx, "Unable to send %v: %v; hope sendgrid gets fixed", msg, err)
+		return err
+	}
+	log.Infof(ctx, "Successfully sent %v", PP(msg))
+
+	log.Infof(ctx, "sendPhaseNotificationsToMail(..., %q, %q, %v, %v, %q) *** SUCCESS ***", host, scheme, gameID, phaseOrdinal, userId)
+
+	return nil
 }
 
 func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, userId string, finishedTokens map[string]struct{}) error {
 	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %v, %v, %q, %+v)", gameID, phaseOrdinal, userId, finishedTokens)
 
-	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
-	if err != nil {
-		log.Errorf(ctx, "PhaseID(..., %v, %v): %v; fix the PhaseID func", gameID, phaseOrdinal, err)
+	msgContext, err := getPhaseNotificationContext(ctx, gameID, phaseOrdinal, userId)
+	if err == noConfigError {
+		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
+		return nil
+	} else if err != nil {
+		log.Errorf(ctx, "Unable to get phase notification context: %v; fix getPhaseNotificationContext or hope datastore gets fixed", err)
 		return err
 	}
 
-	userID := auth.UserID(ctx, userId)
-
-	userConfigID := auth.UserConfigID(ctx, userID)
-
-	game := &Game{}
-	phase := &Phase{}
-	user := &auth.User{}
-	userConfig := &auth.UserConfig{}
-	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID, userConfigID, userID}, []interface{}{game, phase, userConfig, user})
+	dataPayload, err := NewFCMData(msgContext.data)
 	if err != nil {
-		if merr, ok := err.(appengine.MultiError); ok {
-			if merr[2] == datastore.ErrNoSuchEntity {
-				log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
-				return nil
-			}
-			log.Errorf(ctx, "Unable to load game, phase, user and user config: %v; hope datastore gets fixed", err)
-			return err
-		} else {
-			log.Errorf(ctx, "Unable to load game, phase, user and user config: %v; hope datastore gets fixed", err)
-			return err
-		}
-	}
-	game.ID = gameID
-
-	data := map[string]interface{}{
-		"diplicityPhase": phase,
-		"diplicityGame":  game,
-		"diplicityUser":  user,
-	}
-
-	dataPayload, err := NewFCMData(data)
-	if err != nil {
-		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", data, err)
+		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", msgContext.data, err)
 		return err
 	}
 
-	for _, fcmToken := range userConfig.FCMTokens {
+	for _, fcmToken := range msgContext.userConfig.FCMTokens {
 		if fcmToken.Disabled {
 			continue
 		}
@@ -85,13 +181,13 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 		}
 		finishedTokens[fcmToken.Value] = struct{}{}
 		notificationPayload := &fcm.NotificationPayload{
-			Title:       fmt.Sprintf("%s %d, %s", phase.Season, phase.Year, phase.Type),
-			Body:        fmt.Sprintf("%s has a new phase.", game.Desc),
+			Title:       fmt.Sprintf("%s %d, %s", msgContext.phase.Season, msgContext.phase.Year, msgContext.phase.Type),
+			Body:        fmt.Sprintf("%s has a new phase.", msgContext.game.Desc),
 			Tag:         "diplicity-engine-new-phase",
-			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Phase/%d", game.ID.Encode(), phase.PhaseOrdinal),
+			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Phase/%d", msgContext.game.ID.Encode(), msgContext.phase.PhaseOrdinal),
 		}
 
-		fcmToken.PhaseConfig.Customize(ctx, notificationPayload, data)
+		fcmToken.PhaseConfig.Customize(ctx, notificationPayload, msgContext.data)
 
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			if err := FCMSendToTokensFunc.EnqueueIn(
@@ -108,7 +204,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 				return err
 			}
 
-			if len(userConfig.FCMTokens) > len(finishedTokens) {
+			if len(msgContext.userConfig.FCMTokens) > len(finishedTokens) {
 				if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, gameID, phaseOrdinal, userId, finishedTokens); err != nil {
 					log.Errorf(ctx, "Unable to enqueue sending of rest of notifications: %v; hope datastore gets fixed", err)
 					return err
@@ -129,16 +225,20 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 	return nil
 }
 
-func sendPhaseNotificationsToUsers(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, uids []string) error {
-	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %v, %v, %+v)", gameID, phaseOrdinal, uids)
+func sendPhaseNotificationsToUsers(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, uids []string) error {
+	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %q, %v, %v, %+v)", host, scheme, gameID, phaseOrdinal, uids)
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, gameID, phaseOrdinal, uids[0], map[string]struct{}{}); err != nil {
 			log.Errorf(ctx, "Unable to enqueue sending to %q: %v; hope datastore gets fixed", uids[0], err)
 			return err
 		}
+		if err := sendPhaseNotificationsToMailFunc.EnqueueIn(ctx, 0, host, scheme, gameID, phaseOrdinal, uids[0]); err != nil {
+			log.Errorf(ctx, "Unable to enqueue sending mail to %q: %v; hope datastore gets fixed", uids[0], err)
+			return err
+		}
 		if len(uids) > 1 {
-			if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, gameID, phaseOrdinal, uids[1:]); err != nil {
+			if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, scheme, gameID, phaseOrdinal, uids[1:]); err != nil {
 				log.Errorf(ctx, "Unable to enqueue sending to rest: %v; hope datastore gets fixed", err)
 				return err
 			}
@@ -149,7 +249,7 @@ func sendPhaseNotificationsToUsers(ctx context.Context, gameID *datastore.Key, p
 		return err
 	}
 
-	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %v, %v, %+v) *** SUCCESS ***", gameID, phaseOrdinal, uids)
+	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %q, %v, %v, %+v) *** SUCCESS ***", host, scheme, gameID, phaseOrdinal, uids)
 
 	return nil
 }
@@ -273,7 +373,7 @@ func (p *PhaseResolver) Act() error {
 
 	// Create the new phase.
 
-	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1)
+	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1, p.Phase.Host, p.Phase.Scheme)
 	newPhase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
 
 	// Check if we can roll forward again, and potentially create new phase states.
@@ -538,6 +638,8 @@ type Phase struct {
 	Resolutions  []Resolution
 	Resolved     bool
 	DeadlineAt   time.Time
+	Host         string
+	Scheme       string
 }
 
 var PhaseResource = &Resource{
@@ -671,7 +773,7 @@ func (p *Phase) Save(ctx context.Context) error {
 	return err
 }
 
-func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64) *Phase {
+func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host, scheme string) *Phase {
 	current := s.Phase()
 	p := &Phase{
 		GameID:       gameID,
@@ -679,6 +781,8 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64) *Phase 
 		Season:       current.Season(),
 		Year:         current.Year(),
 		Type:         current.Type(),
+		Host:         host,
+		Scheme:       scheme,
 	}
 	units, scs, dislodgeds, dislodgers, bounces, resolutions := s.Dump()
 	for prov, unit := range units {
@@ -718,7 +822,7 @@ func (p *Phase) NotifyMembers(ctx context.Context, game *Game) error {
 	if len(memberIds) == 0 {
 		return nil
 	}
-	return sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, p.GameID, p.PhaseOrdinal, memberIds)
+	return sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, p.Host, p.Scheme, p.GameID, p.PhaseOrdinal, memberIds)
 }
 
 func listOptions(w ResponseWriter, r Request) error {

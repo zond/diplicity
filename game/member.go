@@ -126,7 +126,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		}
 		game.Members = append(game.Members, *member)
 		if len(game.Members) == len(variants.Variants[game.Variant].Nations) {
-			if err := game.Start(ctx); err != nil {
+			if err := game.Start(ctx, r); err != nil {
 				return err
 			}
 		}
