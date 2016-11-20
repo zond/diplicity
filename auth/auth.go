@@ -29,12 +29,13 @@ import (
 var TestMode = false
 
 const (
-	LoginRoute           = "Login"
-	LogoutRoute          = "Logout"
-	RedirectRoute        = "Redirect"
-	OAuth2CallbackRoute  = "OAuth2Callback"
-	UnsubscribeRoute     = "Unsubscribe"
-	ApproveRedirectRoute = "ApproveRedirect"
+	LoginRoute            = "Login"
+	LogoutRoute           = "Logout"
+	RedirectRoute         = "Redirect"
+	OAuth2CallbackRoute   = "OAuth2Callback"
+	UnsubscribeRoute      = "Unsubscribe"
+	ApproveRedirectRoute  = "ApproveRedirect"
+	ListRedirectURLsRoute = "ListRedirectURLs"
 )
 
 const (
@@ -86,13 +87,89 @@ func GetUnsubscribeURL(ctx context.Context, r *mux.Router, reqURL string, userId
 	return unsubscribeURL, nil
 }
 
+type RedirectURLs []RedirectURL
+
+func (u RedirectURLs) Item(r Request, userId string) *Item {
+	urlItems := make(List, len(u))
+	for i := range u {
+		urlItems[i] = u[i].Item(r)
+	}
+	urlsItem := NewItem(urlItems).SetName("approved-frontends").AddLink(r.NewLink(Link{
+		Rel:         "self",
+		Route:       ListRedirectURLsRoute,
+		RouteParams: []string{"user_id", userId},
+	}))
+	return urlsItem
+}
+
+var RedirectURLResource = &Resource{
+	Delete: deleteRedirectURL,
+}
+
+func deleteRedirectURL(w ResponseWriter, r Request) (*RedirectURL, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*User)
+	if !ok {
+		return nil, HTTPErr{"unauthorized", 401}
+	}
+
+	redirectURLID, err := datastore.DecodeKey(r.Vars()["id"])
+	if err != nil {
+		return nil, err
+	}
+
+	redirectURL := &RedirectURL{}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		if err := datastore.Get(ctx, redirectURLID, redirectURL); err != nil {
+			return err
+		}
+		if redirectURL.UserId != user.Id {
+			return HTTPErr{"can only delete your own redirect URLs", 403}
+		}
+
+		return datastore.Delete(ctx, redirectURLID)
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		return nil, err
+	}
+
+	return redirectURL, nil
+}
+
 type RedirectURL struct {
 	UserId      string
 	RedirectURL string
 }
 
+func (u *RedirectURL) Item(r Request) *Item {
+	ctx := appengine.NewContext(r.Req())
+	return NewItem(u).SetName("approved-frontend").AddLink(r.NewLink(RedirectURLResource.Link("delete", Delete, []string{"id", u.ID(ctx).Encode()})))
+}
+
 func (r *RedirectURL) ID(ctx context.Context) *datastore.Key {
 	return datastore.NewKey(ctx, redirectURLKind, fmt.Sprintf("%s,%s", r.UserId, r.RedirectURL), 0, nil)
+}
+
+func listRedirectURLs(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*User)
+	if !ok {
+		return HTTPErr{"unauthorized", 401}
+	}
+
+	if user.Id != r.Vars()["user_id"] {
+		return HTTPErr{"can only list your own redirect URLs", 403}
+	}
+
+	redirectURLs := RedirectURLs{}
+	if _, err := datastore.NewQuery(redirectURLKind).Filter("UserId=", user.Id).GetAll(ctx, &redirectURLs); err != nil {
+		return err
+	}
+
+	w.SetContent(redirectURLs.Item(r, user.Id))
+
+	return nil
 }
 
 type User struct {
@@ -707,11 +784,13 @@ func unsubscribe(w ResponseWriter, r Request) error {
 func SetupRouter(r *mux.Router) {
 	router = r
 	HandleResource(router, UserConfigResource)
+	HandleResource(router, RedirectURLResource)
 	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
 	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
 	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
 	Handle(router, "/Auth/ApproveRedirect", []string{"GET"}, ApproveRedirectRoute, handleApproveRedirect)
 	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
+	Handle(router, "/User/{user_id}/RedirectURLs", []string{"GET"}, ListRedirectURLsRoute, listRedirectURLs)
 	AddFilter(tokenFilter)
 	AddPostProc(loginRedirect)
 }
