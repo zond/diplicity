@@ -40,6 +40,7 @@ type phaseNotificationContext struct {
 	userID       *datastore.Key
 	userConfigID *datastore.Key
 	phaseID      *datastore.Key
+	memberID     *datastore.Key
 	game         *Game
 	phase        *Phase
 	member       *Member
@@ -81,6 +82,13 @@ func getPhaseNotificationContext(ctx context.Context, gameID *datastore.Key, pha
 		}
 	}
 	res.game.ID = gameID
+
+	isMember := false
+	res.member, isMember = res.game.GetMember(userId)
+	if !isMember {
+		log.Errorf(ctx, "%q is not a member of %v, wtf? Exiting.", userId, res.game)
+		return nil, noConfigError
+	}
 
 	res.data = map[string]interface{}{
 		"diplicityPhase": res.phase,
