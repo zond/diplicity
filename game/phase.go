@@ -102,12 +102,6 @@ func getPhaseNotificationContext(ctx context.Context, gameID *datastore.Key, pha
 func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string) error {
 	log.Infof(ctx, "sendPhaseNotificationsToMail(..., %q, %q, %v, %v, %q)", host, scheme, gameID, phaseOrdinal, userId)
 
-	sendGridConf, err := GetSendGrid(ctx)
-	if err != nil {
-		log.Errorf(ctx, "Unable to load sendgrid API key: %v; upload one or hope datastore gets fixed", err)
-		return err
-	}
-
 	msgContext, err := getPhaseNotificationContext(ctx, gameID, phaseOrdinal, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
@@ -120,6 +114,12 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 	if !msgContext.userConfig.MailConfig.Enabled {
 		log.Infof(ctx, "%q hasn't enabled mail notifications for mail, will skip sending notification", userId)
 		return nil
+	}
+
+	sendGridConf, err := GetSendGrid(ctx)
+	if err != nil {
+		log.Errorf(ctx, "Unable to load sendgrid API key: %v; upload one or hope datastore gets fixed", err)
+		return err
 	}
 
 	reqURL := fmt.Sprintf("%s://%s", scheme, host)

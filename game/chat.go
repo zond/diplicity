@@ -136,12 +136,6 @@ func sendEmailError(ctx context.Context, to string, errorMessage string) error {
 func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) error {
 	log.Infof(ctx, "sendMsgNotificationsToMail(..., %q, %v, %+v, %v, %q)", reqURL, gameID, channelMembers, messageID, userId)
 
-	sendGridConf, err := GetSendGrid(ctx)
-	if err != nil {
-		log.Errorf(ctx, "Unable to load sendgrid API key: %v; upload one or hope datastore gets fixed", err)
-		return err
-	}
-
 	msgContext, err := getMsgNotificationContext(ctx, gameID, channelMembers, messageID, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
@@ -154,6 +148,12 @@ func sendMsgNotificationsToMail(ctx context.Context, reqURL string, gameID *data
 	if !msgContext.userConfig.MailConfig.Enabled {
 		log.Infof(ctx, "%q hasn't enabled mail notifications for mail, will skip sending notification", userId)
 		return nil
+	}
+
+	sendGridConf, err := GetSendGrid(ctx)
+	if err != nil {
+		log.Errorf(ctx, "Unable to load sendgrid API key: %v; upload one or hope datastore gets fixed", err)
+		return err
 	}
 
 	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, reqURL, userId)
