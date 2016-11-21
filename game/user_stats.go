@@ -118,7 +118,9 @@ func loadUserStats(w ResponseWriter, r Request) (*UserStats, error) {
 	}
 
 	userStats := &UserStats{}
-	if err := datastore.Get(ctx, UserStatsID(ctx, user.Id), userStats); err != nil {
+	if err := datastore.Get(ctx, UserStatsID(ctx, user.Id), userStats); err == datastore.ErrNoSuchEntity {
+		userStats.UserId = user.Id
+	} else if err != nil {
 		return nil, err
 	}
 
