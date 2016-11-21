@@ -236,7 +236,7 @@ func (r *Result) AssertNil(path ...string) *Result {
 	if val, err := jsonq.NewQuery(r.Body).String(path...); err == nil {
 		panic(fmt.Errorf("wanted nil at %+v in %v, got %q", path, pp(r.Body), val))
 	} else if !strings.Contains(err.Error(), "Nil value found") {
-		panic(fmt.Errorf("wanted nil at %+v: %v", err))
+		panic(fmt.Errorf("wanted nil at %+v: %v", path, err))
 	}
 	return r
 }
@@ -277,17 +277,24 @@ func (f findErr) Error() string {
 
 func (r *Result) find(match interface{}, paths [][]string) (*Result, error) {
 	if len(paths) == 1 {
-		obj, err := jsonq.NewQuery(r.Body).Interface(paths[0]...)
-		if err != nil {
-			if strings.Contains(err.Error(), "on non-object <nil>") {
-				return nil, findErr(err.Error())
+		if len(paths[0]) == 0 {
+			if diff := pretty.Diff(r.Body, match); fmt.Sprintf("%#v", r.Body) != fmt.Sprintf("%#v", match) && len(diff) > 0 {
+				return nil, fmt.Errorf(pp(diff))
 			}
-			panic(err)
+			return r, nil
+		} else {
+			obj, err := jsonq.NewQuery(r.Body).Interface(paths[0]...)
+			if err != nil {
+				if strings.Contains(err.Error(), "on non-object <nil>") {
+					return nil, findErr(err.Error())
+				}
+				panic(err)
+			}
+			if diff := pretty.Diff(obj, match); fmt.Sprintf("%#v", obj) != fmt.Sprintf("%#v", match) && len(diff) > 0 {
+				return nil, fmt.Errorf(pp(diff))
+			}
+			return r, nil
 		}
-		if diff := pretty.Diff(obj, match); fmt.Sprintf("%#v", obj) != fmt.Sprintf("%#v", match) && len(diff) > 0 {
-			return nil, fmt.Errorf(pp(diff))
-		}
-		return r, nil
 	}
 	ary, err := jsonq.NewQuery(r.Body).Array(paths[0]...)
 	if err != nil {
