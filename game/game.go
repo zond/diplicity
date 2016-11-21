@@ -280,11 +280,13 @@ func (g *Game) Item(r Request) *Item {
 	if g.Finished {
 		gameItem.AddLink(r.NewLink(GameResultResource.Link("game-result", Load, []string{"game_id", g.ID.Encode()})))
 	}
-	gameItem.AddLink(r.NewLink(Link{
-		Rel:         "game-states",
-		Route:       ListGameStatesRoute,
-		RouteParams: []string{"game_id", g.ID.Encode()},
-	}))
+	if g.Started {
+		gameItem.AddLink(r.NewLink(Link{
+			Rel:         "game-states",
+			Route:       ListGameStatesRoute,
+			RouteParams: []string{"game_id", g.ID.Encode()},
+		}))
+	}
 	return gameItem
 }
 
