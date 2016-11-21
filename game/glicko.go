@@ -119,13 +119,14 @@ func updateGlickos(ctx context.Context) error {
 				return err
 			}
 			newGlickos = append(newGlickos, Glicko{
-				GameID:     game.ID,
-				UserId:     member.User.Id,
-				CreatedAt:  gameResult.CreatedAt,
-				Member:     member.Nation,
-				Rating:     newRating.Rating,
-				Deviation:  newRating.Deviation,
-				Volatility: newRating.Volatility,
+				GameID:          game.ID,
+				UserId:          member.User.Id,
+				CreatedAt:       gameResult.CreatedAt,
+				Member:          member.Nation,
+				Rating:          newRating.Rating,
+				PracticalRating: newRating.Rating - 2*newRating.Deviation,
+				Deviation:       newRating.Deviation,
+				Volatility:      newRating.Volatility,
 			})
 		}
 
@@ -187,24 +188,26 @@ func GetGlicko(ctx context.Context, userId string) (*Glicko, error) {
 	}
 	if len(glickos) == 0 {
 		return &Glicko{
-			UserId:     userId,
-			CreatedAt:  time.Now(),
-			Rating:     goglicko.DefaultRat,
-			Deviation:  goglicko.DefaultDev,
-			Volatility: goglicko.DefaultVol,
+			UserId:          userId,
+			CreatedAt:       time.Now(),
+			Rating:          goglicko.DefaultRat,
+			PracticalRating: goglicko.DefaultRat - 2*goglicko.DefaultDev,
+			Deviation:       goglicko.DefaultDev,
+			Volatility:      goglicko.DefaultVol,
 		}, nil
 	}
 	return &glickos[0], nil
 }
 
 type Glicko struct {
-	GameID     *datastore.Key
-	UserId     string
-	CreatedAt  time.Time
-	Member     dip.Nation
-	Rating     float64
-	Deviation  float64
-	Volatility float64
+	GameID          *datastore.Key
+	UserId          string
+	CreatedAt       time.Time
+	Member          dip.Nation
+	Rating          float64
+	PracticalRating float64
+	Deviation       float64
+	Volatility      float64
 }
 
 func (g *Glicko) ID(ctx context.Context) (*datastore.Key, error) {
