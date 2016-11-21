@@ -128,6 +128,7 @@ func updateGlickos(ctx context.Context) error {
 				Volatility: newRating.Volatility,
 			})
 		}
+
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			if err := datastore.Get(ctx, gameResultID, gameResult); err != nil {
 				log.Errorf(ctx, "Unable to get game result %v: %v; hope datastore gets fixed", gameResultID, err)
@@ -142,6 +143,7 @@ func updateGlickos(ctx context.Context) error {
 				log.Errorf(ctx, "Unable to save game result %v after setting it as rated: %v; hope datastore gets fixed", PP(gameResult), err)
 				return err
 			}
+
 			glickoIDs := make([]*datastore.Key, len(newGlickos))
 			for i, glicko := range newGlickos {
 				id, err := glicko.ID(ctx)
@@ -153,6 +155,15 @@ func updateGlickos(ctx context.Context) error {
 			}
 			if _, err := datastore.PutMulti(ctx, glickoIDs, newGlickos); err != nil {
 				log.Errorf(ctx, "Unable to store new glickos %v => %v: %v; hope datastore gets fixed", PP(glickoIDs), PP(newGlickos), err)
+				return err
+			}
+
+			uids := make([]string, len(newGlickos))
+			for i, glicko := range newGlickos {
+				uids[i] = glicko.UserId
+			}
+			if err := UpdateUserStatsASAP(ctx, uids); err != nil {
+				log.Errorf(ctx, "Unable to enqueue updating of user stats: %v; hope datastore gets fixed", err)
 				return err
 			}
 			return nil

@@ -22,6 +22,7 @@ type PhaseResult struct {
 	NMRUsers     []string
 	ActiveUsers  []string
 	ReadyUsers   []string
+	AllUsers     []string
 }
 
 var PhaseResultResource = &Resource{

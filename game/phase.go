@@ -491,6 +491,8 @@ func (p *PhaseResolver) Act() error {
 			}
 			newPhaseStates = append(newPhaseStates, *newPhaseState)
 		}
+
+		oldPhaseResult.AllUsers = append(oldPhaseResult.AllUsers, member.User.Id)
 	}
 
 	log.Infof(p.Context, "Calculated key metrics: allReady: %v, soloWinner: %q, quitters: %v", allReady, soloWinner, PP(quitters))
@@ -572,6 +574,8 @@ func (p *PhaseResolver) Act() error {
 			EliminatedMembers: eliminatedMembers,
 			EliminatedUsers:   eliminatedUsers,
 			Scores:            scores,
+			AllUsers:          oldPhaseResult.AllUsers,
+			Rated:             false,
 			CreatedAt:         time.Now(),
 		}
 		gameResult.AssignScores()
@@ -579,6 +583,7 @@ func (p *PhaseResolver) Act() error {
 			log.Errorf(p.Context, "Unable to save game result %v: %v; hope datastore gets fixed", PP(gameResult), err)
 			return err
 		}
+
 	} else {
 
 		// Otherwise, save the new phase states.
@@ -641,22 +646,25 @@ func (p *PhaseResolver) Act() error {
 		return err
 	}
 
-	// Enqueue updating of user stats (for NMR/NonNMR purposes, and also if the game finishes - for game level stats).
+	if p.Game.Finished {
+		// Enqueue updating of ratings, which will in turn update user stats.
 
-	uids := make([]string, len(p.Game.Members))
-	for i, m := range p.Game.Members {
-		uids[i] = m.User.Id
-	}
-	if err := UpdateUserStatsASAP(p.Context, uids); err != nil {
-		log.Errorf(p.Context, "Unable to enqueue user stats update tasks: %v; hope datastore gets fixed", err)
-		return err
-	}
+		if err := UpdateGlickosASAP(p.Context); err != nil {
+			log.Errorf(p.Context, "Unable to enqueue updating of ratings: %v; hope datastore gets fixed", err)
+			return err
+		}
 
-	// Enqueue updating of ratings.
+	} else {
+		// Enqueue updating of user stats (for NMR/NonNMR purposes).
 
-	if err := UpdateGlickosASAP(p.Context); err != nil {
-		log.Errorf(p.Context, "Unable to enqueue updating of ratings: %v; hope datastore gets fixed", err)
-		return err
+		uids := make([]string, len(p.Game.Members))
+		for i, m := range p.Game.Members {
+			uids[i] = m.User.Id
+		}
+		if err := UpdateUserStatsASAP(p.Context, uids); err != nil {
+			log.Errorf(p.Context, "Unable to enqueue user stats update tasks: %v; hope datastore gets fixed", err)
+			return err
+		}
 	}
 
 	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)

@@ -33,6 +33,7 @@ type GameResult struct {
 	NMRUsers          []string
 	EliminatedMembers []dip.Nation
 	EliminatedUsers   []string
+	AllUsers          []string
 	Scores            []GameScore
 	Rated             bool
 	CreatedAt         time.Time

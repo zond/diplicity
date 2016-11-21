@@ -40,8 +40,15 @@ func updateUserStat(ctx context.Context, userId string) error {
 		UserId: userId,
 	}
 	if err := userStats.Recalculate(ctx); err != nil {
+		log.Errorf(ctx, "Unable to recalculate user stats %v: %v; fix UserStats#Recalculate", PP(userStats), err)
 		return err
 	}
+	latestGlicko, err := GetGlicko(ctx, userId)
+	if err != nil {
+		log.Errorf(ctx, "Unable to get latest Glicko for %q: %v; fix GetGlicko", userId, err)
+		return err
+	}
+	userStats.Glicko = *latestGlicko
 	if _, err := datastore.Put(ctx, userStats.ID(ctx), userStats); err != nil {
 		log.Errorf(ctx, "Unable to store stats %v: %v; hope datastore gets fixed", userStats, err)
 		return err
@@ -98,6 +105,8 @@ type UserStats struct {
 	SharedBans int
 	Hated      float64
 	Hater      float64
+
+	Glicko Glicko
 }
 
 var UserStatsResource = &Resource{
