@@ -324,10 +324,15 @@ func (p *PhaseResolver) SCCounts(s *state.State) map[dip.Nation]int {
 	return res
 }
 
-type nationState int
+type quitter struct {
+	state  quitState
+	member Member
+}
+
+type quitState int
 
 const (
-	unknownState nationState = iota
+	unknownState quitState = iota
 	diasState
 	eliminatedState
 	nmrState
@@ -387,12 +392,15 @@ func (p *PhaseResolver) Act() error {
 	// Check if we can roll forward again, and potentially create new phase states.
 
 	// Prepare some data to collect.
-	allReady := true                            // All nations are ready to resolve the new phase as well.
-	var soloWinner dip.Nation                   // The nation, if any, reaching solo victory.
-	quitNations := map[dip.Nation]nationState{} // One state per nation that wants to quit, with either dias or eliminated.
-	newPhaseStates := PhaseStates{}             // The new phase states to save if we want to prepare resolution of a new phase.
+	allReady := true          // All nations are ready to resolve the new phase as well.
+	var soloWinner dip.Nation // The nation, if any, reaching solo victory.
+	var soloWinnerUser string
+	quitters := map[dip.Nation]quitter{} // One per nation that wants to quit, with either dias or eliminated.
+	newPhaseStates := PhaseStates{}      // The new phase states to save if we want to prepare resolution of a new phase.
 
-	for _, nat := range variant.Nations {
+	for _, member := range p.Game.Members {
+		nat := member.Nation
+
 		// Collect data on each nation.
 		_, hadOrders := orderMap[nat]
 		wasReady := false
@@ -403,7 +411,10 @@ func (p *PhaseResolver) Act() error {
 				wasReady = phaseState.ReadyToResolve
 				wantedDIAS = phaseState.WantsDIAS
 				if phaseState.WantsDIAS {
-					quitNations[nat] = diasState
+					quitters[nat] = quitter{
+						state:  diasState,
+						member: member,
+					}
 				}
 				wasOnProbation = phaseState.OnProbation
 				break
@@ -412,7 +423,10 @@ func (p *PhaseResolver) Act() error {
 		newOptions := len(s.Phase().Options(s, nat))
 		if scCounts[nat] == 0 {
 			// Overwrite DIAS with eliminated, you can't be part of a DIAS if you are eliminated...
-			quitNations[nat] = eliminatedState
+			quitters[nat] = quitter{
+				state:  eliminatedState,
+				member: member,
+			}
 		} else if scCounts[nat] >= variant.SoloSupplyCenters {
 			if soloWinner != "" {
 				msg := fmt.Sprintf("Found that %q has >= variant.SoloSupplyCenters (%d) SCs, but %q was already marked as solo winner? WTF?; fix godip?", nat, variant.SoloSupplyCenters, soloWinner)
@@ -421,6 +435,7 @@ func (p *PhaseResolver) Act() error {
 			}
 			log.Infof(p.Context, "Found that %q has >= variant.SoloSupplyCenters (%d) SCs, marking %q as solo winner", nat, variant.SoloSupplyCenters, nat)
 			soloWinner = nat
+			soloWinnerUser = member.User.Id
 		}
 
 		// Log what we're doing.
@@ -437,9 +452,12 @@ func (p *PhaseResolver) Act() error {
 		autoDIAS := wantedDIAS || autoProbation
 		allReady = allReady && autoReady
 
-		// Overwrite DIAS with NMR, but don't overwrite Eliminated with NMR.
-		if reason := quitNations[nat]; autoProbation && reason != eliminatedState {
-			quitNations[nat] = nmrState
+		// Overwrite DIAS but not eliminated with NMR.
+		if q := quitters[nat]; autoProbation && q.state != eliminatedState {
+			quitters[nat] = quitter{
+				state:  nmrState,
+				member: member,
+			}
 		}
 
 		// If the next phase state is non-default, we must save and append it.
@@ -457,12 +475,12 @@ func (p *PhaseResolver) Act() error {
 		}
 	}
 
-	log.Infof(p.Context, "Calculated key metrics: allReady: %v, soloWinner: %q, quitNations: %+v", allReady, soloWinner, quitNations)
+	log.Infof(p.Context, "Calculated key metrics: allReady: %v, soloWinner: %q, quitters: %v", allReady, soloWinner, PP(quitters))
 
 	// Check if the game should end.
 
-	if soloWinner != "" || len(quitNations) == len(variant.Nations) {
-		log.Infof(p.Context, "soloWinner: %q, quitNations: %+v => game needs to end", soloWinner, quitNations)
+	if soloWinner != "" || len(quitters) == len(variant.Nations) {
+		log.Infof(p.Context, "soloWinner: %q, quitters: %v => game needs to end", soloWinner, PP(quitters))
 		// Just to ensure we don't try to resolve it again, even by mistake.
 		newPhase.Resolved = true
 	}
@@ -493,19 +511,25 @@ func (p *PhaseResolver) Act() error {
 		}
 
 		diasMembers := []dip.Nation{}
+		diasUsers := []string{}
 		nmrMembers := []dip.Nation{}
+		nmrUsers := []string{}
 		eliminatedMembers := []dip.Nation{}
+		eliminatedUsers := []string{}
 
-		for nat, state := range quitNations {
-			switch state {
+		for nat, q := range quitters {
+			switch q.state {
 			case diasState:
 				diasMembers = append(diasMembers, nat)
+				diasUsers = append(diasUsers, q.member.User.Id)
 			case nmrState:
 				nmrMembers = append(nmrMembers, nat)
+				nmrUsers = append(nmrUsers, q.member.User.Id)
 			case eliminatedState:
 				eliminatedMembers = append(eliminatedMembers, nat)
+				eliminatedUsers = append(eliminatedUsers, q.member.User.Id)
 			default:
-				msg := fmt.Sprintf("Unknown nation state %v for %q! Fix the resolver!", state, nat)
+				msg := fmt.Sprintf("Unknown nation state %v for %q! Fix the resolver!", PP(q), nat)
 				log.Errorf(p.Context, msg)
 				return fmt.Errorf(msg)
 			}
@@ -513,10 +537,14 @@ func (p *PhaseResolver) Act() error {
 
 		gameResult := &GameResult{
 			GameID:            p.Game.ID,
-			SoloWinner:        soloWinner,
+			SoloWinnerMember:  soloWinner,
+			SoloWinnerUser:    soloWinnerUser,
 			DIASMembers:       diasMembers,
+			DIASUsers:         diasUsers,
 			NMRMembers:        nmrMembers,
+			NMRUsers:          nmrUsers,
 			EliminatedMembers: eliminatedMembers,
+			EliminatedUsers:   eliminatedUsers,
 		}
 		if err := gameResult.Save(p.Context); err != nil {
 			log.Errorf(p.Context, "Unable to save game result %v: %v; hope datastore gets fixed", PP(gameResult), err)

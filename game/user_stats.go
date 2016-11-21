@@ -75,13 +75,17 @@ func updateUserStats(ctx context.Context, uids []string) error {
 }
 
 type UserStats struct {
-	UserId        string
-	StartedGames  int
-	FinishedGames int
-	OwnedBans     int
-	SharedBans    int
-	Hated         float64
-	Hater         float64
+	UserId          string
+	StartedGames    int
+	FinishedGames   int
+	SoloGames       int
+	DIASGames       int
+	EliminatedGames int
+	DroppedGames    int
+	OwnedBans       int
+	SharedBans      int
+	Hated           float64
+	Hater           float64
 }
 
 func (u *UserStats) Recalculate(ctx context.Context) error {
@@ -92,6 +96,20 @@ func (u *UserStats) Recalculate(ctx context.Context) error {
 	if u.FinishedGames, err = datastore.NewQuery(gameKind).Filter("Members.User.Id=", u.UserId).Filter("Finished=", true).Count(ctx); err != nil {
 		return err
 	}
+
+	if u.SoloGames, err = datastore.NewQuery(gameResultKind).Filter("SoloWinnerUser=", u.UserId).Count(ctx); err != nil {
+		return err
+	}
+	if u.DIASGames, err = datastore.NewQuery(gameResultKind).Filter("DIASUsers=", u.UserId).Count(ctx); err != nil {
+		return err
+	}
+	if u.EliminatedGames, err = datastore.NewQuery(gameResultKind).Filter("EliminatedUsers=", u.UserId).Count(ctx); err != nil {
+		return err
+	}
+	if u.DroppedGames, err = datastore.NewQuery(gameResultKind).Filter("NMRUsers=", u.UserId).Count(ctx); err != nil {
+		return err
+	}
+
 	if u.OwnedBans, err = datastore.NewQuery(banKind).Filter("OwnerIds=", u.UserId).Count(ctx); err != nil {
 		return err
 	}

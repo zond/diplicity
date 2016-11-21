@@ -124,11 +124,19 @@ func TestDIASEnding(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 				Follow("started-games", "Links").Success().
 				AssertNotFind(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
-			g.Follow("game-result", "Links").Success().
+			res := g.Follow("game-result", "Links").Success().
 				AssertLen(7, "Properties", "DIASMembers").
+				AssertLen(7, "Properties", "DIASUsers").
 				AssertNil("Properties", "NMRMembers").
+				AssertNil("Properties", "NMRUsers").
 				AssertNil("Properties", "EliminatedMembers").
-				AssertEq("", "Properties", "SoloWinner")
+				AssertNil("Properties", "EliminatedUsers").
+				AssertEq("", "Properties", "SoloWinnerMember").
+				AssertEq("", "Properties", "SoloWinnerUser")
+			for i := range startedGameEnvs {
+				res.Find(startedGameNats[i], []string{"Properties", "DIASMembers"}, nil)
+				res.Find(startedGameEnvs[i].GetUID(), []string{"Properties", "DIASUsers"}, nil)
+			}
 		})
 
 	})
@@ -307,11 +315,19 @@ func TestTimeoutResolution(t *testing.T) {
 			g := startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 				Follow("finished-games", "Links").Success().
 				Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
-			g.Follow("game-result", "Links").Success().
+			res := g.Follow("game-result", "Links").Success().
 				AssertNil("Properties", "DIASMembers").
+				AssertNil("Properties", "DIASUsers").
 				AssertLen(7, "Properties", "NMRMembers").
+				AssertLen(7, "Properties", "NMRUsers").
 				AssertNil("Properties", "EliminatedMembers").
-				AssertEq("", "Properties", "SoloWinner")
+				AssertNil("Properties", "EliminatedUsers").
+				AssertEq("", "Properties", "SoloWinnerMember").
+				AssertEq("", "Properties", "SoloWinnerUser")
+			for i := range startedGameEnvs {
+				res.Find(startedGameNats[i], []string{"Properties", "NMRMembers"}, nil)
+				res.Find(startedGameEnvs[i].GetUID(), []string{"Properties", "NMRUsers"}, nil)
+			}
 		})
 	})
 

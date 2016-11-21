@@ -16,10 +16,14 @@ const (
 
 type GameResult struct {
 	GameID            *datastore.Key
-	SoloWinner        dip.Nation
+	SoloWinnerMember  dip.Nation
+	SoloWinnerUser    string
 	DIASMembers       []dip.Nation
+	DIASUsers         []string
 	NMRMembers        []dip.Nation
+	NMRUsers          []string
 	EliminatedMembers []dip.Nation
+	EliminatedUsers   []string
 }
 
 func GameResultID(ctx context.Context, gameID *datastore.Key) *datastore.Key {
