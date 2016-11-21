@@ -137,6 +137,11 @@ func updateGlickos(ctx context.Context) error {
 				log.Infof(ctx, "%v got rated while we worked, exiting", PP(gameResult))
 				return nil
 			}
+			gameResult.Rated = true
+			if _, err := datastore.Put(ctx, gameResultID, gameResult); err != nil {
+				log.Errorf(ctx, "Unable to save game result %v after setting it as rated: %v; hope datastore gets fixed", PP(gameResult), err)
+				return err
+			}
 			glickoIDs := make([]*datastore.Key, len(newGlickos))
 			for i, glicko := range newGlickos {
 				id, err := glicko.ID(ctx)
@@ -173,8 +178,8 @@ func GetGlicko(ctx context.Context, userId string) (*Glicko, error) {
 		return &Glicko{
 			UserId:     userId,
 			CreatedAt:  time.Now(),
-			Rating:     1500,
-			Deviation:  350,
+			Rating:     goglicko.DefaultRat,
+			Deviation:  goglicko.DefaultDev,
 			Volatility: goglicko.DefaultVol,
 		}, nil
 	}
