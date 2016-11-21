@@ -819,6 +819,9 @@ func (p *Phase) Item(r Request) *Item {
 			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
 		}))
 	}
+	if p.Resolved {
+		phaseItem.AddLink(r.NewLink(PhaseResultResource.Link("phase-result", Load, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)})))
+	}
 	return phaseItem
 }
 

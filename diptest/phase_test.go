@@ -226,6 +226,36 @@ func TestTimeoutResolution(t *testing.T) {
 				AssertEq(false, "Properties", "ReadyToResolve")
 		})
 
+		t.Run("TestOldPhase-1", func(t *testing.T) {
+			p := startedGames[0].Follow("phases", "Links").Success().
+				Find(1, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				AssertEq(true, "Properties", "Resolved")
+			pr := p.Follow("phase-result", "Links").Success().
+				AssertLen(6, "Properties", "ReadyUsers").
+				AssertNil("Properties", "NMRUsers").
+				AssertLen(1, "Properties", "ActiveUsers")
+			for i, env := range startedGameEnvs {
+				if i == 0 {
+					pr.Find(env.GetUID(), []string{"Properties", "ActiveUsers"}, nil)
+				} else {
+					pr.Find(env.GetUID(), []string{"Properties", "ReadyUsers"}, nil)
+				}
+			}
+		})
+
+		t.Run("TestOldPhase-2", func(t *testing.T) {
+			p := startedGames[0].Follow("phases", "Links").Success().
+				Find(2, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				AssertEq(true, "Properties", "Resolved")
+			pr := p.Follow("phase-result", "Links").Success().
+				AssertLen(7, "Properties", "ReadyUsers").
+				AssertNil("Properties", "NMRUsers").
+				AssertNil("Properties", "ActiveUsers")
+			for _, env := range startedGameEnvs {
+				pr.Find(env.GetUID(), []string{"Properties", "ReadyUsers"}, nil)
+			}
+		})
+
 		var expectedLocs []string
 
 		t.Run("PreparePhaseStatesNotReadyNoOrders", func(t *testing.T) {
@@ -303,6 +333,23 @@ func TestTimeoutResolution(t *testing.T) {
 				AssertEq(false, "Properties", "ReadyToResolve")
 		})
 
+		t.Run("TestOldPhase-3", func(t *testing.T) {
+			p := startedGames[0].Follow("phases", "Links").Success().
+				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				AssertEq(true, "Properties", "Resolved")
+			pr := p.Follow("phase-result", "Links").Success().
+				AssertNil("Properties", "ReadyUsers").
+				AssertLen(1, "Properties", "NMRUsers").
+				AssertLen(6, "Properties", "ActiveUsers")
+			for i, env := range startedGameEnvs {
+				if i == 0 {
+					pr.Find(env.GetUID(), []string{"Properties", "NMRUsers"}, nil)
+				} else {
+					pr.Find(env.GetUID(), []string{"Properties", "ActiveUsers"}, nil)
+				}
+			}
+		})
+
 		t.Run("TimeoutResolve-3", func(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
 				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "6").Success()
@@ -327,6 +374,19 @@ func TestTimeoutResolution(t *testing.T) {
 			for i := range startedGameEnvs {
 				res.Find(startedGameNats[i], []string{"Properties", "NMRMembers"}, nil)
 				res.Find(startedGameEnvs[i].GetUID(), []string{"Properties", "NMRUsers"}, nil)
+			}
+		})
+
+		t.Run("TestOldPhase-4", func(t *testing.T) {
+			p := startedGames[0].Follow("phases", "Links").Success().
+				Find(6, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				AssertEq(true, "Properties", "Resolved")
+			pr := p.Follow("phase-result", "Links").Success().
+				AssertNil("Properties", "ReadyUsers").
+				AssertLen(7, "Properties", "NMRUsers").
+				AssertNil("Properties", "ActiveUsers")
+			for _, env := range startedGameEnvs {
+				pr.Find(env.GetUID(), []string{"Properties", "NMRUsers"}, nil)
 			}
 		})
 	})
@@ -390,6 +450,13 @@ func testReadyResolution(t *testing.T) {
 		p.Follow("phase-states", "Links").Success().
 			AssertLen(7, "Properties").
 			AssertNotFind("update", []string{"Properties"}, []string{"Links", "Rel"})
+		pr := p.Follow("phase-result", "Links").Success().
+			AssertLen(7, "Properties", "ReadyUsers").
+			AssertNil("Properties", "NMRUsers").
+			AssertNil("Properties", "ActiveUsers")
+		for _, env := range startedGameEnvs {
+			pr.Find(env.GetUID(), []string{"Properties", "ReadyUsers"}, nil)
+		}
 	})
 	t.Run("TestSkippedPhase", func(t *testing.T) {
 		p := startedGames[0].Follow("phases", "Links").Success().
@@ -414,6 +481,13 @@ func testReadyResolution(t *testing.T) {
 			AssertEq(false, "Properties", "WantsDIAS").
 			AssertEq(false, "Properties", "OnProbation").
 			AssertEq(true, "Properties", "ReadyToResolve")
+		pr := p.Follow("phase-result", "Links").Success().
+			AssertLen(7, "Properties", "ReadyUsers").
+			AssertNil("Properties", "NMRUsers").
+			AssertNil("Properties", "ActiveUsers")
+		for _, env := range startedGameEnvs {
+			pr.Find(env.GetUID(), []string{"Properties", "ReadyUsers"}, nil)
+		}
 	})
 	t.Run("TestNextPhase", func(t *testing.T) {
 		p := startedGames[0].Follow("phases", "Links").Success().
