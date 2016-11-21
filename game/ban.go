@@ -137,8 +137,12 @@ func deleteBan(w ResponseWriter, r Request) (*Ban, error) {
 			return datastore.Delete(ctx, banID)
 		}
 
+		if err := UpdateUserStatsASAP(ctx, ban.UserIds); err != nil {
+			return err
+		}
+
 		return ban.Save(ctx)
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}
 
@@ -223,8 +227,12 @@ func createBan(w ResponseWriter, r Request) (*Ban, error) {
 			return fmt.Errorf("bans must have 1 or 2 owner ids")
 		}
 
+		if err := UpdateUserStatsASAP(ctx, ban.UserIds); err != nil {
+			return err
+		}
+
 		return ban.Save(ctx)
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}
 

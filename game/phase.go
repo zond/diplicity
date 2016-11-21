@@ -523,14 +523,12 @@ func (p *PhaseResolver) Act() error {
 			return err
 		}
 
-		deltas := make([]UserStats, len(p.Game.Members))
+		uids := make([]string, len(p.Game.Members))
 		for i, m := range p.Game.Members {
-			deltas[i] = UserStats{
-				UserId:        m.User.Id,
-				FinishedGames: 1,
-			}
+			uids[i] = m.User.Id
 		}
-		if err := UpdateUserStatsFunc.EnqueueIn(p.Context, 0, deltas); err != nil {
+		if err := UpdateUserStatsASAP(p.Context, uids); err != nil {
+			log.Errorf(p.Context, "Unable to enqueue user stats update tasks: %v; hope datastore gets fixed", err)
 			return err
 		}
 
