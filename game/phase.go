@@ -496,16 +496,10 @@ func (p *PhaseResolver) Act() error {
 		newPhase.Resolved = true
 	}
 
-	// Notify about the new phase.
-
-	if err := newPhase.NotifyMembers(p.Context, p.Game); err != nil {
-		log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
-		return err
-	}
-
 	// Save the old phase result.
 
 	if err := oldPhaseResult.Save(p.Context); err != nil {
+		log.Errorf(p.Context, "Unable to save old phase result %v: %v; hope datastore gets fixed", PP(oldPhaseResult), err)
 		return err
 	}
 
@@ -516,9 +510,10 @@ func (p *PhaseResolver) Act() error {
 		return err
 	}
 
-	// Exit early if the new phase is already resolved.
-
 	if newPhase.Resolved {
+
+		// Finish the game and store a game result if the new phase is already resolved.
+
 		log.Infof(p.Context, "New phase is already resolved, marking game as finished and stopping early")
 		p.Game.Finished = true
 		p.Game.Closed = true
@@ -567,67 +562,76 @@ func (p *PhaseResolver) Act() error {
 			log.Errorf(p.Context, "Unable to save game result %v: %v; hope datastore gets fixed", PP(gameResult), err)
 			return err
 		}
+	} else {
 
-		uids := make([]string, len(p.Game.Members))
-		for i, m := range p.Game.Members {
-			uids[i] = m.User.Id
-		}
-		if err := UpdateUserStatsASAP(p.Context, uids); err != nil {
-			log.Errorf(p.Context, "Unable to enqueue user stats update tasks: %v; hope datastore gets fixed", err)
-			return err
-		}
+		// Otherwise, save the new phase states.
 
-		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
-
-		return nil
-	}
-
-	// Save the new phase states.
-
-	if len(newPhaseStates) > 0 {
-		ids := make([]*datastore.Key, len(newPhaseStates))
-		for i := range newPhaseStates {
-			id, err := newPhaseStates[i].ID(p.Context)
-			if err != nil {
-				log.Errorf(p.Context, "Unable to create new phase state ID for %v: %v; fix PhaseState.ID or hope datastore gets fixed", PP(newPhaseStates[i]), err)
+		if len(newPhaseStates) > 0 {
+			ids := make([]*datastore.Key, len(newPhaseStates))
+			for i := range newPhaseStates {
+				id, err := newPhaseStates[i].ID(p.Context)
+				if err != nil {
+					log.Errorf(p.Context, "Unable to create new phase state ID for %v: %v; fix PhaseState.ID or hope datastore gets fixed", PP(newPhaseStates[i]), err)
+					return err
+				}
+				ids[i] = id
+			}
+			if _, err := datastore.PutMulti(p.Context, ids, newPhaseStates); err != nil {
+				log.Errorf(p.Context, "Unable to save new PhaseStates %v: %v; hope datastore will get fixed", PP(newPhaseStates), err)
 				return err
 			}
-			ids[i] = id
+			log.Infof(p.Context, "Saved %v to get things moving", PP(newPhaseStates))
 		}
-		if _, err := datastore.PutMulti(p.Context, ids, newPhaseStates); err != nil {
-			log.Errorf(p.Context, "Unable to save new PhaseStates %v: %v; hope datastore will get fixed", PP(newPhaseStates), err)
-			return err
-		}
-		log.Infof(p.Context, "Saved %v to get things moving", PP(newPhaseStates))
-	}
 
-	// If we can't roll forward again, schedule new resolution.
+		if allReady {
 
-	if !allReady {
-		if p.Game.PhaseLengthMinutes > 0 {
-			if err := newPhase.ScheduleResolution(p.Context); err != nil {
-				log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(newPhase), err)
+			// If we can roll forward again, do it and return (to skip enqueueing tasks, which might break datastore if we do it too many times in the same tx).
+
+			log.Infof(p.Context, "Since all players are ready to resolve RIGHT NOW, rolling forward again")
+
+			newPhase.DeadlineAt = time.Now()
+			p.Phase = newPhase
+			p.PhaseStates = newPhaseStates
+			if err := p.Act(); err != nil {
+				log.Errorf(p.Context, "Unable to continue rolling forward: %v; fix the resolver!", err)
 				return err
 			}
-			log.Infof(p.Context, "%v has phase length of %v minutes, scheduled new resolve", PP(p.Game), p.Game.PhaseLengthMinutes)
+
+			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** delegated to new resolver due to immediate resolution ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+
+			return nil
+
 		} else {
-			log.Infof(p.Context, "%v has a zero phase length, skipping resolve scheduling", PP(p.Game))
+
+			// Otherwise, schedule new phase resolution if necessary.
+
+			if p.Game.PhaseLengthMinutes > 0 {
+				if err := newPhase.ScheduleResolution(p.Context); err != nil {
+					log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(newPhase), err)
+					return err
+				}
+				log.Infof(p.Context, "%v has phase length of %v minutes, scheduled new resolve", PP(p.Game), p.Game.PhaseLengthMinutes)
+			} else {
+				log.Infof(p.Context, "%v has a zero phase length, skipping resolve scheduling", PP(p.Game))
+			}
 		}
-
-		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
-
-		return nil
 	}
 
-	// Roll forward again.
+	// Notify about the new phase.
 
-	log.Infof(p.Context, "Since all players are ready to resolve RIGHT NOW, rolling forward again")
+	if err := newPhase.NotifyMembers(p.Context, p.Game); err != nil {
+		log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
+		return err
+	}
 
-	newPhase.DeadlineAt = time.Now()
-	p.Phase = newPhase
-	p.PhaseStates = newPhaseStates
-	if err := p.Act(); err != nil {
-		log.Errorf(p.Context, "Unable to continue rolling forward: %v; fix the resolver!", err)
+	// Enqueue updating of user stats (for NMR/NonNMR purposes, and also if the game finishes - for game level stats).
+
+	uids := make([]string, len(p.Game.Members))
+	for i, m := range p.Game.Members {
+		uids[i] = m.User.Id
+	}
+	if err := UpdateUserStatsASAP(p.Context, uids); err != nil {
+		log.Errorf(p.Context, "Unable to enqueue user stats update tasks: %v; hope datastore gets fixed", err)
 		return err
 	}
 
