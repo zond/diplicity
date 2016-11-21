@@ -86,8 +86,10 @@ type UserStats struct {
 	DroppedGames    int
 
 	NMRPhases    int
-	NonNMRPhases int
+	ActivePhases int
+	ReadyPhases  int
 	Reliability  float64
+	Quickness    float64
 
 	OwnedBans  int
 	SharedBans int
@@ -120,10 +122,14 @@ func (u *UserStats) Recalculate(ctx context.Context) error {
 	if u.NMRPhases, err = datastore.NewQuery(phaseResultKind).Filter("NMRUsers=", u.UserId).Count(ctx); err != nil {
 		return err
 	}
-	if u.NonNMRPhases, err = datastore.NewQuery(phaseResultKind).Filter("NonNMRUsers=", u.UserId).Count(ctx); err != nil {
+	if u.ActivePhases, err = datastore.NewQuery(phaseResultKind).Filter("ActiveUsers=", u.UserId).Count(ctx); err != nil {
 		return err
 	}
-	u.Reliability = float64(u.NonNMRPhases) / float64(u.NMRPhases+1)
+	if u.ReadyPhases, err = datastore.NewQuery(phaseResultKind).Filter("ReadyUsers=", u.UserId).Count(ctx); err != nil {
+		return err
+	}
+	u.Reliability = float64(u.ReadyPhases+u.ActivePhases) / float64(u.ReadyPhases+u.ActivePhases+u.NMRPhases+1)
+	u.Quickness = float64(u.ReadyPhases) / float64(u.ReadyPhases+u.ActivePhases+u.NMRPhases+1)
 
 	if u.OwnedBans, err = datastore.NewQuery(banKind).Filter("OwnerIds=", u.UserId).Count(ctx); err != nil {
 		return err

@@ -15,7 +15,8 @@ type PhaseResult struct {
 	GameID       *datastore.Key
 	PhaseOrdinal int64
 	NMRUsers     []string
-	NonNMRUsers  []string
+	ActiveUsers  []string
+	ReadyUsers   []string
 }
 
 func (p *PhaseResult) ID(ctx context.Context) (*datastore.Key, error) {

@@ -462,9 +462,12 @@ func (p *PhaseResolver) Act() error {
 		if autoProbation {
 			// Users on probation get an NMR count.
 			oldPhaseResult.NMRUsers = append(oldPhaseResult.NMRUsers, member.User.Id)
-		} else if !wasEliminated {
-			// Users not on probation get a NonNMR count if they weren't eliminated.
-			oldPhaseResult.NonNMRUsers = append(oldPhaseResult.NonNMRUsers, member.User.Id)
+		} else if wasReady {
+			// Users marked ready get a ready count.
+			oldPhaseResult.ReadyUsers = append(oldPhaseResult.ReadyUsers, member.User.Id)
+		} else if hadOrders {
+			// Users having orders, but not marked as ready to resolve, get an active count.
+			oldPhaseResult.ActiveUsers = append(oldPhaseResult.ActiveUsers, member.User.Id)
 		}
 
 		// Overwrite DIAS but not eliminated with NMR.
