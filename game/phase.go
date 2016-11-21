@@ -410,6 +410,7 @@ func (p *PhaseResolver) Act() error {
 		wasReady := false
 		wantedDIAS := false
 		wasOnProbation := false
+		wasEliminated := false
 		for _, phaseState := range p.PhaseStates {
 			if phaseState.Nation == nat {
 				wasReady = phaseState.ReadyToResolve
@@ -426,6 +427,7 @@ func (p *PhaseResolver) Act() error {
 		}
 		newOptions := len(s.Phase().Options(s, nat))
 		if scCounts[nat] == 0 {
+			wasEliminated = true
 			// Overwrite DIAS with eliminated, you can't be part of a DIAS if you are eliminated...
 			quitters[nat] = quitter{
 				state:  eliminatedState,
@@ -443,7 +445,7 @@ func (p *PhaseResolver) Act() error {
 		}
 
 		// Log what we're doing.
-		stateString := fmt.Sprintf("wasReady = %v, wantedDIAS = %v, onProbation = %v, hadOrders = %v, newOptions = %v", wasReady, wantedDIAS, wasOnProbation, hadOrders, newOptions)
+		stateString := fmt.Sprintf("wasReady = %v, wantedDIAS = %v, onProbation = %v, hadOrders = %v, newOptions = %v, wasEliminated = %v", wasReady, wantedDIAS, wasOnProbation, hadOrders, newOptions, wasEliminated)
 		log.Infof(p.Context, "%v at phase change: %s", nat, stateString)
 
 		// Calculate states for next phase.
@@ -457,10 +459,12 @@ func (p *PhaseResolver) Act() error {
 		allReady = allReady && autoReady
 
 		// Update the old phase result object.
-		if hadOrders || wasReady {
-			oldPhaseResult.NonNMRUsers = append(oldPhaseResult.NonNMRUsers, member.User.Id)
-		} else {
+		if autoProbation {
+			// Users on probation get an NMR count.
 			oldPhaseResult.NMRUsers = append(oldPhaseResult.NMRUsers, member.User.Id)
+		} else if !wasEliminated {
+			// Users not on probation get a NonNMR count if they weren't eliminated.
+			oldPhaseResult.NonNMRUsers = append(oldPhaseResult.NonNMRUsers, member.User.Id)
 		}
 
 		// Overwrite DIAS but not eliminated with NMR.
