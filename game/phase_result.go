@@ -72,7 +72,7 @@ func (p *PhaseResult) ID(ctx context.Context) (*datastore.Key, error) {
 }
 
 func (p *PhaseResult) Item(r Request) *Item {
-	return NewItem(p).SetName("phase-result")
+	return NewItem(p).SetName("phase-result").AddLink(r.NewLink(PhaseResultResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)})))
 }
 
 func (p *PhaseResult) Save(ctx context.Context) error {

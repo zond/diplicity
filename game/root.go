@@ -96,7 +96,7 @@ func handleIndex(w ResponseWriter, r Request) error {
 			Rel:         "bans",
 			Route:       ListBansRoute,
 			RouteParams: []string{"user_id", user.Id},
-		}))
+		})).AddLink(r.NewLink(UserStatsResource.Link("user-stats", Load, []string{"user_id", user.Id})))
 	}
 	w.SetContent(index)
 	return nil

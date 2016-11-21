@@ -3,10 +3,13 @@ package game
 import (
 	"time"
 
+	"github.com/zond/diplicity/auth"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+
+	. "github.com/zond/goaeoas"
 )
 
 const (
@@ -95,6 +98,35 @@ type UserStats struct {
 	SharedBans int
 	Hated      float64
 	Hater      float64
+}
+
+var UserStatsResource = &Resource{
+	Load:     loadUserStats,
+	FullPath: "/User/{user_id}/Stats",
+}
+
+func loadUserStats(w ResponseWriter, r Request) (*UserStats, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthorized", 401}
+	}
+
+	if user.Id != r.Vars()["user_id"] {
+		return nil, HTTPErr{"can only load owned stats", 403}
+	}
+
+	userStats := &UserStats{}
+	if err := datastore.Get(ctx, UserStatsID(ctx, user.Id), userStats); err != nil {
+		return nil, err
+	}
+
+	return userStats, nil
+}
+
+func (u *UserStats) Item(r Request) *Item {
+	return NewItem(u).SetName("user-stats").AddLink(r.NewLink(UserStatsResource.Link("self", Load, []string{"user_id", u.UserId})))
 }
 
 func (u *UserStats) Recalculate(ctx context.Context) error {

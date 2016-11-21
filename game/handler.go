@@ -263,6 +263,7 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, GameResultResource)
 	HandleResource(r, BanResource)
 	HandleResource(r, PhaseResultResource)
+	HandleResource(r, UserStatsResource)
 	HeadCallback(func(head *Node) error {
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.6.0/firebase.js")
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.5.2/firebase-app.js")
