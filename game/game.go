@@ -228,6 +228,7 @@ type Game struct {
 	Members            []Member
 	ActiveBans         []Ban `datastore:"-"`
 	CreatedAt          time.Time
+	FinishedAt         time.Time
 }
 
 func (g *Game) GetMember(userID string) (*Member, bool) {

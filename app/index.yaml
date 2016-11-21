@@ -98,6 +98,17 @@ indexes:
     direction: desc
   - name: CreatedAt
 
+- kind: GameResult
+  properties:
+  - name: Rated
+  - name: CreatedAt
+
+- kind: Glicko
+  properties:
+  - name: UserId
+  - name: CreatedAt
+    direction: desc
+
 - kind: Message
   ancestor: yes
   properties:

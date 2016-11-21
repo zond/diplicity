@@ -523,6 +523,7 @@ func (p *PhaseResolver) Act() error {
 
 		log.Infof(p.Context, "New phase is already resolved, marking game as finished and stopping early")
 		p.Game.Finished = true
+		p.Game.FinishedAt = time.Now()
 		p.Game.Closed = true
 		if err := p.Game.Save(p.Context); err != nil {
 			log.Errorf(p.Context, "Unable to save game as finished: %v; hope datastore will get fixed", err)
@@ -648,6 +649,13 @@ func (p *PhaseResolver) Act() error {
 	}
 	if err := UpdateUserStatsASAP(p.Context, uids); err != nil {
 		log.Errorf(p.Context, "Unable to enqueue user stats update tasks: %v; hope datastore gets fixed", err)
+		return err
+	}
+
+	// Enqueue updating of ratings.
+
+	if err := UpdateGlickosASAP(p.Context); err != nil {
+		log.Errorf(p.Context, "Unable to enqueue updating of ratings: %v; hope datastore gets fixed", err)
 		return err
 	}
 

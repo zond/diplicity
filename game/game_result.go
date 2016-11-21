@@ -34,6 +34,7 @@ type GameResult struct {
 	EliminatedMembers []dip.Nation
 	EliminatedUsers   []string
 	Scores            []GameScore
+	Rated             bool
 	CreatedAt         time.Time
 }
 
