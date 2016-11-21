@@ -75,17 +75,24 @@ func updateUserStats(ctx context.Context, uids []string) error {
 }
 
 type UserStats struct {
-	UserId          string
-	StartedGames    int
-	FinishedGames   int
+	UserId string
+
+	StartedGames  int
+	FinishedGames int
+
 	SoloGames       int
 	DIASGames       int
 	EliminatedGames int
 	DroppedGames    int
-	OwnedBans       int
-	SharedBans      int
-	Hated           float64
-	Hater           float64
+
+	NMRPhases    int
+	NonNMRPhases int
+	Reliability  float64
+
+	OwnedBans  int
+	SharedBans int
+	Hated      float64
+	Hater      float64
 }
 
 func (u *UserStats) Recalculate(ctx context.Context) error {
@@ -109,6 +116,14 @@ func (u *UserStats) Recalculate(ctx context.Context) error {
 	if u.DroppedGames, err = datastore.NewQuery(gameResultKind).Filter("NMRUsers=", u.UserId).Count(ctx); err != nil {
 		return err
 	}
+
+	if u.NMRPhases, err = datastore.NewQuery(phaseResultKind).Filter("NMRUsers=", u.UserId).Count(ctx); err != nil {
+		return err
+	}
+	if u.NonNMRPhases, err = datastore.NewQuery(phaseResultKind).Filter("NonNMRUsers=", u.UserId).Count(ctx); err != nil {
+		return err
+	}
+	u.Reliability = float64(u.NonNMRPhases) / float64(u.NMRPhases+1)
 
 	if u.OwnedBans, err = datastore.NewQuery(banKind).Filter("OwnerIds=", u.UserId).Count(ctx); err != nil {
 		return err

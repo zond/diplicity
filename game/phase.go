@@ -397,6 +397,10 @@ func (p *PhaseResolver) Act() error {
 	var soloWinnerUser string
 	quitters := map[dip.Nation]quitter{} // One per nation that wants to quit, with either dias or eliminated.
 	newPhaseStates := PhaseStates{}      // The new phase states to save if we want to prepare resolution of a new phase.
+	oldPhaseResult := &PhaseResult{      // A result object for the old phase to simplify collecting user scoped stats.
+		GameID:       p.Phase.GameID,
+		PhaseOrdinal: p.Phase.PhaseOrdinal,
+	}
 
 	for _, member := range p.Game.Members {
 		nat := member.Nation
@@ -452,6 +456,13 @@ func (p *PhaseResolver) Act() error {
 		autoDIAS := wantedDIAS || autoProbation
 		allReady = allReady && autoReady
 
+		// Update the old phase result object.
+		if hadOrders || wasReady {
+			oldPhaseResult.NonNMRUsers = append(oldPhaseResult.NonNMRUsers, member.User.Id)
+		} else {
+			oldPhaseResult.NMRUsers = append(oldPhaseResult.NMRUsers, member.User.Id)
+		}
+
 		// Overwrite DIAS but not eliminated with NMR.
 		if q := quitters[nat]; autoProbation && q.state != eliminatedState {
 			quitters[nat] = quitter{
@@ -489,6 +500,12 @@ func (p *PhaseResolver) Act() error {
 
 	if err := newPhase.NotifyMembers(p.Context, p.Game); err != nil {
 		log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
+		return err
+	}
+
+	// Save the old phase result.
+
+	if err := oldPhaseResult.Save(p.Context); err != nil {
 		return err
 	}
 
