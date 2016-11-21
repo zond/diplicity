@@ -535,8 +535,14 @@ func (p *PhaseResolver) Act() error {
 		nmrUsers := []string{}
 		eliminatedMembers := []dip.Nation{}
 		eliminatedUsers := []string{}
+		scores := []GameScore{}
 
 		for nat, q := range quitters {
+			scores = append(scores, GameScore{
+				UserId: q.member.User.Id,
+				Member: nat,
+				SCs:    scCounts[nat],
+			})
 			switch q.state {
 			case diasState:
 				diasMembers = append(diasMembers, nat)
@@ -564,7 +570,10 @@ func (p *PhaseResolver) Act() error {
 			NMRUsers:          nmrUsers,
 			EliminatedMembers: eliminatedMembers,
 			EliminatedUsers:   eliminatedUsers,
+			Scores:            scores,
+			CreatedAt:         time.Now(),
 		}
+		gameResult.AssignScores()
 		if err := gameResult.Save(p.Context); err != nil {
 			log.Errorf(p.Context, "Unable to save game result %v: %v; hope datastore gets fixed", PP(gameResult), err)
 			return err

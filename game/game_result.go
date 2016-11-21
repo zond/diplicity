@@ -1,6 +1,8 @@
 package game
 
 import (
+	"time"
+
 	"github.com/zond/diplicity/auth"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
@@ -14,6 +16,13 @@ const (
 	gameResultKind = "GameResult"
 )
 
+type GameScore struct {
+	UserId string
+	Member dip.Nation
+	SCs    int
+	Score  float64
+}
+
 type GameResult struct {
 	GameID            *datastore.Key
 	SoloWinnerMember  dip.Nation
@@ -24,6 +33,30 @@ type GameResult struct {
 	NMRUsers          []string
 	EliminatedMembers []dip.Nation
 	EliminatedUsers   []string
+	Scores            []GameScore
+	CreatedAt         time.Time
+}
+
+func (g *GameResult) AssignScores() {
+	if g.SoloWinnerMember != "" {
+		for i := range g.Scores {
+			if g.Scores[i].Member == g.SoloWinnerMember {
+				g.Scores[i].Score = 100
+			} else {
+				g.Scores[i].Score = 0
+			}
+		}
+	} else {
+		scoreSum := float64(0)
+		for i := range g.Scores {
+			g.Scores[i].Score = float64(g.Scores[i].SCs * g.Scores[i].SCs)
+			scoreSum += g.Scores[i].Score
+		}
+		ratio := 100 / scoreSum
+		for i := range g.Scores {
+			g.Scores[i].Score = g.Scores[i].Score * ratio
+		}
+	}
 }
 
 func GameResultID(ctx context.Context, gameID *datastore.Key) *datastore.Key {
