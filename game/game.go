@@ -216,7 +216,7 @@ func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit 
 	return gamesItem
 }
 
-type GameData struct {
+type Game struct {
 	ID                 *datastore.Key `datastore:"-"`
 	Started            bool           // Game has started.
 	Closed             bool           // Game is no longer joinable..
@@ -225,12 +225,8 @@ type GameData struct {
 	Variant            string         `methods:"POST"`
 	PhaseLengthMinutes time.Duration  `methods:"POST"`
 	NMembers           int
+	Members            []Member
 	CreatedAt          time.Time
-}
-
-type Game struct {
-	GameData `methods:"POST"`
-	Members  []Member
 }
 
 func (g *Game) GetMember(userID string) (*Member, bool) {
@@ -242,11 +238,11 @@ func (g *Game) GetMember(userID string) (*Member, bool) {
 	return nil, false
 }
 
-func (g GameData) Leavable() bool {
+func (g *Game) Leavable() bool {
 	return !g.Started
 }
 
-func (g GameData) Joinable() bool {
+func (g *Game) Joinable() bool {
 	return !g.Closed && g.NMembers < len(variants.Variants[g.Variant].Nations)
 }
 
@@ -270,23 +266,23 @@ func (g *Game) Item(r Request) *Item {
 				RouteParams: []string{"game_id", g.ID.Encode()},
 			}))
 		}
-	}
-	if g.Started {
-		gameItem.AddLink(r.NewLink(Link{
-			Rel:         "phases",
-			Route:       ListPhasesRoute,
-			RouteParams: []string{"game_id", g.ID.Encode()},
-		}))
-	}
-	if g.Finished {
-		gameItem.AddLink(r.NewLink(GameResultResource.Link("game-result", Load, []string{"game_id", g.ID.Encode()})))
-	}
-	if g.Started {
-		gameItem.AddLink(r.NewLink(Link{
-			Rel:         "game-states",
-			Route:       ListGameStatesRoute,
-			RouteParams: []string{"game_id", g.ID.Encode()},
-		}))
+		if g.Started {
+			gameItem.AddLink(r.NewLink(Link{
+				Rel:         "phases",
+				Route:       ListPhasesRoute,
+				RouteParams: []string{"game_id", g.ID.Encode()},
+			}))
+		}
+		if g.Finished {
+			gameItem.AddLink(r.NewLink(GameResultResource.Link("game-result", Load, []string{"game_id", g.ID.Encode()})))
+		}
+		if g.Started {
+			gameItem.AddLink(r.NewLink(Link{
+				Rel:         "game-states",
+				Route:       ListGameStatesRoute,
+				RouteParams: []string{"game_id", g.ID.Encode()},
+			}))
+		}
 	}
 	return gameItem
 }
