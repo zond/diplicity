@@ -99,7 +99,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		return nil, err
 	}
 	filterList := Games{*game}
-	if err := filterList.RemoveBanned(ctx, user.Id); err != nil {
+	if _, err := filterList.RemoveBanned(ctx, user.Id); err != nil {
 		return nil, err
 	}
 	if len(filterList) == 0 {

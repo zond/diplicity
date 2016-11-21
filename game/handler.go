@@ -143,7 +143,7 @@ func (req *gamesReq) handle(private bool) error {
 	games := Games{}
 	for err == nil && len(games) < req.limit {
 		err = req.refill(&games)
-		if filtErr := games.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
+		if _, filtErr := games.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
 			return filtErr
 		}
 	}
