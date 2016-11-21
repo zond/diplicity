@@ -161,6 +161,18 @@ func (e *Env) GetRoute(route string) *Req {
 	}
 }
 
+func (e *Env) GetURL(u string) *Req {
+	pu, err := url.Parse(u)
+	if err != nil {
+		panic(err)
+	}
+	return &Req{
+		env:    e,
+		url:    pu,
+		method: "GET",
+	}
+}
+
 func (r *Req) RouteParams(routeParams ...string) *Req {
 	r.routeParams = routeParams
 	return r

@@ -2,6 +2,7 @@ package diptest
 
 import (
 	"fmt"
+	"net/url"
 	"testing"
 
 	"github.com/zond/diplicity/game"
@@ -171,9 +172,19 @@ func TestBans(t *testing.T) {
 func testBanEfficacy(t *testing.T) {
 	newEnv := NewEnv().SetUID(String("fake"))
 
+	gameURLString := startedGames[0].Find("self", []string{"Links"}, []string{"Rel"}).GetValue("URL").(string)
+	gameURL, err := url.Parse(gameURLString)
+	if err != nil {
+		panic(err)
+	}
+	gameURL.RawQuery = ""
+
 	newEnv.GetRoute(game.IndexRoute).Success().
 		Follow("started-games", "Links").Success().
 		Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	newEnv.GetURL(gameURL.String()).Success().
+		AssertNil("Properties", "ActiveBans")
 
 	startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 		Follow("bans", "Links").Success().
@@ -185,6 +196,9 @@ func testBanEfficacy(t *testing.T) {
 		Follow("started-games", "Links").Success().
 		AssertNotFind(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
+	newEnv.GetURL(gameURL.String()).Success().
+		Find(newEnv.GetUID(), []string{"Properties", "ActiveBans"}, []string{"UserIds"}, nil)
+
 	newGameDesc := String("game")
 	newEnv.GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").
@@ -194,9 +208,22 @@ func testBanEfficacy(t *testing.T) {
 	}).Success().
 		AssertEq(newGameDesc, "Properties", "Desc")
 
+	newGameURLString := newEnv.GetRoute(game.IndexRoute).Success().
+		Follow("my-staging-games", "Links").Success().
+		Find(newGameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+		Find("self", []string{"Links"}, []string{"Rel"}).GetValue("URL").(string)
+	newGameURL, err := url.Parse(newGameURLString)
+	if err != nil {
+		panic(err)
+	}
+
 	startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 		Follow("open-games", "Links").Success().
 		AssertNotFind(newGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	banView := startedGameEnvs[0].GetURL(newGameURL.String()).Success()
+	banView.Find(startedGameEnvs[0].GetUID(), []string{"Properties", "ActiveBans"}, []string{"UserIds"}, nil)
+	banView.AssertNotFind("join", []string{"Links"}, []string{"Rel"})
 
 	startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 		Follow("bans", "Links").Success().
@@ -210,4 +237,8 @@ func testBanEfficacy(t *testing.T) {
 	startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 		Follow("open-games", "Links").Success().
 		Find(newGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	unbanView := startedGameEnvs[0].GetURL(newGameURL.String()).Success()
+	unbanView.AssertNil("Properties", "ActiveBans")
+	unbanView.Find("join", []string{"Links"}, []string{"Rel"})
 }

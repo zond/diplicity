@@ -148,7 +148,7 @@ func (g *Games) RemoveBanned(ctx context.Context, uid string) ([][]Ban, error) {
 
 	if err == nil {
 		*g = Games{}
-		return gameBans, nil
+		return [][]Ban{bans}, nil
 	}
 
 	if err == datastore.ErrNoSuchEntity {
@@ -226,6 +226,7 @@ type Game struct {
 	PhaseLengthMinutes time.Duration  `methods:"POST"`
 	NMembers           int
 	Members            []Member
+	ActiveBans         []Ban `datastore:"-"`
 	CreatedAt          time.Time
 }
 
@@ -243,7 +244,7 @@ func (g *Game) Leavable() bool {
 }
 
 func (g *Game) Joinable() bool {
-	return !g.Closed && g.NMembers < len(variants.Variants[g.Variant].Nations)
+	return !g.Closed && g.NMembers < len(variants.Variants[g.Variant].Nations) && len(g.ActiveBans) == 0
 }
 
 func (g *Game) Item(r Request) *Item {
@@ -411,6 +412,13 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 	if _, isMember := game.GetMember(user.Id); !isMember {
 		game.Redact()
 	}
+
+	filtered := Games{*game}
+	activeBans, err := filtered.RemoveBanned(ctx, user.Id)
+	if err != nil {
+		return nil, err
+	}
+	game.ActiveBans = activeBans[0]
 
 	return game, nil
 }
