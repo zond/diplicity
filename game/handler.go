@@ -3,7 +3,9 @@ package game
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
@@ -122,14 +124,15 @@ type gamesHandler struct {
 }
 
 type gamesReq struct {
-	ctx       context.Context
-	w         ResponseWriter
-	r         Request
-	user      *auth.User
-	userStats *UserStats
-	iter      *datastore.Iterator
-	limit     int
-	h         *gamesHandler
+	ctx           context.Context
+	w             ResponseWriter
+	r             Request
+	user          *auth.User
+	userStats     *UserStats
+	iter          *datastore.Iterator
+	limit         int
+	h             *gamesHandler
+	detailFilters []func(g *Game) bool
 }
 
 func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
@@ -144,6 +147,33 @@ func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
 		return nil, nil
 	}
 	return nil, err
+}
+
+func (req *gamesReq) intervalFilter(fieldName, paramName string) func(*Game) bool {
+	parm := req.r.Req().URL.Query().Get(paramName)
+	if parm == "" {
+		return nil
+	}
+
+	parts := strings.Split(parm, ":")
+	if len(parts) != 2 {
+		return nil
+	}
+
+	min, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return nil
+	}
+
+	max, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		return nil
+	}
+
+	return func(g *Game) bool {
+		cmp := reflect.ValueOf(g).Elem().FieldByName(fieldName).Float()
+		return cmp >= min && cmp <= max
+	}
 }
 
 func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*gamesReq, error) {
@@ -168,7 +198,8 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*game
 	}
 	req.userStats = userStats
 
-	limit, err := strconv.ParseInt(r.Req().URL.Query().Get("limit"), 10, 64)
+	uq := r.Req().URL.Query()
+	limit, err := strconv.ParseInt(uq.Get("limit"), 10, 64)
 	if err != nil || limit > maxLimit {
 		limit = maxLimit
 		err = nil
@@ -180,11 +211,31 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*game
 		q = q.Filter("Members.User.Id=", user.Id)
 	}
 
-	if variantFilter := r.Req().URL.Query().Get("variant"); variantFilter != "" {
-		q = q.Filter("Variant=", variantFilter)
+	if variantFilter := uq.Get("variant"); variantFilter != "" {
+		req.detailFilters = append(req.detailFilters, func(g *Game) bool {
+			return g.Variant == variantFilter
+		})
+	}
+	if f := req.intervalFilter("MinReliability", "min-reliability"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
+	}
+	if f := req.intervalFilter("MinQuickness", "min-quickness"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
+	}
+	if f := req.intervalFilter("MaxHater", "max-hater"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
+	}
+	if f := req.intervalFilter("MaxHated", "max-hated"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
+	}
+	if f := req.intervalFilter("MinRating", "min-rating"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
+	}
+	if f := req.intervalFilter("MaxRating", "max-rating"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
 	}
 
-	cursor := r.Req().URL.Query().Get("cursor")
+	cursor := uq.Get("cursor")
 	if cursor == "" {
 		req.iter = q.Run(req.ctx)
 		return req, nil
@@ -198,7 +249,7 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*game
 	return req, nil
 }
 
-func fetch(iter *datastore.Iterator, max int) (Games, error) {
+func (h *gamesHandler) fetch(iter *datastore.Iterator, max int) (Games, error) {
 	var err error
 	result := make(Games, 0, max)
 	for err == nil && len(result) < max {
@@ -216,8 +267,9 @@ func (req *gamesReq) handle(private bool) error {
 	games := make(Games, 0, req.limit)
 	for err == nil && len(games) < req.limit {
 		var nextBatch Games
-		nextBatch, err = fetch(req.iter, maxLimit)
+		nextBatch, err = req.h.fetch(req.iter, maxLimit)
 		nextBatch.RemoveFiltered(req.userStats)
+		nextBatch.RemoveCustomFiltered(req.detailFilters)
 		if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
 			return filtErr
 		}

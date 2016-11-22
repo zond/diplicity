@@ -128,6 +128,23 @@ var GameResource = &Resource{
 
 type Games []Game
 
+func (g *Games) RemoveCustomFiltered(filters []func(g *Game) bool) {
+	newGames := make(Games, 0, len(*g))
+	for _, game := range *g {
+		isOK := true
+		for _, filter := range filters {
+			if !filter(&game) {
+				isOK = false
+				break
+			}
+		}
+		if isOK {
+			newGames = append(newGames, game)
+		}
+	}
+	*g = newGames
+}
+
 func (g *Games) RemoveFiltered(userStats *UserStats) [][]string {
 	failedRequirements := make([][]string, len(*g))
 	newGames := make(Games, 0, len(*g))
