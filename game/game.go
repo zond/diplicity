@@ -128,6 +128,40 @@ var GameResource = &Resource{
 
 type Games []Game
 
+func (g *Games) RemoveFiltered(userStats *UserStats) [][]string {
+	failedRequirements := make([][]string, len(*g))
+	newGames := make(Games, 0, len(*g))
+	for i, game := range *g {
+		if game.MaxHated != 0 && userStats.Hated > game.MaxHated {
+			failedRequirements[i] = append(failedRequirements[i], "Hated")
+			continue
+		}
+		if game.MaxHater != 0 && userStats.Hater > game.MaxHater {
+			failedRequirements[i] = append(failedRequirements[i], "Hater")
+			continue
+		}
+		if game.MaxRating != 0 && userStats.Glicko.PracticalRating > game.MaxRating {
+			failedRequirements[i] = append(failedRequirements[i], "MaxRating")
+			continue
+		}
+		if game.MinRating != 0 && userStats.Glicko.PracticalRating < game.MinRating {
+			failedRequirements[i] = append(failedRequirements[i], "MinRating")
+			continue
+		}
+		if game.MinReliability != 0 && userStats.Reliability < game.MinReliability {
+			failedRequirements[i] = append(failedRequirements[i], "MinReliability")
+			continue
+		}
+		if game.MinQuickness != 0 && userStats.Quickness < game.MinQuickness {
+			failedRequirements[i] = append(failedRequirements[i], "MinQuickness")
+			continue
+		}
+		newGames = append(newGames, game)
+	}
+	*g = newGames
+	return failedRequirements
+}
+
 func (g *Games) RemoveBanned(ctx context.Context, uid string) ([][]Ban, error) {
 	gameBans := make([][]Ban, len(*g))
 
@@ -217,18 +251,30 @@ func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit 
 }
 
 type Game struct {
-	ID                 *datastore.Key `datastore:"-"`
-	Started            bool           // Game has started.
-	Closed             bool           // Game is no longer joinable..
-	Finished           bool           // Game has reached its end.
-	Desc               string         `methods:"POST" datastore:",noindex"`
-	Variant            string         `methods:"POST"`
-	PhaseLengthMinutes time.Duration  `methods:"POST"`
-	NMembers           int
-	Members            []Member
-	ActiveBans         []Ban `datastore:"-"`
-	CreatedAt          time.Time
-	FinishedAt         time.Time
+	ID *datastore.Key `datastore:"-"`
+
+	Started  bool // Game has started.
+	Closed   bool // Game is no longer joinable..
+	Finished bool // Game has reached its end.
+
+	Desc               string        `methods:"POST" datastore:",noindex"`
+	Variant            string        `methods:"POST"`
+	PhaseLengthMinutes time.Duration `methods:"POST"`
+	MaxHated           float64       `methods:"POST"`
+	MaxHater           float64       `methods:"POST"`
+	MinRating          float64       `methods:"POST"`
+	MaxRating          float64       `methods:"POST"`
+	MinReliability     float64       `methods:"POST"`
+	MinQuickness       float64       `methods:"POST"`
+
+	NMembers int
+	Members  []Member
+
+	ActiveBans         []Ban    `datastore:"-"`
+	FailedRequirements []string `datastore:"-"`
+
+	CreatedAt  time.Time
+	FinishedAt time.Time
 }
 
 func (g *Game) GetMember(userID string) (*Member, bool) {
@@ -245,7 +291,7 @@ func (g *Game) Leavable() bool {
 }
 
 func (g *Game) Joinable() bool {
-	return !g.Closed && g.NMembers < len(variants.Variants[g.Variant].Nations) && len(g.ActiveBans) == 0
+	return !g.Closed && g.NMembers < len(variants.Variants[g.Variant].Nations) && len(g.ActiveBans) == 0 && len(g.FailedRequirements) == 0
 }
 
 func (g *Game) Item(r Request) *Item {
@@ -323,6 +369,16 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	game.CreatedAt = time.Now()
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		userStats := &UserStats{}
+		if err := datastore.Get(ctx, UserStatsID(ctx, user.Id), userStats); err == datastore.ErrNoSuchEntity {
+			userStats.UserId = user.Id
+		} else if err != nil {
+			return err
+		}
+		filtered := Games{*game}
+		if failedRequirements := filtered.RemoveFiltered(userStats); len(failedRequirements[0]) > 0 {
+			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), 400}
+		}
 		if err := game.Save(ctx); err != nil {
 			return err
 		}
@@ -331,7 +387,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 		game.Members = []Member{member}
 		return game.Save(ctx)
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}
 
@@ -405,8 +461,18 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 	}
 
 	game := &Game{}
-	if err := datastore.Get(ctx, gameID, game); err != nil {
-		return nil, err
+	userStats := &UserStats{}
+	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, UserStatsID(ctx, user.Id)}, []interface{}{game, userStats}); err != nil {
+		if merr, ok := err.(appengine.MultiError); ok {
+			if merr[0] == nil && merr[1] == datastore.ErrNoSuchEntity {
+				userStats.UserId = user.Id
+				err = nil
+			} else {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 	game.ID = gameID
 
@@ -420,6 +486,9 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 		return nil, err
 	}
 	game.ActiveBans = activeBans[0]
+
+	filtered = Games{*game}
+	game.FailedRequirements = filtered.RemoveFiltered(userStats)[0]
 
 	return game, nil
 }

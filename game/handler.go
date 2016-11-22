@@ -52,6 +52,7 @@ const (
 	ListTopHaterPlayersRoute    = "ListTopHaterPlayers"
 	ListTopQuickPlayersRoute    = "ListTopQuickPlayers"
 	DevResolvePhaseTimeoutRoute = "DevResolvePhaseTimeout"
+	DevUserStatsUpdateRoute     = "DevUserStatsUpdate"
 	ReceiveMailRoute            = "ReceiveMail"
 )
 
@@ -121,13 +122,14 @@ type gamesHandler struct {
 }
 
 type gamesReq struct {
-	ctx   context.Context
-	w     ResponseWriter
-	r     Request
-	user  *auth.User
-	iter  *datastore.Iterator
-	limit int
-	h     *gamesHandler
+	ctx       context.Context
+	w         ResponseWriter
+	r         Request
+	user      *auth.User
+	userStats *UserStats
+	iter      *datastore.Iterator
+	limit     int
+	h         *gamesHandler
 }
 
 func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
@@ -157,6 +159,14 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*game
 		return nil, HTTPErr{"unauthorized", 401}
 	}
 	req.user = user
+
+	userStats := &UserStats{}
+	if err := datastore.Get(req.ctx, UserStatsID(req.ctx, user.Id), userStats); err == datastore.ErrNoSuchEntity {
+		userStats.UserId = user.Id
+	} else if err != nil {
+		return nil, err
+	}
+	req.userStats = userStats
 
 	limit, err := strconv.ParseInt(r.Req().URL.Query().Get("limit"), 10, 64)
 	if err != nil || limit > maxLimit {
@@ -188,25 +198,33 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*game
 	return req, nil
 }
 
-func (req *gamesReq) refill(games *Games) error {
+func fetch(iter *datastore.Iterator, max int) (Games, error) {
 	var err error
-	for err == nil && len(*games) < req.limit {
+	result := make(Games, 0, max)
+	for err == nil && len(result) < max {
 		game := Game{}
-		game.ID, err = req.iter.Next(&game)
+		game.ID, err = iter.Next(&game)
 		if err == nil {
-			*games = append(*games, game)
+			result = append(result, game)
 		}
 	}
-	return err
+	return result, err
 }
 
 func (req *gamesReq) handle(private bool) error {
 	var err error
-	games := Games{}
+	games := make(Games, 0, req.limit)
 	for err == nil && len(games) < req.limit {
-		err = req.refill(&games)
-		if _, filtErr := games.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
+		var nextBatch Games
+		nextBatch, err = fetch(req.iter, maxLimit)
+		nextBatch.RemoveFiltered(req.userStats)
+		if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
 			return filtErr
+		}
+		if len(nextBatch) > req.limit-len(games) {
+			games = append(games, nextBatch[:req.limit-len(games)]...)
+		} else {
+			games = append(games, nextBatch...)
 		}
 	}
 
@@ -328,6 +346,7 @@ func handleConfigure(w ResponseWriter, r Request) error {
 func SetupRouter(r *mux.Router) {
 	router = r
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
+	Handle(r, "/_ah/mail", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channel/{channel_members}/Messages", []string{"GET"}, ListMessagesRoute, listMessages)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
@@ -344,7 +363,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Games/My/Started", []string{"GET"}, MyStartedGamesRoute, startedGamesHandler.handlePrivate)
 	Handle(r, "/Games/My/Finished", []string{"GET"}, MyFinishedGamesRoute, finishedGamesHandler.handlePrivate)
 	Handle(r, "/User/{user_id}/Bans", []string{"GET"}, ListBansRoute, listBans)
-	Handle(r, "/_ah/mail", []string{"POST"}, ReceiveMailRoute, receiveMail)
+	Handle(r, "/User/{user_id}/Stats/_dev_update", []string{"PUT"}, DevUserStatsUpdateRoute, devUserStatsUpdate)
 	Handle(r, "/Users/TopRated", []string{"GET"}, ListTopRatedPlayersRoute, topRatedPlayersHandler.handle)
 	Handle(r, "/Users/TopReliable", []string{"GET"}, ListTopReliablePlayersRoute, topReliablePlayersHandler.handle)
 	Handle(r, "/Users/TopHated", []string{"GET"}, ListTopHatedPlayersRoute, topHatedPlayersHandler.handle)

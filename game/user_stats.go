@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"time"
@@ -147,6 +148,25 @@ type UserStats struct {
 var UserStatsResource = &Resource{
 	Load:     loadUserStats,
 	FullPath: "/User/{user_id}/Stats",
+}
+
+func devUserStatsUpdate(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		return fmt.Errorf("only accessible in local dev mode")
+	}
+
+	userStats := &UserStats{}
+	if err := json.NewDecoder(r.Req().Body).Decode(userStats); err != nil {
+		return err
+	}
+
+	if _, err := datastore.Put(ctx, UserStatsID(ctx, r.Vars()["user_id"]), userStats); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func loadUserStats(w ResponseWriter, r Request) (*UserStats, error) {
