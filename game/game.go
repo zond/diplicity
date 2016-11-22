@@ -248,7 +248,14 @@ func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit 
 		},
 		[]string{
 			"Filters",
-			"To show only games with a given variant, add a `variant` query parameter.",
+			"To show only games matching certain criteria, add query parameter filters.",
+			"`variant=X` filters on variant X.",
+			"`min-reliability=X:Y` filters on min reliability between X and Y.",
+			"`min-quickness=X:Y` filters on min quickness between X and Y.",
+			"`max-hated=X:Y` filters on max hated between X and Y.",
+			"`max-hater=X:Y` filters on max hater between X and Y.",
+			"`min-rating=X:Y` filters on min rating between X and Y.",
+			"`max-rating=X:Y` filters on max rating between X and Y.",
 		},
 	}).AddLink(r.NewLink(Link{
 		Rel:   "self",
