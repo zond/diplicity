@@ -104,27 +104,131 @@ func TestGameListFilters(t *testing.T) {
 	env2.GetURL(gameURL.String()).Success().
 		AssertNil("Properties", "FailedRequirements")
 
+	for _, f := range []filter{
+		{
+			"variant",
+			"Classical",
+			true,
+		},
+		{
+			"variant",
+			"blapp",
+			false,
+		},
+		{
+			"min-reliability",
+			"5:15",
+			true,
+		},
+		{
+			"min-reliability",
+			"0:5",
+			false,
+		},
+		{
+			"min-reliability",
+			"15:20",
+			false,
+		},
+		{
+			"min-quickness",
+			"5:15",
+			true,
+		},
+		{
+			"min-quickness",
+			"0:5",
+			false,
+		},
+		{
+			"min-quickness",
+			"15:20",
+			false,
+		},
+		{
+			"min-rating",
+			"5:15",
+			true,
+		},
+		{
+			"min-rating",
+			"0:5",
+			false,
+		},
+		{
+			"min-rating",
+			"15:20",
+			false,
+		},
+		{
+			"max-rating",
+			"95:115",
+			true,
+		},
+		{
+			"max-rating",
+			"10:15",
+			false,
+		},
+		{
+			"max-rating",
+			"125:130",
+			false,
+		},
+		{
+			"max-hater",
+			"5:15",
+			true,
+		},
+		{
+			"max-hater",
+			"0:5",
+			false,
+		},
+		{
+			"max-hater",
+			"15:25",
+			false,
+		},
+		{
+			"max-hated",
+			"5:15",
+			true,
+		},
+		{
+			"max-hated",
+			"0:5",
+			false,
+		},
+		{
+			"max-hated",
+			"15:25",
+			false,
+		},
+	} {
+		res := env2.GetRoute(game.OpenGamesRoute).QueryParams(url.Values{
+			f.name: []string{f.value},
+		}).Success()
+		if f.wantFind {
+			res.Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		} else {
+			res.AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		}
+	}
+}
+
+type filter struct {
+	name     string
+	value    string
+	wantFind bool
 }
 
 func TestGameLists(t *testing.T) {
 	env := NewEnv().SetUID(String("fake"))
-	t.Run("TestWithoutFilters", func(t *testing.T) {
-		env.GetRoute(game.MyStagingGamesRoute).Success()
-		env.GetRoute(game.MyStartedGamesRoute).Success()
-		env.GetRoute(game.MyFinishedGamesRoute).Success()
-		env.GetRoute(game.OpenGamesRoute).Success()
-		env.GetRoute(game.StartedGamesRoute).Success()
-		env.GetRoute(game.FinishedGamesRoute).Success()
-	})
-	qp := url.Values{
-		"variant": []string{"Classical"},
-	}
-	t.Run("TestWithVariantFilter", func(t *testing.T) {
-		env.GetRoute(game.MyStagingGamesRoute).QueryParams(qp).Success()
-		env.GetRoute(game.MyStartedGamesRoute).QueryParams(qp).Success()
-		env.GetRoute(game.MyFinishedGamesRoute).QueryParams(qp).Success()
-		env.GetRoute(game.OpenGamesRoute).QueryParams(qp).Success()
-		env.GetRoute(game.StartedGamesRoute).QueryParams(qp).Success()
-		env.GetRoute(game.FinishedGamesRoute).QueryParams(qp).Success()
-	})
+	env.GetRoute(game.MyStagingGamesRoute).Success()
+	env.GetRoute(game.MyStartedGamesRoute).Success()
+	env.GetRoute(game.MyFinishedGamesRoute).Success()
+	env.GetRoute(game.OpenGamesRoute).Success()
+	env.GetRoute(game.StartedGamesRoute).Success()
+	env.GetRoute(game.FinishedGamesRoute).Success()
 }
