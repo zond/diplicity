@@ -23,8 +23,8 @@ To enable debugging the JSON output in a browser, adding the query parameter `ac
 To run it locally
 
 1. Clone this repo.
-2. Run `go get -v ./...` in the root directory.
-3. Install the [App Engine SDK for Go](https://cloud.google.com/appengine/docs/go/download).
+2. Install the [App Engine SDK for Go](https://cloud.google.com/appengine/docs/go/download).
+3. Run `go get -v ./...` in the root directory.
 4. Run `goapp serve` in the `app` directory.
 
 ### Faking user ID
