@@ -153,6 +153,14 @@ type Req struct {
 	body        []byte
 }
 
+func (e *Env) PutRoute(route string) *Req {
+	return &Req{
+		env:    e,
+		route:  route,
+		method: "PUT",
+	}
+}
+
 func (e *Env) GetRoute(route string) *Req {
 	return &Req{
 		env:    e,
