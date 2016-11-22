@@ -349,6 +349,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Users/TopReliable", []string{"GET"}, ListTopReliablePlayersRoute, topReliablePlayersHandler.handle)
 	Handle(r, "/Users/TopHated", []string{"GET"}, ListTopHatedPlayersRoute, topHatedPlayersHandler.handle)
 	Handle(r, "/Users/TopHater", []string{"GET"}, ListTopHaterPlayersRoute, topHaterPlayersHandler.handle)
+	Handle(r, "/Users/TopQuick", []string{"GET"}, ListTopQuickPlayersRoute, topQuickPlayersHandler.handle)
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)
