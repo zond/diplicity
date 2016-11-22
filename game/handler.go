@@ -46,9 +46,71 @@ const (
 	ListChannelsRoute           = "ListChannels"
 	ListMessagesRoute           = "ListMessages"
 	ListBansRoute               = "ListBans"
+	ListTopRatedPlayersRoute    = "ListTopRatedPlayers"
+	ListTopReliablePlayersRoute = "ListTopReliablePlayers"
+	ListTopHatedPlayersRoute    = "ListTopHatedPlayers"
+	ListTopHaterPlayersRoute    = "ListTopHaterPlayers"
+	ListTopQuickPlayersRoute    = "ListTopQuickPlayers"
 	DevResolvePhaseTimeoutRoute = "DevResolvePhaseTimeout"
 	ReceiveMailRoute            = "ReceiveMail"
 )
+
+type userStatsHandler struct {
+	query *datastore.Query
+	name  string
+	desc  []string
+	route string
+}
+
+func (h *userStatsHandler) handle(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	_, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthorized", 401}
+	}
+
+	limit, err := strconv.ParseInt(r.Req().URL.Query().Get("limit"), 10, 64)
+	if err != nil || limit > maxLimit {
+		limit = maxLimit
+		err = nil
+	}
+
+	var iter *datastore.Iterator
+
+	cursor := r.Req().URL.Query().Get("cursor")
+	if cursor == "" {
+		iter = h.query.Run(ctx)
+	} else {
+		decoded, err := datastore.DecodeCursor(cursor)
+		if err != nil {
+			return err
+		}
+		iter = h.query.Start(decoded).Run(ctx)
+	}
+
+	stats := UserStatsSlice{}
+	for err == nil && len(stats) < int(limit) {
+		stat := &UserStats{}
+		_, err = iter.Next(stat)
+		if err == nil {
+			stats = append(stats, *stat)
+		}
+	}
+
+	var cursP *datastore.Cursor
+	if err == nil {
+		curs, err := iter.Cursor()
+		if err != nil {
+			return err
+		}
+		cursP = &curs
+	}
+
+	w.SetContent(stats.Item(r, cursP, limit, h.name, h.desc, h.route))
+
+	return nil
+}
 
 type gamesHandler struct {
 	query   *datastore.Query
@@ -200,6 +262,36 @@ var (
 		desc:  []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
 		route: MyStagingGamesRoute,
 	}
+	topRatedPlayersHandler = userStatsHandler{
+		query: datastore.NewQuery(userStatsKind).Order("-Glicko.PracticalRating"),
+		name:  "top-rated-players",
+		desc:  []string{"Top rated alayers", "Players sorted by PracticalGlicko (lowest bound of their rating: rating - 2 * deviation)"},
+		route: ListTopRatedPlayersRoute,
+	}
+	topReliablePlayersHandler = userStatsHandler{
+		query: datastore.NewQuery(userStatsKind).Order("-Reliability"),
+		name:  "top-reliable-players",
+		desc:  []string{"Top reliable players", "Players sorted by Reliability"},
+		route: ListTopReliablePlayersRoute,
+	}
+	topHatedPlayersHandler = userStatsHandler{
+		query: datastore.NewQuery(userStatsKind).Order("-Hated"),
+		name:  "top-hated-players",
+		desc:  []string{"Top hated players", "Players sorted by Hated"},
+		route: ListTopHatedPlayersRoute,
+	}
+	topHaterPlayersHandler = userStatsHandler{
+		query: datastore.NewQuery(userStatsKind).Order("-Hater"),
+		name:  "top-hater-players",
+		desc:  []string{"Top hater players", "Players sorted by Hater"},
+		route: ListTopHaterPlayersRoute,
+	}
+	topQuickPlayersHandler = userStatsHandler{
+		query: datastore.NewQuery(userStatsKind).Order("-Quickness"),
+		name:  "top-quick-players",
+		desc:  []string{"Top quick players", "Players sorted by Quickness"},
+		route: ListTopQuickPlayersRoute,
+	}
 )
 
 type configuration struct {
@@ -253,6 +345,10 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Games/My/Finished", []string{"GET"}, MyFinishedGamesRoute, finishedGamesHandler.handlePrivate)
 	Handle(r, "/User/{user_id}/Bans", []string{"GET"}, ListBansRoute, listBans)
 	Handle(r, "/_ah/mail", []string{"POST"}, ReceiveMailRoute, receiveMail)
+	Handle(r, "/Users/TopRated", []string{"GET"}, ListTopRatedPlayersRoute, topRatedPlayersHandler.handle)
+	Handle(r, "/Users/TopReliable", []string{"GET"}, ListTopReliablePlayersRoute, topReliablePlayersHandler.handle)
+	Handle(r, "/Users/TopHated", []string{"GET"}, ListTopHatedPlayersRoute, topHatedPlayersHandler.handle)
+	Handle(r, "/Users/TopHater", []string{"GET"}, ListTopHaterPlayersRoute, topHaterPlayersHandler.handle)
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)

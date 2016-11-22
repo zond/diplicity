@@ -1,6 +1,8 @@
 package game
 
 import (
+	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/zond/diplicity/auth"
@@ -49,6 +51,12 @@ func updateUserStat(ctx context.Context, userId string) error {
 		return err
 	}
 	userStats.Glicko = *latestGlicko
+	user := &auth.User{}
+	if err := datastore.Get(ctx, auth.UserID(ctx, userId), user); err != nil {
+		log.Errorf(ctx, "Unable to load user for %q: %v; hope datastore gets fixed", userId, err)
+		return err
+	}
+	userStats.User = *user
 	if _, err := datastore.Put(ctx, userStats.ID(ctx), userStats); err != nil {
 		log.Errorf(ctx, "Unable to store stats %v: %v; hope datastore gets fixed", userStats, err)
 		return err
@@ -84,6 +92,32 @@ func updateUserStats(ctx context.Context, uids []string) error {
 	return nil
 }
 
+type UserStatsSlice []UserStats
+
+func (u UserStatsSlice) Item(r Request, cursor *datastore.Cursor, limit int64, name string, desc []string, route string) *Item {
+	statsItems := make(List, len(u))
+	for i := range u {
+		statsItems[i] = u[i].Item(r)
+	}
+	statsItem := NewItem(statsItems).SetName(name).SetDesc([][]string{
+		desc,
+	}).AddLink(r.NewLink(Link{
+		Rel:   "self",
+		Route: route,
+	}))
+	if cursor != nil {
+		statsItem.AddLink(r.NewLink(Link{
+			Rel:   "next",
+			Route: route,
+			QueryParams: url.Values{
+				"cursor": []string{cursor.String()},
+				"limit":  []string{fmt.Sprint(limit)},
+			},
+		}))
+	}
+	return statsItem
+}
+
 type UserStats struct {
 	UserId string
 
@@ -107,6 +141,7 @@ type UserStats struct {
 	Hater      float64
 
 	Glicko Glicko
+	User   auth.User
 }
 
 var UserStatsResource = &Resource{
@@ -117,18 +152,14 @@ var UserStatsResource = &Resource{
 func loadUserStats(w ResponseWriter, r Request) (*UserStats, error) {
 	ctx := appengine.NewContext(r.Req())
 
-	user, ok := r.Values()["user"].(*auth.User)
+	_, ok := r.Values()["user"].(*auth.User)
 	if !ok {
 		return nil, HTTPErr{"unauthorized", 401}
 	}
 
-	if user.Id != r.Vars()["user_id"] {
-		return nil, HTTPErr{"can only load owned stats", 403}
-	}
-
 	userStats := &UserStats{}
-	if err := datastore.Get(ctx, UserStatsID(ctx, user.Id), userStats); err == datastore.ErrNoSuchEntity {
-		userStats.UserId = user.Id
+	if err := datastore.Get(ctx, UserStatsID(ctx, r.Vars()["user_id"]), userStats); err == datastore.ErrNoSuchEntity {
+		userStats.UserId = r.Vars()["user_id"]
 	} else if err != nil {
 		return nil, err
 	}
@@ -137,6 +168,7 @@ func loadUserStats(w ResponseWriter, r Request) (*UserStats, error) {
 }
 
 func (u *UserStats) Item(r Request) *Item {
+	u.User.Email = ""
 	return NewItem(u).SetName("user-stats").AddLink(r.NewLink(UserStatsResource.Link("self", Load, []string{"user_id", u.UserId})))
 }
 

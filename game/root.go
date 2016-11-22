@@ -69,6 +69,21 @@ func handleIndex(w ResponseWriter, r Request) error {
 				"redirect-to": []string{"/"},
 			},
 		})).AddLink(r.NewLink(Link{
+			Rel:   "top-rated-players",
+			Route: ListTopRatedPlayersRoute,
+		})).AddLink(r.NewLink(Link{
+			Rel:   "top-reliable-players",
+			Route: ListTopReliablePlayersRoute,
+		})).AddLink(r.NewLink(Link{
+			Rel:   "top-hated-players",
+			Route: ListTopHatedPlayersRoute,
+		})).AddLink(r.NewLink(Link{
+			Rel:   "top-hater-players",
+			Route: ListTopHaterPlayersRoute,
+		})).AddLink(r.NewLink(Link{
+			Rel:   "top-quick-players",
+			Route: ListTopQuickPlayersRoute,
+		})).AddLink(r.NewLink(Link{
 			Rel:   "my-staging-games",
 			Route: MyStagingGamesRoute,
 		})).AddLink(r.NewLink(Link{
