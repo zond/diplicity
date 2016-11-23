@@ -14,4 +14,4 @@ test:
     - sh -c "while ! curl -s -o /dev/null http://localhost:8080; do echo Waiting; sleep 1; done"
     - sh -c "cd diptest && env GOROOT=$HOME/golang $HOME/golang/bin/go test -v"
 
-    
+   
