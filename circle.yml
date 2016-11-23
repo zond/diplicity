@@ -1,11 +1,13 @@
 dependencies:
   cache_directories:
-    - "~/go_appengine" # relative to the user's home directory
+    - "~/go_appengine"
+    - "~/golang"
   override:
-    - sh -c "go get -v ./... || true"
+    - ./maybe_install_go.sh
+    - sh -c "$HOME/golang/bin/go get -v ./... || true"
     - ./maybe_install_sdk.sh
 test:
   pre:
     - sh -c "cd app && dev_appserver.py --clear_datastore=yes  --datastore_consistency_policy=consistent --skip_sdk_update_check > dev_appserver.log 2>&1" &
   override:
-    - sh -c "cd diptest && go test -v"
+    - sh -c "cd diptest && $HOME/golang/bin/go test -v"
