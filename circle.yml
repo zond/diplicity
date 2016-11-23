@@ -4,7 +4,7 @@ dependencies:
     - ~/golang
   override:
     - ./circle/maybe_install_go.sh
-    - sh -c "env GOROOT=$HOME/golang $HOME/golang/bin/go get -v ./... || true"
+    - sh -c "env GOROOT=$HOME/golang $HOME/golang/bin/go get -u -v ./... || true"
     - sh -c "env GOROOT=$HOME/golang $HOME/golang/bin/go get github.com/jstemmer/go-junit-report"
     - ./circle/maybe_install_sdk.sh
 test:
