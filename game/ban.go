@@ -17,11 +17,22 @@ const (
 	banKind = "Ban"
 )
 
-var BanResource = &Resource{
-	Create:     createBan,
-	Delete:     deleteBan,
-	CreatePath: "/User/{user_id}/Ban",
-	FullPath:   "/User/{user_id}/Ban/{banned_id}",
+var BanResource *Resource
+
+func init() {
+	BanResource = &Resource{
+		Create:     createBan,
+		Delete:     deleteBan,
+		CreatePath: "/User/{user_id}/Ban",
+		FullPath:   "/User/{user_id}/Ban/{banned_id}",
+		Listers: []Lister{
+			{
+				Path:    "/User/{user_id}/Bans",
+				Route:   ListBansRoute,
+				Handler: listBans,
+			},
+		},
+	}
 }
 
 type Bans []Ban

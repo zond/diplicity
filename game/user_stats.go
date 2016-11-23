@@ -22,11 +22,46 @@ const (
 var (
 	UpdateUserStatsFunc *DelayFunc
 	updateUserStatFunc  *DelayFunc
+
+	UserStatsResource *Resource
 )
 
 func init() {
 	UpdateUserStatsFunc = NewDelayFunc("game-updateUserStats", updateUserStats)
 	updateUserStatFunc = NewDelayFunc("game-updateUserStat", updateUserStat)
+
+	UserStatsResource = &Resource{
+		Load:     loadUserStats,
+		FullPath: "/User/{user_id}/Stats",
+		Listers: []Lister{
+			{
+				Path:    "/Users/TopRated",
+				Route:   ListTopRatedPlayersRoute,
+				Handler: topRatedPlayersHandler.handle,
+			},
+			{
+				Path:    "/Users/TopReliable",
+				Route:   ListTopReliablePlayersRoute,
+				Handler: topReliablePlayersHandler.handle,
+			},
+			{
+				Path:    "/Users/TopHated",
+				Route:   ListTopHatedPlayersRoute,
+				Handler: topHatedPlayersHandler.handle,
+			},
+			{
+				Path:    "/Users/TopHater",
+				Route:   ListTopHaterPlayersRoute,
+				Handler: topHaterPlayersHandler.handle,
+			},
+			{
+				Path:    "/Users/TopQuick",
+				Route:   ListTopQuickPlayersRoute,
+				Handler: topQuickPlayersHandler.handle,
+			},
+		},
+	}
+
 }
 
 func UpdateUserStatsASAP(ctx context.Context, uids []string) error {
@@ -143,11 +178,6 @@ type UserStats struct {
 
 	Glicko Glicko
 	User   auth.User
-}
-
-var UserStatsResource = &Resource{
-	Load:     loadUserStats,
-	FullPath: "/User/{user_id}/Stats",
 }
 
 func devUserStatsUpdate(w ResponseWriter, r Request) error {

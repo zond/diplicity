@@ -27,6 +27,7 @@ var (
 	sendPhaseNotificationsToUsersFunc *DelayFunc
 	sendPhaseNotificationsToFCMFunc   *DelayFunc
 	sendPhaseNotificationsToMailFunc  *DelayFunc
+	PhaseResource                     *Resource
 )
 
 func init() {
@@ -34,6 +35,18 @@ func init() {
 	sendPhaseNotificationsToUsersFunc = NewDelayFunc("game-sendPhaseNotificationsToUsers", sendPhaseNotificationsToUsers)
 	sendPhaseNotificationsToFCMFunc = NewDelayFunc("game-sendPhaseNotificationsToFCM", sendPhaseNotificationsToFCM)
 	sendPhaseNotificationsToMailFunc = NewDelayFunc("game-sendPhaseNotificationsToMail", sendPhaseNotificationsToMail)
+
+	PhaseResource = &Resource{
+		Load:     loadPhase,
+		FullPath: "/Game/{game_id}/Phase/{phase_ordinal}",
+		Listers: []Lister{
+			{
+				Path:    "/Game/{game_id}/Phases",
+				Route:   ListPhasesRoute,
+				Handler: listPhases,
+			},
+		},
+	}
 }
 
 type phaseNotificationContext struct {
@@ -738,11 +751,6 @@ type Phase struct {
 	DeadlineAt   time.Time
 	Host         string
 	Scheme       string
-}
-
-var PhaseResource = &Resource{
-	Load:     loadPhase,
-	FullPath: "/Game/{game_id}/Phase/{phase_ordinal}",
 }
 
 func devResolvePhaseTimeout(w ResponseWriter, r Request) error {

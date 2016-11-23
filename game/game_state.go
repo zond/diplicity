@@ -17,9 +17,20 @@ const (
 	gameStateKind = "GameState"
 )
 
-var GameStateResource = &Resource{
-	Update:   updateGameState,
-	FullPath: "/Game/{game_id}/GameState/{nation}",
+var GameStateResource *Resource
+
+func init() {
+	GameStateResource = &Resource{
+		Update:   updateGameState,
+		FullPath: "/Game/{game_id}/GameState/{nation}",
+		Listers: []Lister{
+			{
+				Path:    "/Game/{game_id}/GameStates",
+				Route:   ListGameStatesRoute,
+				Handler: listGameStates,
+			},
+		},
+	}
 }
 
 type GameStates []GameState

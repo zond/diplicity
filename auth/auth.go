@@ -52,7 +52,22 @@ var (
 	prodNaCl      *naCl
 	prodNaClLock  = sync.RWMutex{}
 	router        *mux.Router
+
+	RedirectURLResource *Resource
 )
+
+func init() {
+	RedirectURLResource = &Resource{
+		Delete: deleteRedirectURL,
+		Listers: []Lister{
+			{
+				Path:    "/User/{user_id}/RedirectURLs",
+				Route:   ListRedirectURLsRoute,
+				Handler: listRedirectURLs,
+			},
+		},
+	}
+}
 
 func PP(i interface{}) string {
 	b, err := json.MarshalIndent(i, "  ", "  ")
@@ -100,10 +115,6 @@ func (u RedirectURLs) Item(r Request, userId string) *Item {
 		RouteParams: []string{"user_id", userId},
 	}))
 	return urlsItem
-}
-
-var RedirectURLResource = &Resource{
-	Delete: deleteRedirectURL,
 }
 
 func deleteRedirectURL(w ResponseWriter, r Request) (*RedirectURL, error) {
@@ -790,7 +801,6 @@ func SetupRouter(r *mux.Router) {
 	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
 	Handle(router, "/Auth/ApproveRedirect", []string{"GET"}, ApproveRedirectRoute, handleApproveRedirect)
 	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
-	Handle(router, "/User/{user_id}/RedirectURLs", []string{"GET"}, ListRedirectURLsRoute, listRedirectURLs)
 	AddFilter(tokenFilter)
 	AddPostProc(loginRedirect)
 }

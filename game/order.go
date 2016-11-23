@@ -19,12 +19,23 @@ const (
 	orderKind = "Order"
 )
 
-var OrderResource = &Resource{
-	Create:     createOrder,
-	Update:     updateOrder,
-	Delete:     deleteOrder,
-	CreatePath: "/Game/{game_id}/Phase/{phase_ordinal}/Order",
-	FullPath:   "/Game/{game_id}/Phase/{phase_ordinal}/Order/{src_province}",
+var OrderResource *Resource
+
+func init() {
+	OrderResource = &Resource{
+		Create:     createOrder,
+		Update:     updateOrder,
+		Delete:     deleteOrder,
+		CreatePath: "/Game/{game_id}/Phase/{phase_ordinal}/Order",
+		FullPath:   "/Game/{game_id}/Phase/{phase_ordinal}/Order/{src_province}",
+		Listers: []Lister{
+			{
+				Path:    "/Game/{game_id}/Phase/{phase_ordinal}/Orders",
+				Route:   ListOrdersRoute,
+				Handler: listOrders,
+			},
+		},
+	}
 }
 
 type Orders []Order

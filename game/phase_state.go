@@ -18,9 +18,20 @@ const (
 	phaseStateKind = "PhaseState"
 )
 
-var PhaseStateResource = &Resource{
-	Update:   updatePhaseState,
-	FullPath: "/Game/{game_id}/Phase/{phase_ordinal}/PhaseState/{nation}",
+var PhaseStateResource *Resource
+
+func init() {
+	PhaseStateResource = &Resource{
+		Update:   updatePhaseState,
+		FullPath: "/Game/{game_id}/Phase/{phase_ordinal}/PhaseState/{nation}",
+		Listers: []Lister{
+			{
+				Path:    "/Game/{game_id}/Phase/{phase_ordinal}/PhaseStates",
+				Route:   ListPhaseStatesRoute,
+				Handler: listPhaseStates,
+			},
+		},
+	}
 }
 
 type PhaseStates []PhaseState

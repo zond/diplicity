@@ -35,12 +35,26 @@ var (
 	sendMsgNotificationsToUsersFunc *DelayFunc
 	sendMsgNotificationsToFCMFunc   *DelayFunc
 	sendMsgNotificationsToMailFunc  *DelayFunc
+
+	MessageResource *Resource
 )
 
 func init() {
 	sendMsgNotificationsToUsersFunc = NewDelayFunc("game-sendMsgNotificationsToUsers", sendMsgNotificationsToUsers)
 	sendMsgNotificationsToFCMFunc = NewDelayFunc("game-sendMsgNotificationsToFCM", sendMsgNotificationsToFCM)
 	sendMsgNotificationsToMailFunc = NewDelayFunc("game-sendMsgNotificationsToMail", sendMsgNotificationsToMail)
+
+	MessageResource = &Resource{
+		Create:     createMessage,
+		CreatePath: "/Game/{game_id}/Messages",
+		Listers: []Lister{
+			{
+				Path:    "/Game/{game_id}/Channel/{channel_members}/Messages",
+				Route:   ListMessagesRoute,
+				Handler: listMessages,
+			},
+		},
+	}
 }
 
 type msgNotificationContext struct {
@@ -428,11 +442,6 @@ func (c *Channel) CountSince(ctx context.Context, since time.Time) error {
 	c.NMessagesSince.Since = since
 	c.NMessagesSince.NMessages = count
 	return nil
-}
-
-var MessageResource = &Resource{
-	Create:     createMessage,
-	CreatePath: "/Game/{game_id}/Messages",
 }
 
 type Messages []Message

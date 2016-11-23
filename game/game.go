@@ -36,7 +36,48 @@ var (
 	fromAddressPattern = "replies+%s@diplicity-engine.appspotmail.com"
 	fromAddressReg     = regexp.MustCompile("^replies\\+([^@]+)@diplicity-engine.appspotmail.com")
 	noreplyFromAddr    = "noreply@oort.se"
+
+	GameResource *Resource
 )
+
+func init() {
+	GameResource = &Resource{
+		Load:   loadGame,
+		Create: createGame,
+		Listers: []Lister{
+			{
+				Path:    "/Games/Open",
+				Route:   OpenGamesRoute,
+				Handler: openGamesHandler.handlePublic,
+			},
+			{
+				Path:    "/Games/Started",
+				Route:   StartedGamesRoute,
+				Handler: startedGamesHandler.handlePublic,
+			},
+			{
+				Path:    "/Games/Finished",
+				Route:   FinishedGamesRoute,
+				Handler: finishedGamesHandler.handlePublic,
+			},
+			{
+				Path:    "/Games/My/Staging",
+				Route:   MyStagingGamesRoute,
+				Handler: stagingGamesHandler.handlePrivate,
+			},
+			{
+				Path:    "/Games/My/Started",
+				Route:   MyStartedGamesRoute,
+				Handler: startedGamesHandler.handlePrivate,
+			},
+			{
+				Path:    "/Games/My/Finished",
+				Route:   MyFinishedGamesRoute,
+				Handler: finishedGamesHandler.handlePrivate,
+			},
+		},
+	}
+}
 
 type SendGrid struct {
 	APIKey string
@@ -119,11 +160,6 @@ func (d *DelayFunc) EnqueueAt(ctx context.Context, taskETA time.Time, args ...in
 
 func (d *DelayFunc) EnqueueIn(ctx context.Context, taskDelay time.Duration, args ...interface{}) error {
 	return d.EnqueueAt(ctx, time.Now().Add(taskDelay), args...)
-}
-
-var GameResource = &Resource{
-	Load:   loadGame,
-	Create: createGame,
 }
 
 type Games []Game
