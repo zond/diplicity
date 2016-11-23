@@ -2,4 +2,4 @@ dependencies:
   cache_directories:
     - "~/go_appengine" # relative to the user's home directory
   pre:
-    - maybe_install_sdk.sh
+    - ./maybe_install_sdk.sh
