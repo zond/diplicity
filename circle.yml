@@ -1,7 +1,8 @@
 dependencies:
   cache_directories:
     - "~/go_appengine" # relative to the user's home directory
-  pre:
+  override:
+    - go get -v ./...
     - ./maybe_install_sdk.sh
 test:
   pre:
