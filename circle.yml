@@ -8,7 +8,7 @@ dependencies:
     - ./maybe_install_sdk.sh
 test:
   pre:
-    - sh -c "cd app && dev_appserver.py --clear_datastore=yes  --datastore_consistency_policy=consistent --skip_sdk_update_check > dev_appserver.log 2>&1":
+    - sh -c "cd app && dev_appserver.py --clear_datastore=yes  --datastore_consistency_policy=consistent --skip_sdk_update_check":
         background: true
   override:
     - sh -c "while ! curl -s -o /dev/null http://localhost:8080; do echo Waiting; sleep 1; done"
