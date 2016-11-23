@@ -824,31 +824,27 @@ func receiveMail(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	msg, err := mail.ReadMessage(bytes.NewBuffer(b))
+	enmsg, err := enmime.ReadEnvelope(bytes.NewBuffer(b))
 	if err != nil {
-		log.Errorf(ctx, "Unable to parse mail from %q: %v", string(b), err)
-		return err
-	}
-
-	from := msg.Header.Get("From")
-
-	enmsg, err := enmime.EnvelopeFromMessage(msg)
-	if err != nil {
-		e := fmt.Sprintf("Unable to parse %v into a mime message: %v", PP(msg), err)
+		e := fmt.Sprintf("Unable to parse\n%s\ninto a mime message: %v", string(b), err)
 		log.Errorf(ctx, e)
-		return sendEmailError(ctx, from, e)
+		return fmt.Errorf(e)
 	}
 
-	toAddress, err := mail.ParseAddress(enmsg.GetHeader("To"))
+	from := enmsg.GetHeader("From")
+
+	toAddressString := enmsg.GetHeader("To")
+
+	toAddress, err := mail.ParseAddress(toAddressString)
 	if err != nil {
-		e := fmt.Sprintf("Unable to parse recipient address of %v: %v", PP(msg.Header), err)
+		e := fmt.Sprintf("Unable to parse recipient address %q: %v", toAddressString, err)
 		log.Errorf(ctx, e)
 		return sendEmailError(ctx, from, e)
 	}
 
 	match := fromAddressReg.FindStringSubmatch(toAddress.Address)
 	if len(match) == 0 {
-		e := fmt.Sprintf("Recipient address of %v doesn't match %v.", PP(msg.Header), fromAddressReg)
+		e := fmt.Sprintf("Recipient address of %v doesn't match %v.", toAddress, fromAddressReg)
 		log.Errorf(ctx, e)
 		return sendEmailError(ctx, from, e)
 	}
