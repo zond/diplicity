@@ -8,7 +8,7 @@ dependencies:
     - ./maybe_install_sdk.sh
 test:
   pre:
-    - sh -c "cd app && $HOME/go_appengine/dev_appserver.py --clear_datastore=yes  --datastore_consistency_policy=consistent --skip_sdk_update_check .":
+    - sh -c "cd app && $HOME/go_appengine/dev_appserver.py --clear_datastore=yes  --datastore_consistency_policy=consistent --skip_sdk_update_check=yes .":
         background: true
   override:
     - sh -c "while ! curl -s -o /dev/null http://localhost:8080; do echo Waiting; sleep 1; done"
