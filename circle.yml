@@ -5,8 +5,6 @@ dependencies:
     - ./maybe_install_sdk.sh
 test:
   pre:
-    - cd app
-    - sh -c "dev_appserver.py --clear_datastore=yes  --datastore_consistency_policy=consistent --skip_sdk_update_check > dev_appserver.log 2>&1" &
+    - sh -c "cd app && dev_appserver.py --clear_datastore=yes  --datastore_consistency_policy=consistent --skip_sdk_update_check > dev_appserver.log 2>&1" &
   override:
-    - cd diptest
-    - go test -v
+    - sh -c "cd diptest && go test -v"
