@@ -1,3 +1,5 @@
+[![CircleCI](https://circleci.com/gh/zond/diplicity.svg?style=svg)](https://circleci.com/gh/zond/diplicity)
+
 # diplicity
 
 A dippy API service based on [App Engine](https://cloud.google.com/appengine) and [godip](https://github.com/zond/godip).
