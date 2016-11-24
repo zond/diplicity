@@ -102,6 +102,9 @@ func handleIndex(w ResponseWriter, r Request) error {
 			Rel:   "finished-games",
 			Route: FinishedGamesRoute,
 		})).AddLink(r.NewLink(Link{
+			Rel:   "flagged-messages",
+			Route: ListFlaggedMessagesRoute,
+		})).AddLink(r.NewLink(Link{
 			Rel:         "approved-frontends",
 			Route:       auth.ListRedirectURLsRoute,
 			RouteParams: []string{"user_id", user.Id},

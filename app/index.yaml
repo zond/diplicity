@@ -19,14 +19,6 @@ indexes:
 
 - kind: Game
   properties:
-  - name: Closed
-  - name: Variant
-  - name: NMembers
-    direction: desc
-  - name: CreatedAt
-
-- kind: Game
-  properties:
   - name: Finished
   - name: CreatedAt
     direction: desc
@@ -48,52 +40,13 @@ indexes:
 - kind: Game
   properties:
   - name: Finished
-  - name: Members.User.Id
   - name: Started
-  - name: Variant
-  - name: CreatedAt
-
-- kind: Game
-  properties:
-  - name: Finished
-  - name: Members.User.Id
-  - name: Variant
-  - name: CreatedAt
-    direction: desc
-
-- kind: Game
-  properties:
-  - name: Finished
-  - name: Started
-  - name: CreatedAt
-
-- kind: Game
-  properties:
-  - name: Finished
-  - name: Started
-  - name: Variant
-  - name: CreatedAt
-
-- kind: Game
-  properties:
-  - name: Finished
-  - name: Variant
-  - name: CreatedAt
-    direction: desc
-
-- kind: Game
-  properties:
-  - name: Members.User.Id
-  - name: Started
-  - name: NMembers
-    direction: desc
   - name: CreatedAt
 
 - kind: Game
   properties:
   - name: Members.User.Id
   - name: Started
-  - name: Variant
   - name: NMembers
     direction: desc
   - name: CreatedAt
@@ -108,6 +61,11 @@ indexes:
   - name: UserId
   - name: CreatedAt
     direction: desc
+
+- kind: Message
+  ancestor: yes
+  properties:
+  - name: CreatedAt
 
 - kind: Message
   ancestor: yes

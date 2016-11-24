@@ -460,7 +460,7 @@ func (m Messages) Item(r Request, gameID *datastore.Key, channelMembers Nations)
 		Rel:         "self",
 		Route:       ListMessagesRoute,
 		RouteParams: []string{"game_id", gameID.Encode(), "channel_members", channelMembers.String()},
-	}))
+	})).AddLink(r.NewLink(MessageFlagResource.Link("flag-messages", Create, []string{"game_id", gameID.Encode(), "channel_members", channelMembers.String()})))
 	return messagesItem
 }
 

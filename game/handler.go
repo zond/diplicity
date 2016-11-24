@@ -53,6 +53,7 @@ const (
 	ListTopHatedPlayersRoute    = "ListTopHatedPlayers"
 	ListTopHaterPlayersRoute    = "ListTopHaterPlayers"
 	ListTopQuickPlayersRoute    = "ListTopQuickPlayers"
+	ListFlaggedMessagesRoute    = "ListFlaggedMessages"
 	DevResolvePhaseTimeoutRoute = "DevResolvePhaseTimeout"
 	DevUserStatsUpdateRoute     = "DevUserStatsUpdate"
 	ReceiveMailRoute            = "ReceiveMail"
@@ -267,17 +268,13 @@ func (req *gamesReq) handle(private bool) error {
 	games := make(Games, 0, req.limit)
 	for err == nil && len(games) < req.limit {
 		var nextBatch Games
-		nextBatch, err = req.h.fetch(req.iter, maxLimit)
+		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
 		nextBatch.RemoveFiltered(req.userStats)
 		nextBatch.RemoveCustomFiltered(req.detailFilters)
 		if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
 			return filtErr
 		}
-		if len(nextBatch) > req.limit-len(games) {
-			games = append(games, nextBatch[:req.limit-len(games)]...)
-		} else {
-			games = append(games, nextBatch...)
-		}
+		games = append(games, nextBatch...)
 	}
 
 	curs, err := req.cursor(err)
@@ -415,6 +412,8 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, BanResource)
 	HandleResource(r, PhaseResultResource)
 	HandleResource(r, UserStatsResource)
+	HandleResource(r, MessageFlagResource)
+	HandleResource(r, FlaggedMessagesResource)
 	HeadCallback(func(head *Node) error {
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.6.0/firebase.js")
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.5.2/firebase-app.js")
