@@ -98,3 +98,45 @@ func testChat(t *testing.T) {
 			Find(msg2, []string{"Properties"}, []string{"Properties", "Body"})
 	})
 }
+
+func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
+	withStartedGame(func() {
+		msg := String("message")
+		startedGames[0].Follow("channels", "Links").Success().
+			Follow("message", "Links").Body(map[string]interface{}{
+			"Body":           msg,
+			"ChannelMembers": []string{startedGameNats[0], startedGameNats[1]},
+		}).Success()
+
+		newEnv := NewEnv().SetUID(String("fake"))
+
+		extGame := newEnv.GetRoute(game.StartedGamesRoute).Success().
+			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		extGame.Follow("channels", "Links").Success().
+			AssertNotRel("message", "Links")
+		extGame.Follow("channels", "Links").Success().
+			AssertLen(0, "Properties")
+
+		for _, game := range startedGames {
+			p := game.Follow("phases", "Links").Success().
+				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+
+			p.Follow("phase-states", "Links").Success().
+				Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"ReadyToResolve": true,
+				"WantsDIAS":      true,
+			}).Success()
+		}
+
+		extGame.Follow("channels", "Links").Success().
+			AssertNotRel("message", "Links")
+		extGame.Follow("channels", "Links").Success().
+			AssertLen(1, "Properties").
+			Find(1, []string{"Properties"}, []string{"Properties", "NMessages"}).
+			Follow("messages", "Links").Success().
+			Find(msg, []string{"Properties"}, []string{"Properties", "Body"})
+
+	})
+}

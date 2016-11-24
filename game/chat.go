@@ -369,7 +369,7 @@ func (n Nations) String() string {
 
 type Channels []Channel
 
-func (c Channels) Item(r Request, gameID *datastore.Key) *Item {
+func (c Channels) Item(r Request, gameID *datastore.Key, isMember bool) *Item {
 	channelItems := make(List, len(c))
 	for i := range c {
 		channelItems[i] = c[i].Item(r)
@@ -389,7 +389,9 @@ func (c Channels) Item(r Request, gameID *datastore.Key) *Item {
 		Route:       ListChannelsRoute,
 		RouteParams: []string{"game_id", gameID.Encode()},
 	}))
-	channelsItem.AddLink(r.NewLink(MessageResource.Link("message", Create, []string{"game_id", gameID.Encode()})))
+	if isMember {
+		channelsItem.AddLink(r.NewLink(MessageResource.Link("message", Create, []string{"game_id", gameID.Encode()})))
+	}
 	return channelsItem
 }
 
@@ -715,7 +717,7 @@ func listMessages(w ResponseWriter, r Request) error {
 		}
 	}
 
-	if !channelMembers.Includes(nation) && !isPublic(game.Variant, channelMembers) {
+	if !game.Finished && !channelMembers.Includes(nation) && !isPublic(game.Variant, channelMembers) {
 		return HTTPErr{"can only list member channels", 403}
 	}
 
@@ -775,26 +777,34 @@ func listChannels(w ResponseWriter, r Request) error {
 
 	var nation dip.Nation
 
-	if member, found := game.GetMember(user.Id); found {
+	member, isMember := game.GetMember(user.Id)
+	if isMember {
 		nation = member.Nation
 	}
 
 	channels := Channels{}
-	if nation == "" {
-		channelID, err := ChannelID(ctx, gameID, publicChannel(game.Variant))
+	if game.Finished {
+		_, err = datastore.NewQuery(channelKind).Filter("GameID=", gameID).GetAll(ctx, &channels)
 		if err != nil {
-			return err
-		}
-		channel := &Channel{}
-		if err := datastore.Get(ctx, channelID, channel); err == nil {
-			channels = append(channels, *channel)
-		} else if err != datastore.ErrNoSuchEntity {
 			return err
 		}
 	} else {
-		_, err = datastore.NewQuery(channelKind).Filter("GameID=", gameID).Filter("Members=", nation).GetAll(ctx, &channels)
-		if err != nil {
-			return err
+		if nation == "" {
+			channelID, err := ChannelID(ctx, gameID, publicChannel(game.Variant))
+			if err != nil {
+				return err
+			}
+			channel := &Channel{}
+			if err := datastore.Get(ctx, channelID, channel); err == nil {
+				channels = append(channels, *channel)
+			} else if err != datastore.ErrNoSuchEntity {
+				return err
+			}
+		} else {
+			_, err = datastore.NewQuery(channelKind).Filter("GameID=", gameID).Filter("Members=", nation).GetAll(ctx, &channels)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -820,7 +830,7 @@ func listChannels(w ResponseWriter, r Request) error {
 		}
 	}
 
-	w.SetContent(channels.Item(r, gameID))
+	w.SetContent(channels.Item(r, gameID, isMember))
 	return nil
 }
 
