@@ -4,18 +4,18 @@ dependencies:
     - ~/golang
   override:
     - ./circle/maybe_install_go.sh
-    - sh -c "rm -rf $HOME/.go_workspace/src/github.com/zond/diplicity"
-    - sh -c "mv -v $HOME/diplicity $HOME/.go_workspace/src/github.com/zond/diplicity"
-    - sh -c "ln -s $HOME/.go_workspace/src/github.com/zond/diplicity diplicity"
-    - sh -c "env GOROOT=$HOME/golang $HOME/golang/bin/go get -u -v ./... || true"
-    - sh -c "env GOROOT=$HOME/golang $HOME/golang/bin/go get github.com/jstemmer/go-junit-report"
+    - rm -rf $HOME/.go_workspace/src/github.com/zond/diplicity
+    - mv -v $HOME/diplicity $HOME/.go_workspace/src/github.com/zond/diplicity
+    - ln -s $HOME/.go_workspace/src/github.com/zond/diplicity diplicity
+    - env GOROOT=$HOME/golang $HOME/golang/bin/go get -u -v ./... || true
+    - env GOROOT=$HOME/golang $HOME/golang/bin/go get github.com/jstemmer/go-junit-report
     - ./circle/maybe_install_sdk.sh
 test:
   pre:
-    - sh -c "cd app && $HOME/go_appengine/dev_appserver.py --clear_datastore=yes  --datastore_consistency_policy=consistent --skip_sdk_update_check=yes .":
+    - bash -c "cd app && $HOME/go_appengine/dev_appserver.py --clear_datastore=yes  --datastore_consistency_policy=consistent --skip_sdk_update_check=yes .":
         background: true
   override:
-    - sh -c "while ! curl -s -o /dev/null http://localhost:8080; do echo Waiting; sleep 10; done"
-    - sh -c "cd diptest && set -o pipefail && env GOROOT=$HOME/golang $HOME/golang/bin/go test -v | go-junit-report > $CIRCLE_TEST_REPORTS/report.xml"
+    - bash -c "while ! curl -s -o /dev/null http://localhost:8080; do echo Waiting; sleep 10; done"
+    - bash -c "cd diptest && set -o pipefail && env GOROOT=$HOME/golang $HOME/golang/bin/go test -v | go-junit-report > $CIRCLE_TEST_REPORTS/report.xml"
 
    
