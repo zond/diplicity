@@ -114,8 +114,7 @@ func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
 		extGame.Follow("channels", "Links").Success().
-			AssertNotRel("message", "Links")
-		extGame.Follow("channels", "Links").Success().
+			AssertNotRel("message", "Links").
 			AssertLen(0, "Properties")
 
 		for _, game := range startedGames {
