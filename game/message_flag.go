@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"net/url"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -30,6 +31,7 @@ func init() {
 		CreatePath: "/Game/{game_id}/Channel/{channel_members}/MessageFlag",
 	}
 	FlaggedMessagesResource = &Resource{
+		Type: reflect.TypeOf(FlaggedMessages{}),
 		Listers: []Lister{
 			{
 				Path:    "/FlaggedMessages",
