@@ -80,7 +80,15 @@ func (f FlaggedMessagess) Item(r Request, curs *datastore.Cursor, limit int, use
 	for i := range f {
 		fmItems[i] = f[i].Item(r)
 	}
-	fmsItem := NewItem(fmItems).SetName("flagged-messages").AddLink(r.NewLink(BanResource.Link("create-ban", Create, []string{"user_id", userId})))
+	fmsItem := NewItem(fmItems).SetName("flagged-messages").
+	SetDesc([][]string{
+		[]string{
+			"Flagged messages",
+			"This lists the messages flagged by users. The intention is to make it easier to browse examples of what others find to be bad behaviour, and ban authors of messages you don't want to see in your own games.",
+			"The ban link here is exactly the same as the one in the regular 'bans' view. To make it simpler to ban from the auto generated UI, and to make it easier to understand the intention of this list, it's provided here as well.",
+		},
+	}).
+	AddLink(r.NewLink(BanResource.Link("create-ban", Create, []string{"user_id", userId})))
 	if curs != nil {
 		fmsItem.AddLink(r.NewLink(Link{
 			Rel:   "self",
