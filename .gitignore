@@ -25,3 +25,5 @@ _testmain.go
 .*.swp
 
 java/classes
+
+.DS_STORE

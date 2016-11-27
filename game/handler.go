@@ -268,14 +268,14 @@ func (req *gamesReq) handle(private bool) error {
 	games := make(Games, 0, req.limit)
 	for err == nil && len(games) < req.limit {
 		var nextBatch Games
-		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))	
+		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
 		nextBatch.RemoveCustomFiltered(req.detailFilters)
 		if !private {
-		nextBatch.RemoveFiltered(req.userStats)
-		if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
-			return filtErr
-		}
+			nextBatch.RemoveFiltered(req.userStats)
+			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
+				return filtErr
 			}
+		}
 		games = append(games, nextBatch...)
 	}
 
