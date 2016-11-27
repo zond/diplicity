@@ -544,6 +544,8 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 			return nil
 		})
 
+		log.Infof(ctx, "Request by fake %+v", user)
+
 		return true, nil
 	}
 
@@ -592,7 +594,10 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 			})
 		}
 
+	} else {
+		log.Infof(ctx, "Unauthenticated request")
 	}
+
 	return true, nil
 }
 
