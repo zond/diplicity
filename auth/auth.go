@@ -602,6 +602,9 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 }
 
 func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
+	ctx := appengine.NewContext(r.Req())
+	log.Infof(ctx, "loginRedirect called with %+v", errI)
+
 	if r.Media() != "text/html" {
 		return true, errI
 	}
@@ -713,9 +716,9 @@ form {
 	border-color: #f3961c transparent;
 	display: block;
 	width: 0;
-	top: 16px;
+	top: auto;
 	left: -50px;
-	bottom: auto;
+	bottom: 12px;
 	border-width: 10px 50px 10px 0;
 	border-color: transparent #f3961c;
 }
