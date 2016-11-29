@@ -682,6 +682,7 @@ func renderMessage(w ResponseWriter, title, msg string) {
 <html>
 <head>
 <title>%s</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
 form {
 	display: inline;
@@ -703,21 +704,19 @@ form {
 	border-radius: 10px;
 	margin-left: 50px;
 	background: #f3961c;
-	bottom: 43px;
-	left: -70px;
+	bottom: -30px;
 }
 .bubble:after {
 	content: "";
 	position: absolute;
 	bottom: -15px;
-	left: 50px;
+	left: -48px;
 	border-width: 15px 15px 0;
 	border-style: solid;
 	border-color: #f3961c transparent;
 	display: block;
 	width: 0;
 	top: auto;
-	left: -50px;
 	bottom: 12px;
 	border-width: 10px 50px 10px 0;
 	border-color: transparent #f3961c;
@@ -727,7 +726,7 @@ form {
 <body>
 <table><tr>
 <td>
-<img src="/img/otto.png">
+<img width="100%%" src="/img/otto.png">
 </td>
 <td valign="bottom">
 <div class="bubble">%s</div>
