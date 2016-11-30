@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/mail"
 	"strconv"
@@ -532,6 +533,11 @@ func (p *PhaseResolver) Act() error {
 		return err
 	}
 
+	if err = newPhase.Recalc(); err != nil {
+		return err
+	}
+	p.Game.NewestPhaseMeta = []PhaseMeta{newPhase.PhaseMeta}
+
 	if newPhase.Resolved {
 
 		// Finish the game and store a game result if the new phase is already resolved.
@@ -540,10 +546,6 @@ func (p *PhaseResolver) Act() error {
 		p.Game.Finished = true
 		p.Game.FinishedAt = time.Now()
 		p.Game.Closed = true
-		if err := p.Game.Save(p.Context); err != nil {
-			log.Errorf(p.Context, "Unable to save game as finished: %v; hope datastore will get fixed", err)
-			return err
-		}
 
 		diasMembers := []dip.Nation{}
 		diasUsers := []string{}
@@ -680,6 +682,11 @@ func (p *PhaseResolver) Act() error {
 		}
 	}
 
+	if err := p.Game.Save(p.Context); err != nil {
+		log.Errorf(p.Context, "Unable to save game %v: %v; hope datastore will get fixed", PP(p.Game), err)
+		return err
+	}
+
 	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
 
 	return nil
@@ -735,22 +742,42 @@ func (p Phases) Item(r Request, gameID *datastore.Key) *Item {
 	return phasesItem
 }
 
-type Phase struct {
-	GameID       *datastore.Key
+type PhaseMeta struct {
 	PhaseOrdinal int64
 	Season       dip.Season
 	Year         int
 	Type         dip.PhaseType
-	Units        []Unit
-	SCs          []SC
-	Dislodgeds   []Dislodged
-	Dislodgers   []Dislodger
-	Bounces      []Bounce
-	Resolutions  []Resolution
 	Resolved     bool
 	DeadlineAt   time.Time
-	Host         string
-	Scheme       string
+	UnitsJSON    string
+	SCsJSON      string
+}
+
+func (p *Phase) Recalc() error {
+	b, err := json.Marshal(p.Units)
+	if err != nil {
+		return err
+	}
+	p.PhaseMeta.UnitsJSON = string(b)
+	b, err = json.Marshal(p.SCs)
+	if err != nil {
+		return err
+	}
+	p.PhaseMeta.SCsJSON = string(b)
+	return nil
+}
+
+type Phase struct {
+	PhaseMeta
+	GameID      *datastore.Key
+	Units       []Unit
+	SCs         []SC
+	Dislodgeds  []Dislodged
+	Dislodgers  []Dislodger
+	Bounces     []Bounce
+	Resolutions []Resolution
+	Host        string
+	Scheme      string
 }
 
 func devResolvePhaseTimeout(w ResponseWriter, r Request) error {
@@ -878,6 +905,8 @@ func (p *Phase) Save(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	p.PhaseMeta.UnitsJSON = ""
+	p.PhaseMeta.SCsJSON = ""
 	_, err = datastore.Put(ctx, key, p)
 	return err
 }
@@ -885,13 +914,15 @@ func (p *Phase) Save(ctx context.Context) error {
 func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host, scheme string) *Phase {
 	current := s.Phase()
 	p := &Phase{
-		GameID:       gameID,
-		PhaseOrdinal: phaseOrdinal,
-		Season:       current.Season(),
-		Year:         current.Year(),
-		Type:         current.Type(),
-		Host:         host,
-		Scheme:       scheme,
+		PhaseMeta: PhaseMeta{
+			PhaseOrdinal: phaseOrdinal,
+			Season:       current.Season(),
+			Year:         current.Year(),
+			Type:         current.Type(),
+		},
+		GameID: gameID,
+		Host:   host,
+		Scheme: scheme,
 	}
 	units, scs, dislodgeds, dislodgers, bounces, resolutions := s.Dump()
 	for prov, unit := range units {

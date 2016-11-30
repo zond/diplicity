@@ -337,6 +337,8 @@ type Game struct {
 	NMembers int
 	Members  []Member
 
+	NewestPhaseMeta []PhaseMeta
+
 	ActiveBans         []Ban    `datastore:"-"`
 	FailedRequirements []string `datastore:"-"`
 
@@ -489,6 +491,11 @@ func (g *Game) Start(ctx context.Context, r Request) error {
 	if err := phase.Save(ctx); err != nil {
 		return err
 	}
+
+	if err = phase.Recalc(); err != nil {
+		return err
+	}
+	g.NewestPhaseMeta = []PhaseMeta{phase.PhaseMeta}
 
 	if g.PhaseLengthMinutes != 0 {
 		if err := phase.ScheduleResolution(ctx); err != nil {

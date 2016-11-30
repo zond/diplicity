@@ -122,6 +122,8 @@ func TestDIASEnding(t *testing.T) {
 			g := startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 				Follow("finished-games", "Links").Success().
 				Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			g.Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				AssertEq(true, "Resolved")
 			startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 				Follow("started-games", "Links").Success().
 				AssertNotFind(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
@@ -192,6 +194,9 @@ func TestTimeoutResolution(t *testing.T) {
 		t.Run("TestNoResolve-1", func(t *testing.T) {
 			startedGames[0].Follow("phases", "Links").Success().
 				AssertNotFind(2, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
+			startedGames[0].Follow("self", "Links").Success().
+				Find(1, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				AssertEq(false, "Resolved")
 		})
 
 		t.Run("TimeoutResolve-1", func(t *testing.T) {
@@ -203,6 +208,10 @@ func TestTimeoutResolution(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
 				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(false, "Properties", "Resolved")
+
+			startedGames[0].Follow("self", "Links").Success().
+				Find(3, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				AssertEq(false, "Resolved")
 
 			p.Find("rum", []string{"Properties", "Units"}, []string{"Province"})
 			p.Find("nth", []string{"Properties", "Units"}, []string{"Province"})
@@ -303,6 +312,11 @@ func TestTimeoutResolution(t *testing.T) {
 		t.Run("TestNoResolve-2", func(t *testing.T) {
 			startedGames[0].Follow("phases", "Links").Success().
 				AssertNotFind(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
+
+			startedGames[0].Follow("self", "Links").Success().
+				Find(3, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				AssertEq(false, "Resolved")
+
 		})
 
 		t.Run("TimeoutResolve-2", func(t *testing.T) {
@@ -311,6 +325,10 @@ func TestTimeoutResolution(t *testing.T) {
 		})
 
 		t.Run("TestNextPhaseHasProbation", func(t *testing.T) {
+			startedGames[0].Follow("self", "Links").Success().
+				Find(6, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				AssertEq(false, "Resolved")
+
 			p := startedGames[0].Follow("phases", "Links").Success().
 				Find(6, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(false, "Properties", "Resolved")
@@ -357,6 +375,10 @@ func TestTimeoutResolution(t *testing.T) {
 		})
 
 		t.Run("TestGameFinished", func(t *testing.T) {
+			startedGames[0].Follow("self", "Links").Success().
+				Find(7, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				AssertEq(true, "Resolved")
+
 			startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 				Follow("started-games", "Links").Success().
 				AssertNotFind(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})

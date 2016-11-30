@@ -20,7 +20,8 @@ func TestCreateLeaveGame(t *testing.T) {
 			AssertEq(gameDesc, "Properties", "Desc")
 
 		env.GetRoute(game.MyStagingGamesRoute).Success().
-			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			AssertNil("Properties", "NewestPhaseMeta")
 	})
 
 	t.Run("TestLeaveAndDestroyGame", func(t *testing.T) {
