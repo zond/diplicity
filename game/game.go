@@ -41,39 +41,46 @@ var (
 )
 
 func init() {
+	gameListerParams := []string{"variant", "min-reliability", "min-quickness", "max-hater", "max-hated", "min-rating", "max-rating", "limit", "cursor"}
 	GameResource = &Resource{
 		Load:   loadGame,
 		Create: createGame,
 		Listers: []Lister{
 			{
-				Path:    "/Games/Open",
-				Route:   OpenGamesRoute,
-				Handler: openGamesHandler.handlePublic,
+				Path:        "/Games/Open",
+				Route:       OpenGamesRoute,
+				Handler:     openGamesHandler.handlePublic,
+				QueryParams: gameListerParams,
 			},
 			{
-				Path:    "/Games/Started",
-				Route:   StartedGamesRoute,
-				Handler: startedGamesHandler.handlePublic,
+				Path:        "/Games/Started",
+				Route:       StartedGamesRoute,
+				Handler:     startedGamesHandler.handlePublic,
+				QueryParams: gameListerParams,
 			},
 			{
-				Path:    "/Games/Finished",
-				Route:   FinishedGamesRoute,
-				Handler: finishedGamesHandler.handlePublic,
+				Path:        "/Games/Finished",
+				Route:       FinishedGamesRoute,
+				Handler:     finishedGamesHandler.handlePublic,
+				QueryParams: gameListerParams,
 			},
 			{
-				Path:    "/Games/My/Staging",
-				Route:   MyStagingGamesRoute,
-				Handler: stagingGamesHandler.handlePrivate,
+				Path:        "/Games/My/Staging",
+				Route:       MyStagingGamesRoute,
+				Handler:     stagingGamesHandler.handlePrivate,
+				QueryParams: gameListerParams,
 			},
 			{
-				Path:    "/Games/My/Started",
-				Route:   MyStartedGamesRoute,
-				Handler: startedGamesHandler.handlePrivate,
+				Path:        "/Games/My/Started",
+				Route:       MyStartedGamesRoute,
+				Handler:     startedGamesHandler.handlePrivate,
+				QueryParams: gameListerParams,
 			},
 			{
-				Path:    "/Games/My/Finished",
-				Route:   MyFinishedGamesRoute,
-				Handler: finishedGamesHandler.handlePrivate,
+				Path:        "/Games/My/Finished",
+				Route:       MyFinishedGamesRoute,
+				Handler:     finishedGamesHandler.handlePrivate,
+				QueryParams: gameListerParams,
 			},
 		},
 	}

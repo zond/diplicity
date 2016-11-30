@@ -30,34 +30,40 @@ func init() {
 	UpdateUserStatsFunc = NewDelayFunc("game-updateUserStats", updateUserStats)
 	updateUserStatFunc = NewDelayFunc("game-updateUserStat", updateUserStat)
 
+	userStatsListerParams := []string{"limit", "cursor"}
 	UserStatsResource = &Resource{
 		Load:     loadUserStats,
 		FullPath: "/User/{user_id}/Stats",
 		Listers: []Lister{
 			{
-				Path:    "/Users/TopRated",
-				Route:   ListTopRatedPlayersRoute,
-				Handler: topRatedPlayersHandler.handle,
+				Path:        "/Users/TopRated",
+				Route:       ListTopRatedPlayersRoute,
+				Handler:     topRatedPlayersHandler.handle,
+				QueryParams: userStatsListerParams,
 			},
 			{
-				Path:    "/Users/TopReliable",
-				Route:   ListTopReliablePlayersRoute,
-				Handler: topReliablePlayersHandler.handle,
+				Path:        "/Users/TopReliable",
+				Route:       ListTopReliablePlayersRoute,
+				Handler:     topReliablePlayersHandler.handle,
+				QueryParams: userStatsListerParams,
 			},
 			{
-				Path:    "/Users/TopHated",
-				Route:   ListTopHatedPlayersRoute,
-				Handler: topHatedPlayersHandler.handle,
+				Path:        "/Users/TopHated",
+				Route:       ListTopHatedPlayersRoute,
+				Handler:     topHatedPlayersHandler.handle,
+				QueryParams: userStatsListerParams,
 			},
 			{
-				Path:    "/Users/TopHater",
-				Route:   ListTopHaterPlayersRoute,
-				Handler: topHaterPlayersHandler.handle,
+				Path:        "/Users/TopHater",
+				Route:       ListTopHaterPlayersRoute,
+				Handler:     topHaterPlayersHandler.handle,
+				QueryParams: userStatsListerParams,
 			},
 			{
-				Path:    "/Users/TopQuick",
-				Route:   ListTopQuickPlayersRoute,
-				Handler: topQuickPlayersHandler.handle,
+				Path:        "/Users/TopQuick",
+				Route:       ListTopQuickPlayersRoute,
+				Handler:     topQuickPlayersHandler.handle,
+				QueryParams: userStatsListerParams,
 			},
 		},
 	}
