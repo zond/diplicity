@@ -58,6 +58,7 @@ func (b Bans) Item(r Request, userId string) *Item {
 type Ban struct {
 	UserIds  []string `methods:"POST"`
 	OwnerIds []string
+	Users    []auth.User
 }
 
 func (b *Ban) OwnedBy(uid string) bool {
@@ -239,6 +240,15 @@ func createBan(w ResponseWriter, r Request) (*Ban, error) {
 		}
 
 		if err := UpdateUserStatsASAP(ctx, ban.UserIds); err != nil {
+			return err
+		}
+
+		ban.Users = make([]auth.User, 2)
+		userIDs := make([]*datastore.Key, 2)
+		for i, id := range userIds {
+			userIDs[i] = auth.UserID(ctx, id)
+		}
+		if err := datastore.GetMulti(ctx, userIDs, ban.Users); err != nil {
 			return err
 		}
 

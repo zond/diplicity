@@ -41,8 +41,12 @@ func TestBans(t *testing.T) {
 		"UserIds": []string{env1.GetUID(), env2.GetUID()},
 	}).Success()
 
-	bans := env1.GetRoute(game.IndexRoute).Success().
-		Follow("bans", "Links").Success().GetValue("Properties").([]interface{})
+	bansRes := env1.GetRoute(game.IndexRoute).Success().
+		Follow("bans", "Links").Success()
+	bansRes.Find(env1.GetUID(), []string{"Properties"}, []string{"Properties", "Users"}, []string{"Id"})
+	bansRes.Find(env2.GetUID(), []string{"Properties"}, []string{"Properties", "Users"}, []string{"Id"})
+	bans := bansRes.
+		GetValue("Properties").([]interface{})
 	ban := bans[0].(map[string]interface{})["Properties"].(map[string]interface{})
 	owners := ban["OwnerIds"].([]interface{})
 	if len(owners) != 1 || owners[0] != env1.GetUID() {
