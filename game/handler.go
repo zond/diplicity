@@ -102,6 +102,10 @@ func (h *userStatsHandler) handle(w ResponseWriter, r Request) error {
 		}
 	}
 
+	for i := range stats {
+		stats[i].Redact()
+	}
+
 	var cursP *datastore.Cursor
 	if err == nil {
 		curs, err := iter.Cursor()

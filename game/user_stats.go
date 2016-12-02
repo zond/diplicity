@@ -277,6 +277,10 @@ func UserStatsID(ctx context.Context, userId string) *datastore.Key {
 	return datastore.NewKey(ctx, userStatsKind, userId, 0, nil)
 }
 
+func (u *UserStats) Redact() {
+	u.User.Email = ""
+}
+
 func (u *UserStats) ID(ctx context.Context) *datastore.Key {
 	return UserStatsID(ctx, u.UserId)
 }
