@@ -138,7 +138,7 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 			return HTTPErr{"can only delete orders in member games", 404}
 		}
 		if phase.Resolved {
-			return HTTPErr{"can only delete orders for unresolved phases", 400}
+			return HTTPErr{"can only delete orders for unresolved phases", 412}
 		}
 
 		if order.Nation != member.Nation {
@@ -191,7 +191,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 		}
 		game.ID = gameID
 		if phase.Resolved {
-			return HTTPErr{"can only update orders for unresolved phases", 400}
+			return HTTPErr{"can only update orders for unresolved phases", 412}
 		}
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
@@ -275,7 +275,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 		}
 		game.ID = gameID
 		if phase.Resolved {
-			return HTTPErr{"can only create orders for unresolved phases", 400}
+			return HTTPErr{"can only create orders for unresolved phases", 412}
 		}
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {

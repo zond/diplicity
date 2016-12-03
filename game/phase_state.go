@@ -154,7 +154,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		}
 
 		if phase.Resolved {
-			return HTTPErr{"can only update phase states of unresolved phases", 400}
+			return HTTPErr{"can only update phase states of unresolved phases", 412}
 		}
 
 		err = Copy(phaseState, r, "PUT")

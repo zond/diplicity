@@ -52,7 +52,7 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
-			return err
+			return HTTPErr{"non existing game", 412}
 		}
 		game.ID = gameID
 		isMember := false
@@ -61,7 +61,7 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 			return HTTPErr{"can only leave member games", 404}
 		}
 		if !game.Leavable() {
-			return HTTPErr{"game not leavable", 400}
+			return HTTPErr{"game not leavable", 412}
 		}
 		newMembers := []Member{}
 		for _, oldMember := range game.Members {
@@ -110,7 +110,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
-			return err
+			return HTTPErr{"non existing game", 412}
 		}
 		game.ID = gameID
 		isMember := false
@@ -119,7 +119,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 			return HTTPErr{"user already member", 400}
 		}
 		if !game.Joinable() {
-			return HTTPErr{"game not joinable", 400}
+			return HTTPErr{"game not joinable", 412}
 		}
 		member = &Member{
 			User: *user,
