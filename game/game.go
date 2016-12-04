@@ -446,7 +446,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 		filtered := Games{*game}
 		if failedRequirements := filtered.RemoveFiltered(userStats); len(failedRequirements[0]) > 0 {
-			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), 400}
+			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), 412}
 		}
 		if err := game.Save(ctx); err != nil {
 			return err
