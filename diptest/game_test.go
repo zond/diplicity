@@ -19,17 +19,17 @@ func TestCreateLeaveGame(t *testing.T) {
 		}).Success().
 			AssertEq(gameDesc, "Properties", "Desc")
 
-		env.GetRoute(game.MyStagingGamesRoute).Success().
+		env.GetRoute(game.ListMyStagingGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 			AssertNil("Properties", "NewestPhaseMeta")
 	})
 
 	t.Run("TestLeaveAndDestroyGame", func(t *testing.T) {
-		env.GetRoute(game.OpenGamesRoute).Success().
+		env.GetRoute(game.ListOpenGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 			Follow("leave", "Links").Success()
 
-		env.GetRoute(game.MyStagingGamesRoute).Success().
+		env.GetRoute(game.ListMyStagingGamesRoute).Success().
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 	})
 }
@@ -207,7 +207,7 @@ func TestGameListFilters(t *testing.T) {
 			false,
 		},
 	} {
-		res := env2.GetRoute(game.OpenGamesRoute).QueryParams(url.Values{
+		res := env2.GetRoute(game.ListOpenGamesRoute).QueryParams(url.Values{
 			f.name: []string{f.value},
 		}).Success()
 		if f.wantFind {
@@ -226,10 +226,10 @@ type filter struct {
 
 func TestGameLists(t *testing.T) {
 	env := NewEnv().SetUID(String("fake"))
-	env.GetRoute(game.MyStagingGamesRoute).Success()
-	env.GetRoute(game.MyStartedGamesRoute).Success()
-	env.GetRoute(game.MyFinishedGamesRoute).Success()
-	env.GetRoute(game.OpenGamesRoute).Success()
-	env.GetRoute(game.StartedGamesRoute).Success()
-	env.GetRoute(game.FinishedGamesRoute).Success()
+	env.GetRoute(game.ListMyStagingGamesRoute).Success()
+	env.GetRoute(game.ListMyStartedGamesRoute).Success()
+	env.GetRoute(game.ListMyFinishedGamesRoute).Success()
+	env.GetRoute(game.ListOpenGamesRoute).Success()
+	env.GetRoute(game.ListStartedGamesRoute).Success()
+	env.GetRoute(game.ListFinishedGamesRoute).Success()
 }

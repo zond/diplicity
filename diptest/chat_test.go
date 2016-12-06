@@ -110,7 +110,7 @@ func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 
 		newEnv := NewEnv().SetUID(String("fake"))
 
-		extGame := newEnv.GetRoute(game.StartedGamesRoute).Success().
+		extGame := newEnv.GetRoute(game.ListStartedGamesRoute).Success().
 			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
 		extGame.Follow("channels", "Links").Success().

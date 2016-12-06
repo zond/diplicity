@@ -26,23 +26,23 @@ func TestJoinLeaveGame(t *testing.T) {
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 			Follow("join", "Links").Success()
 
-		env2.GetRoute(game.MyStagingGamesRoute).Success().
+		env2.GetRoute(game.ListMyStagingGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 	})
 
 	t.Run("TestAllLeavingAndDestroyingGame", func(t *testing.T) {
-		env1.GetRoute(game.MyStagingGamesRoute).Success().
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 			Follow("leave", "Links").Success()
 
-		env2.GetRoute(game.MyStagingGamesRoute).Success().
+		env2.GetRoute(game.ListMyStagingGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 			Follow("leave", "Links").Success()
 
-		env1.GetRoute(game.MyStagingGamesRoute).Success().
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
-		env2.GetRoute(game.MyStagingGamesRoute).Success().
+		env2.GetRoute(game.ListMyStagingGamesRoute).Success().
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 	})
 }

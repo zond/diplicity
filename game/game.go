@@ -48,37 +48,37 @@ func init() {
 		Listers: []Lister{
 			{
 				Path:        "/Games/Open",
-				Route:       OpenGamesRoute,
+				Route:       ListOpenGamesRoute,
 				Handler:     openGamesHandler.handlePublic,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/Started",
-				Route:       StartedGamesRoute,
+				Route:       ListStartedGamesRoute,
 				Handler:     startedGamesHandler.handlePublic,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/Finished",
-				Route:       FinishedGamesRoute,
+				Route:       ListFinishedGamesRoute,
 				Handler:     finishedGamesHandler.handlePublic,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Staging",
-				Route:       MyStagingGamesRoute,
+				Route:       ListMyStagingGamesRoute,
 				Handler:     stagingGamesHandler.handlePrivate,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Started",
-				Route:       MyStartedGamesRoute,
+				Route:       ListMyStartedGamesRoute,
 				Handler:     startedGamesHandler.handlePrivate,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Finished",
-				Route:       MyFinishedGamesRoute,
+				Route:       ListMyFinishedGamesRoute,
 				Handler:     finishedGamesHandler.handlePrivate,
 				QueryParams: gameListerParams,
 			},

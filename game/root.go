@@ -85,22 +85,22 @@ func handleIndex(w ResponseWriter, r Request) error {
 			Route: ListTopQuickPlayersRoute,
 		})).AddLink(r.NewLink(Link{
 			Rel:   "my-staging-games",
-			Route: MyStagingGamesRoute,
+			Route: ListMyStagingGamesRoute,
 		})).AddLink(r.NewLink(Link{
 			Rel:   "my-started-games",
-			Route: MyStartedGamesRoute,
+			Route: ListMyStartedGamesRoute,
 		})).AddLink(r.NewLink(Link{
 			Rel:   "my-finished-games",
-			Route: MyFinishedGamesRoute,
+			Route: ListMyFinishedGamesRoute,
 		})).AddLink(r.NewLink(Link{
 			Rel:   "open-games",
-			Route: OpenGamesRoute,
+			Route: ListOpenGamesRoute,
 		})).AddLink(r.NewLink(Link{
 			Rel:   "started-games",
-			Route: StartedGamesRoute,
+			Route: ListStartedGamesRoute,
 		})).AddLink(r.NewLink(Link{
 			Rel:   "finished-games",
-			Route: FinishedGamesRoute,
+			Route: ListFinishedGamesRoute,
 		})).AddLink(r.NewLink(Link{
 			Rel:   "flagged-messages",
 			Route: ListFlaggedMessagesRoute,

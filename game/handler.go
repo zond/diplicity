@@ -34,12 +34,12 @@ const (
 	GetMainJSRoute              = "GetMainJS"
 	ConfigureRoute              = "AuthConfigure"
 	IndexRoute                  = "Index"
-	OpenGamesRoute              = "OpenGames"
-	StartedGamesRoute           = "StartedGames"
-	FinishedGamesRoute          = "FinishedGames"
-	MyStagingGamesRoute         = "MyStagingGames"
-	MyStartedGamesRoute         = "MyStartedGames"
-	MyFinishedGamesRoute        = "MyFinishedGames"
+	ListOpenGamesRoute          = "OpenGames"
+	ListStartedGamesRoute       = "StartedGames"
+	ListFinishedGamesRoute      = "FinishedGames"
+	ListMyStagingGamesRoute     = "MyStagingGames"
+	ListMyStartedGamesRoute     = "MyStartedGames"
+	ListMyFinishedGamesRoute    = "MyFinishedGames"
 	ListOrdersRoute             = "ListOrders"
 	ListPhasesRoute             = "ListPhases"
 	ListPhaseStatesRoute        = "ListPhaseStates"
@@ -315,25 +315,25 @@ var (
 		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-CreatedAt"),
 		name:  "finished-games",
 		desc:  []string{"Finished games", "Finished games, sorted with newest first."},
-		route: FinishedGamesRoute,
+		route: ListFinishedGamesRoute,
 	}
 	startedGamesHandler = gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("CreatedAt"),
 		name:  "started-games",
 		desc:  []string{"Started games", "Started games, sorted with oldest first."},
-		route: StartedGamesRoute,
+		route: ListStartedGamesRoute,
 	}
 	openGamesHandler = gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("-NMembers").Order("CreatedAt"),
 		name:  "open-games",
 		desc:  []string{"Open games", "Open games, sorted with fullest and oldest first."},
-		route: OpenGamesRoute,
+		route: ListOpenGamesRoute,
 	}
 	stagingGamesHandler = gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("-NMembers").Order("CreatedAt"),
 		name:  "my-staging-games",
 		desc:  []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
-		route: MyStagingGamesRoute,
+		route: ListMyStagingGamesRoute,
 	}
 	topRatedPlayersHandler = userStatsHandler{
 		query: datastore.NewQuery(userStatsKind).Order("-Glicko.PracticalRating"),
