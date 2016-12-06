@@ -1,9 +1,13 @@
 package variants
 
 import (
+	"fmt"
+	"net/http"
 	"reflect"
+	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/zond/godip/classical"
 	"github.com/zond/godip/variants"
 
 	. "github.com/zond/goaeoas"
@@ -14,6 +18,7 @@ const (
 	ListVariantsRoute   = "ListVariants"
 	VariantStartRoute   = "StartVariant"
 	VariantResolveRoute = "ResolveVariant"
+	VariantMapRoute     = "VariantMap"
 )
 
 type RenderPhase struct {
@@ -22,6 +27,7 @@ type RenderPhase struct {
 	Type   dip.PhaseType
 	SCs    map[dip.Province]dip.Nation
 	Units  map[dip.Province]dip.Unit
+	Map    string
 }
 
 type RenderVariants map[string]RenderVariant
@@ -72,6 +78,10 @@ func (rv *RenderVariant) Item(r Request) *Item {
 		Route:       VariantResolveRoute,
 		RouteParams: []string{"name", rv.Name},
 		Type:        reflect.TypeOf(Phase{}),
+	})).AddLink(r.NewLink(Link{
+		Rel:         "map",
+		Route:       VariantMapRoute,
+		RouteParams: []string{"name", rv.Variant.Name},
 	}))
 }
 
@@ -98,8 +108,33 @@ func listVariants(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func variantMap(w ResponseWriter, r Request) error {
+	f := "map/map.svg"
+	info, err := classical.AssetInfo(f)
+	if err != nil {
+		return err
+	}
+	b, err := classical.Asset(f)
+	if err != nil {
+		return err
+	}
+
+	etag := fmt.Sprintf("%x", info.ModTime().UnixNano())
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Etag", etag)
+	w.Header().Set("Cache-Control", "max-age=2592000") // 30 days
+	if match := r.Req().Header.Get("If-None-Match"); match != "" && strings.Contains(match, etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return nil
+	}
+
+	_, err = w.Write(b)
+	return err
+}
+
 func SetupRouter(r *mux.Router) {
 	Handle(r, "/Variants", []string{"GET"}, ListVariantsRoute, listVariants)
 	Handle(r, "/Variant/{name}/Start", []string{"GET"}, VariantStartRoute, startVariant)
 	Handle(r, "/Variant/{name}/Resolve", []string{"POST"}, VariantResolveRoute, resolveVariant)
+	Handle(r, "/Variant/{name}/Map.svg", []string{"GET"}, VariantMapRoute, variantMap)
 }
