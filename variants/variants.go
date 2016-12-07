@@ -14,11 +14,16 @@ import (
 	dip "github.com/zond/godip/common"
 )
 
+var (
+	router *mux.Router
+)
+
 const (
 	ListVariantsRoute   = "ListVariants"
 	VariantStartRoute   = "StartVariant"
 	VariantResolveRoute = "ResolveVariant"
 	VariantMapRoute     = "VariantMap"
+	RenderMapRoute      = "RenderMap"
 )
 
 type RenderPhase struct {
@@ -109,7 +114,7 @@ func listVariants(w ResponseWriter, r Request) error {
 }
 
 func variantMap(w ResponseWriter, r Request) error {
-	f := "map/map.svg"
+	f := "svg/map.svg"
 	info, err := classical.AssetInfo(f)
 	if err != nil {
 		return err
@@ -133,8 +138,10 @@ func variantMap(w ResponseWriter, r Request) error {
 }
 
 func SetupRouter(r *mux.Router) {
+	router = r
 	Handle(r, "/Variants", []string{"GET"}, ListVariantsRoute, listVariants)
 	Handle(r, "/Variant/{name}/Start", []string{"GET"}, VariantStartRoute, startVariant)
 	Handle(r, "/Variant/{name}/Resolve", []string{"POST"}, VariantResolveRoute, resolveVariant)
 	Handle(r, "/Variant/{name}/Map.svg", []string{"GET"}, VariantMapRoute, variantMap)
+	Handle(r, "/Variant/{name}/Render", []string{"GET"}, RenderMapRoute, handleRenderMap)
 }
