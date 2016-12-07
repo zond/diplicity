@@ -45,7 +45,7 @@ func handleRenderMap(w ResponseWriter, r Request) error {
 
 	htmlNode := NewEl("html")
 	headNode := htmlNode.AddEl("head")
-	headNode.AddEl("title").AddText(fmt.Sprintf("%s %s, %s", phase.Season, phase.Year, phase.Type))
+	headNode.AddEl("title").AddText(fmt.Sprintf("%s %v, %s", phase.Season, phase.Year, phase.Type))
 	headNode.AddEl("script", "src", "https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js")
 	headNode.AddEl("script", "src", "/js/dippymap.js")
 	headNode.AddEl("script").AddText(fmt.Sprintf(
