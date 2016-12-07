@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/mail"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -61,6 +62,7 @@ type phaseNotificationContext struct {
 	member       *Member
 	user         *auth.User
 	userConfig   *auth.UserConfig
+	mapURL       *url.URL
 	data         map[string]interface{}
 }
 
@@ -105,10 +107,17 @@ func getPhaseNotificationContext(ctx context.Context, gameID *datastore.Key, pha
 		return nil, noConfigError
 	}
 
+	res.mapURL, err = router.Get(RenderPhaseMapRoute).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.phase.PhaseOrdinal))
+	if err != nil {
+		log.Errorf(ctx, "Unable to create map URL for game %v and phase %v: %v; wtf?", res.game.ID, res.phase.PhaseOrdinal, err)
+		return nil, err
+	}
+
 	res.data = map[string]interface{}{
-		"diplicityPhase": res.phase,
-		"diplicityGame":  res.game,
-		"diplicityUser":  res.user,
+		"diplicityPhase":   res.phase,
+		"diplicityGame":    res.game,
+		"diplicityUser":    res.user,
+		"diplicityMapLink": res.mapURL.String(),
 	}
 
 	return res, nil
@@ -148,7 +157,11 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 	msgContext.data["unsubscribeURL"] = unsubscribeURL.String()
 
 	msg := sendgrid.NewMail()
-	msg.SetText(fmt.Sprintf("%s has a new phase.\n\nVisit %s to stop receiving email like this.", msgContext.game.Desc, unsubscribeURL.String()))
+	msg.SetText(fmt.Sprintf(
+		"%s has a new phase: %s.\n\nVisit %s to stop receiving email like this.",
+		msgContext.game.Desc,
+		msgContext.mapURL.String(),
+		unsubscribeURL.String()))
 	msg.SetSubject(fmt.Sprintf("%s %d, %s", msgContext.phase.Season, msgContext.phase.Year, msgContext.phase.Type))
 	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
 
@@ -207,7 +220,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, pha
 			Title:       fmt.Sprintf("%s %d, %s", msgContext.phase.Season, msgContext.phase.Year, msgContext.phase.Type),
 			Body:        fmt.Sprintf("%s has a new phase.", msgContext.game.Desc),
 			Tag:         "diplicity-engine-new-phase",
-			ClickAction: fmt.Sprintf("https://diplicity-engine.appspot.com/Game/%s/Phase/%d", msgContext.game.ID.Encode(), msgContext.phase.PhaseOrdinal),
+			ClickAction: msgContext.mapURL.String(),
 		}
 
 		fcmToken.PhaseConfig.Customize(ctx, notificationPayload, msgContext.data)
@@ -1158,10 +1171,7 @@ func (p *Phase) State(ctx context.Context, variant variants.Variant, orderMap ma
 func renderPhaseMap(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
-	user, ok := r.Values()["user"].(*auth.User)
-	if !ok {
-		return HTTPErr{"unauthorized", 401}
-	}
+	user, loggedIn := r.Values()["user"].(*auth.User)
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
 	if err != nil {
@@ -1187,8 +1197,10 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 
 	var nation dip.Nation
 
-	if member, found := game.GetMember(user.Id); found {
-		nation = member.Nation
+	if loggedIn {
+		if member, found := game.GetMember(user.Id); found {
+			nation = member.Nation
+		}
 	}
 
 	foundOrders, err := phase.Orders(ctx)

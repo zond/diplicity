@@ -207,7 +207,7 @@ func (u *UserConfig) Item(r Request) *Item {
 		},
 		[]string{
 			"New phase FCM notifications",
-			"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhase: [phase JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz.",
+			"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhase: [phase JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz. The on click action will open an HTML page displaying the map of the new phase.",
 		},
 		[]string{
 			"New message FCM notifications",
@@ -220,7 +220,7 @@ func (u *UserConfig) Item(r Request) *Item {
 			"An enabled flag which turns email notifications on.",
 			"Information about whether the unsubscribe link in the email should render some HTML or redirect to another host, defined by two Handlebars templates, one for the redirect link and one for the HTML to display.",
 			"Two template fields, one for phase and one for message notifications.",
-			"All templates will be parsed by the same parser as the FCM templates, using context objects containing the same data as the data payload of the FCM notifications + ` unsubscribeURL: [URL to unsubscribe] `.",
+			"All templates will be parsed by the same parser as the FCM templates, using context objects containing the same data as the data payload of the FCM notifications + ` unsubscribeURL: [URL to unsubscribe] ` and ` diplicityMapLink: [URL to view map] `.",
 		},
 	})
 }
