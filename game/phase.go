@@ -66,7 +66,7 @@ type phaseNotificationContext struct {
 	data         map[string]interface{}
 }
 
-func getPhaseNotificationContext(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, userId string) (*phaseNotificationContext, error) {
+func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string) (*phaseNotificationContext, error) {
 	res := &phaseNotificationContext{}
 
 	var err error
@@ -112,6 +112,8 @@ func getPhaseNotificationContext(ctx context.Context, gameID *datastore.Key, pha
 		log.Errorf(ctx, "Unable to create map URL for game %v and phase %v: %v; wtf?", res.game.ID, res.phase.PhaseOrdinal, err)
 		return nil, err
 	}
+	res.mapURL.Host = host
+	res.mapURL.Scheme = scheme
 
 	res.data = map[string]interface{}{
 		"diplicityPhase":   res.phase,
@@ -126,7 +128,7 @@ func getPhaseNotificationContext(ctx context.Context, gameID *datastore.Key, pha
 func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string) error {
 	log.Infof(ctx, "sendPhaseNotificationsToMail(..., %q, %q, %v, %v, %q)", host, scheme, gameID, phaseOrdinal, userId)
 
-	msgContext, err := getPhaseNotificationContext(ctx, gameID, phaseOrdinal, userId)
+	msgContext, err := getPhaseNotificationContext(ctx, host, scheme, gameID, phaseOrdinal, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 		return nil
@@ -190,10 +192,10 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 	return nil
 }
 
-func sendPhaseNotificationsToFCM(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, userId string, finishedTokens map[string]struct{}) error {
+func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string, finishedTokens map[string]struct{}) error {
 	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %v, %v, %q, %+v)", gameID, phaseOrdinal, userId, finishedTokens)
 
-	msgContext, err := getPhaseNotificationContext(ctx, gameID, phaseOrdinal, userId)
+	msgContext, err := getPhaseNotificationContext(ctx, host, scheme, gameID, phaseOrdinal, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 		return nil
@@ -265,7 +267,7 @@ func sendPhaseNotificationsToUsers(ctx context.Context, host, scheme string, gam
 	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %q, %v, %v, %+v)", host, scheme, gameID, phaseOrdinal, uids)
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, gameID, phaseOrdinal, uids[0], map[string]struct{}{}); err != nil {
+		if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, scheme, gameID, phaseOrdinal, uids[0], map[string]struct{}{}); err != nil {
 			log.Errorf(ctx, "Unable to enqueue sending to %q: %v; hope datastore gets fixed", uids[0], err)
 			return err
 		}
