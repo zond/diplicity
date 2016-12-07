@@ -249,8 +249,7 @@ function dippyMap(container) {
 		path.setAttribute("d", d);
 		el.appendChild(path);
 	};
-	that.addOrder = function(order, variant, nation) {
-	  var color = variantMap[variant].Colors[nation];
+	that.addOrder = function(order, color) {
 	  if (order[1] == 'Hold') {
 		  addBox(order[0], 4, color);
 		} else if (order[1] == 'Move') {
@@ -259,7 +258,7 @@ function dippyMap(container) {
 		  addArrow([order[0], order[2]], color);
 			addBox(order[0], 5, color);
 		} else if (order[1] == 'Build') {
-		  addUnit(variant + 'Unit' + order[2], order[0], color, false, true);
+		  addUnit('unit' + order[2], order[0], color, false, true);
 		} else if (order[1] == 'Disband') {
 		  addCross(order[0], color);
 		} else if (order[1] == 'Convoy') {
