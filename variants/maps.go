@@ -12,11 +12,16 @@ func handleRenderMap(w ResponseWriter, r Request) error {
 	phase := &Phase{
 		Variant: r.Vars()["name"],
 	}
-	variant := variants.Variants[phase.Variant]
-
 	if err := phase.FromQuery(r.Req().URL.Query()); err != nil {
 		return err
 	}
+
+	return RenderPhaseMap(w, r, phase)
+}
+
+func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
+	variant := variants.Variants[phase.Variant]
+
 	mapURL, err := router.Get(VariantMapRoute).URL("name", phase.Variant)
 	if err != nil {
 		return err

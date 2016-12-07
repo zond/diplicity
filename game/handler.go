@@ -57,6 +57,7 @@ const (
 	DevResolvePhaseTimeoutRoute = "DevResolvePhaseTimeout"
 	DevUserStatsUpdateRoute     = "DevUserStatsUpdate"
 	ReceiveMailRoute            = "ReceiveMail"
+	RenderPhaseMapRoute         = "RenderPhaseMap"
 )
 
 type userStatsHandler struct {
@@ -407,6 +408,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/_dev_resolve_timeout", []string{"GET"}, DevResolvePhaseTimeoutRoute, devResolvePhaseTimeout)
 	Handle(r, "/User/{user_id}/Stats/_dev_update", []string{"PUT"}, DevUserStatsUpdateRoute, devUserStatsUpdate)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Options", []string{"GET"}, ListOptionsRoute, listOptions)
+	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Map", []string{"GET"}, RenderPhaseMapRoute, renderPhaseMap)
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)

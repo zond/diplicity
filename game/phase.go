@@ -19,6 +19,7 @@ import (
 	"google.golang.org/appengine/urlfetch"
 	"gopkg.in/sendgrid/sendgrid-go.v2"
 
+	dvars "github.com/zond/diplicity/variants"
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
 )
@@ -780,6 +781,53 @@ type Phase struct {
 	Scheme      string
 }
 
+func (p *Phase) toVariantsPhase(variant string, orderMap map[dip.Nation]map[dip.Province][]string) *dvars.Phase {
+	units := map[dip.Province]dip.Unit{}
+	for _, unit := range p.Units {
+		units[unit.Province] = unit.Unit
+	}
+	scs := map[dip.Province]dip.Nation{}
+	for _, sc := range p.SCs {
+		scs[sc.Province] = sc.Owner
+	}
+	dislodgeds := map[dip.Province]dip.Unit{}
+	for _, d := range p.Dislodgeds {
+		dislodgeds[d.Province] = d.Dislodged
+	}
+	dislodgers := map[dip.Province]dip.Province{}
+	for _, d := range p.Dislodgers {
+		dislodgers[d.Province] = d.Dislodger
+	}
+	bounces := map[dip.Province]map[dip.Province]bool{}
+	for _, b := range p.Bounces {
+		provBounces, found := bounces[b.Province]
+		if !found {
+			provBounces = map[dip.Province]bool{}
+		}
+		for _, el := range strings.Split(b.BounceList, ",") {
+			provBounces[dip.Province(el)] = true
+		}
+		bounces[b.Province] = provBounces
+	}
+	resolutions := map[dip.Province]string{}
+	for _, res := range p.Resolutions {
+		resolutions[res.Province] = res.Resolution
+	}
+	return &dvars.Phase{
+		Variant:       variant,
+		Season:        p.Season,
+		Year:          p.Year,
+		Type:          p.Type,
+		Units:         units,
+		SupplyCenters: scs,
+		Dislodgeds:    dislodgeds,
+		Dislodgers:    dislodgers,
+		Bounces:       bounces,
+		Resolutions:   resolutions,
+		Orders:        orderMap,
+	}
+}
+
 func devResolvePhaseTimeout(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -855,7 +903,13 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 
 func (p *Phase) Item(r Request) *Item {
 	phaseItem := NewItem(p).SetName(fmt.Sprintf("%s %d, %s", p.Season, p.Year, p.Type))
-	phaseItem.AddLink(r.NewLink(PhaseResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)})))
+	phaseItem.
+		AddLink(r.NewLink(PhaseResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)}))).
+		AddLink(r.NewLink(Link{
+		Rel:         "map",
+		Route:       RenderPhaseMapRoute,
+		RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
+	}))
 	_, isMember := r.Values()[memberNationFlag]
 	if isMember || p.Resolved {
 		phaseItem.AddLink(r.NewLink(Link{
@@ -1099,6 +1153,61 @@ func (p *Phase) State(ctx context.Context, variant variants.Variant, orderMap ma
 	}
 
 	return variant.Blank(variant.Phase(p.Year, p.Season, p.Type)).Load(units, supplyCenters, dislodgeds, dislodgers, bounces, parsedOrders), nil
+}
+
+func renderPhaseMap(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthorized", 401}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return err
+	}
+
+	phaseOrdinal, err := strconv.ParseInt(r.Vars()["phase_ordinal"], 10, 64)
+	if err != nil {
+		return err
+	}
+
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		return err
+	}
+
+	game := &Game{}
+	phase := &Phase{}
+	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
+		return err
+	}
+	game.ID = gameID
+
+	var nation dip.Nation
+
+	if member, found := game.GetMember(user.Id); found {
+		nation = member.Nation
+	}
+
+	foundOrders, err := phase.Orders(ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof(ctx, "found %+v", foundOrders)
+
+	ordersToDisplay := map[dip.Nation]map[dip.Province][]string{}
+	for nat, orders := range foundOrders {
+		log.Infof(ctx, "%#v == %#v => %v", nat, nation, nat == nation)
+		if nat == nation || phase.Resolved {
+			ordersToDisplay[nat] = orders
+		}
+	}
+
+	vPhase := phase.toVariantsPhase(game.Variant, ordersToDisplay)
+
+	return dvars.RenderPhaseMap(w, r, vPhase)
 }
 
 func listPhases(w ResponseWriter, r Request) error {
