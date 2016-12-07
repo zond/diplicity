@@ -63,7 +63,8 @@ type phaseNotificationContext struct {
 	user         *auth.User
 	userConfig   *auth.UserConfig
 	mapURL       *url.URL
-	data         map[string]interface{}
+	fcmData      map[string]interface{}
+	mailData     map[string]interface{}
 }
 
 func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string) (*phaseNotificationContext, error) {
@@ -72,7 +73,7 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 	var err error
 	res.phaseID, err = PhaseID(ctx, gameID, phaseOrdinal)
 	if err != nil {
-		log.Errorf(ctx, "PhaseID(..., %q, %q, %v, %v): %v; fix the PhaseID func", host, scheme, gameID, phaseOrdinal, err)
+		log.Errorf(ctx, "PhaseID(..., %v, %v): %v; fix the PhaseID func", gameID, phaseOrdinal, err)
 		return nil, err
 	}
 
@@ -115,11 +116,14 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 	res.mapURL.Host = host
 	res.mapURL.Scheme = scheme
 
-	res.data = map[string]interface{}{
+	res.mailData = map[string]interface{}{
 		"diplicityPhaseMeta": res.phase.PhaseMeta,
 		"diplicityGame":      res.game,
 		"diplicityUser":      res.user,
 		"diplicityMapLink":   res.mapURL.String(),
+	}
+	res.fcmData = map[string]interface{}{
+		"diplicityPhaseMeta": res.phase.PhaseMeta,
 	}
 
 	return res, nil
@@ -154,7 +158,7 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 		return err
 	}
 
-	msgContext.data["unsubscribeURL"] = unsubscribeURL.String()
+	msgContext.mailData["unsubscribeURL"] = unsubscribeURL.String()
 
 	msg := sendgrid.NewMail()
 	msg.SetText(fmt.Sprintf(
@@ -165,7 +169,7 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 	msg.SetSubject(fmt.Sprintf("%s %d, %s", msgContext.phase.Season, msgContext.phase.Year, msgContext.phase.Type))
 	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
 
-	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.data)
+	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.mailData)
 
 	recipEmail, err := mail.ParseAddress(msgContext.user.Email)
 	if err != nil {
@@ -202,9 +206,9 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameI
 		return err
 	}
 
-	dataPayload, err := NewFCMData(msgContext.data)
+	dataPayload, err := NewFCMData(msgContext.fcmData)
 	if err != nil {
-		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", msgContext.data, err)
+		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", msgContext.fcmData, err)
 		return err
 	}
 
@@ -223,7 +227,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameI
 			ClickAction: msgContext.mapURL.String(),
 		}
 
-		fcmToken.PhaseConfig.Customize(ctx, notificationPayload, msgContext.data)
+		fcmToken.PhaseConfig.Customize(ctx, notificationPayload, msgContext.mailData)
 
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			if err := FCMSendToTokensFunc.EnqueueIn(
@@ -241,7 +245,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameI
 			}
 
 			if len(msgContext.userConfig.FCMTokens) > len(finishedTokens) {
-				if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, gameID, phaseOrdinal, userId, finishedTokens); err != nil {
+				if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, scheme, gameID, phaseOrdinal, userId, finishedTokens); err != nil {
 					log.Errorf(ctx, "Unable to enqueue sending of rest of notifications: %v; hope datastore gets fixed", err)
 					return err
 				}
@@ -253,7 +257,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameI
 			return err
 		}
 		log.Infof(ctx, "Successfully sent a notification and enqueued sending the rest, exiting")
-		return nil
+		break
 	}
 
 	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %q, %q, %v, %v, %q, %+v) *** SUCCESS ***", host, scheme, gameID, phaseOrdinal, userId, finishedTokens)

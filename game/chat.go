@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/mail"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -67,10 +68,12 @@ type msgNotificationContext struct {
 	message      *Message
 	user         *auth.User
 	userConfig   *auth.UserConfig
-	data         map[string]interface{}
+	fcmData      map[string]interface{}
+	mailData     map[string]interface{}
+	mapURL       *url.URL
 }
 
-func getMsgNotificationContext(ctx context.Context, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) (*msgNotificationContext, error) {
+func getMsgNotificationContext(ctx context.Context, host, scheme string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) (*msgNotificationContext, error) {
 	res := &msgNotificationContext{}
 
 	var err error
@@ -116,11 +119,23 @@ func getMsgNotificationContext(ctx context.Context, gameID *datastore.Key, chann
 		return nil, noConfigError
 	}
 
-	res.data = map[string]interface{}{
+	res.mapURL, err = router.Get(RenderPhaseMapRoute).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.game.NewestPhaseMeta[0].PhaseOrdinal))
+	if err != nil {
+		log.Errorf(ctx, "Unable to create map URL for game %v and phase %v: %v; wtf?", res.game.ID, res.game.NewestPhaseMeta[0].PhaseOrdinal, err)
+		return nil, err
+	}
+	res.mapURL.Host = host
+	res.mapURL.Scheme = scheme
+
+	res.mailData = map[string]interface{}{
 		"diplicityGame":    res.game,
 		"diplicityChannel": res.channel,
 		"diplicityMessage": res.message,
 		"diplicityUser":    res.user,
+		"diplicityMapLink": res.mapURL.String(),
+	}
+	res.fcmData = map[string]interface{}{
+		"diplicityMessage": res.message,
 	}
 
 	return res, nil
@@ -150,7 +165,7 @@ func sendEmailError(ctx context.Context, to string, errorMessage string) error {
 func sendMsgNotificationsToMail(ctx context.Context, host, scheme string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) error {
 	log.Infof(ctx, "sendMsgNotificationsToMail(..., %q, %q, %v, %+v, %v, %q)", host, scheme, gameID, channelMembers, messageID, userId)
 
-	msgContext, err := getMsgNotificationContext(ctx, gameID, channelMembers, messageID, userId)
+	msgContext, err := getMsgNotificationContext(ctx, host, scheme, gameID, channelMembers, messageID, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 		return nil
@@ -176,14 +191,14 @@ func sendMsgNotificationsToMail(ctx context.Context, host, scheme string, gameID
 		return err
 	}
 
-	msgContext.data["unsubscribeURL"] = unsubscribeURL.String()
+	msgContext.mailData["unsubscribeURL"] = unsubscribeURL.String()
 
 	msg := sendgrid.NewMail()
-	msg.SetText(fmt.Sprintf("%s\n\nVisit %s to stop receiving email like this.", msgContext.message.Body, unsubscribeURL.String()))
+	msg.SetText(fmt.Sprintf("%s\n\nVisit %s to stop receiving email like this.\n\nVisit %s to see the latest phase in this game.", msgContext.message.Body, unsubscribeURL.String(), msgContext.mapURL.String()))
 	msg.SetSubject(fmt.Sprintf("%s: Message from %s", msgContext.message.ChannelMembers.String(), msgContext.message.Sender))
 	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
 
-	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.data)
+	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.mailData)
 
 	recipEmail, err := mail.ParseAddress(msgContext.user.Email)
 	if err != nil {
@@ -224,7 +239,7 @@ func sendMsgNotificationsToMail(ctx context.Context, host, scheme string, gameID
 func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string, finishedTokens map[string]struct{}) error {
 	log.Infof(ctx, "sendMsgNotificationsToFCM(..., %q, %q, %v, %+v, %v, %q, %+v)", host, scheme, gameID, channelMembers, messageID, userId, finishedTokens)
 
-	msgContext, err := getMsgNotificationContext(ctx, gameID, channelMembers, messageID, userId)
+	msgContext, err := getMsgNotificationContext(ctx, host, scheme, gameID, channelMembers, messageID, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 		return nil
@@ -233,9 +248,9 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 		return err
 	}
 
-	dataPayload, err := NewFCMData(msgContext.data)
+	dataPayload, err := NewFCMData(msgContext.fcmData)
 	if err != nil {
-		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", msgContext.data, err)
+		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", msgContext.fcmData, err)
 		return err
 	}
 
@@ -257,10 +272,10 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 			Title:       fmt.Sprintf("%s: Message from %s", msgContext.message.ChannelMembers.String(), msgContext.message.Sender),
 			Body:        msgContext.message.Body,
 			Tag:         "diplicity-engine-new-message",
-			ClickAction: fmt.Sprintf("%s://%s/Game/%s/Channel/%s/Messages", host, scheme, gameID.Encode(), channelMembers.String()),
+			ClickAction: fmt.Sprintf("%s://%s/Game/%s/Channel/%s/Messages", scheme, host, gameID.Encode(), channelMembers.String()),
 		}
 
-		fcmToken.MessageConfig.Customize(ctx, notificationPayload, msgContext.data)
+		fcmToken.MessageConfig.Customize(ctx, notificationPayload, msgContext.mailData)
 
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			if err := FCMSendToTokensFunc.EnqueueIn(
@@ -278,7 +293,7 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 			}
 
 			if len(msgContext.userConfig.FCMTokens) > len(finishedTokens) {
-				if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, gameID, channelMembers, messageID, userId, finishedTokens); err != nil {
+				if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, scheme, gameID, channelMembers, messageID, userId, finishedTokens); err != nil {
 					log.Errorf(ctx, "Unable to enqueue sending of rest of notifications: %v; hope datastore gets fixed", err)
 					return err
 				}
@@ -290,7 +305,7 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 			return err
 		}
 		log.Infof(ctx, "Successfully enqueued sent a notification and enqueued sending the rest, exiting")
-		return nil
+		break
 	}
 
 	log.Infof(ctx, "sendMsgNotificationsToFCM(..., %q, %q, %v, %+v, %v, %q, %+v) *** SUCCESS ***", host, scheme, gameID, channelMembers, messageID, userId, finishedTokens)

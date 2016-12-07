@@ -203,15 +203,15 @@ func (u *UserConfig) Item(r Request) *Item {
 		[]string{
 			"FCM templates",
 			"The FCM templates define the title, body and click action of the FCM notifications sent out.",
-			"They are parsed by a Handlebars parser (https://github.com/aymerick/raymond), using context objects containing the same data as the data payload of the FCM notifications.",
+			"They are parsed by a Handlebars parser (https://github.com/aymerick/raymond).",
 		},
 		[]string{
 			"New phase FCM notifications",
-			"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhaseMeta: [phase JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz. The on click action will open an HTML page displaying the map of the new phase.",
+			"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhaseMeta: [phase JSON] }` compressed with libz. The on click action will open an HTML page displaying the map of the new phase.",
 		},
 		[]string{
 			"New message FCM notifications",
-			"FCM notifications for new messages will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON], diplicityChannel: [channel JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz.",
+			"FCM notifications for new messages will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON] }` compressed with libz.",
 		},
 		[]string{
 			"Email config",
@@ -220,7 +220,7 @@ func (u *UserConfig) Item(r Request) *Item {
 			"An enabled flag which turns email notifications on.",
 			"Information about whether the unsubscribe link in the email should render some HTML or redirect to another host, defined by two Handlebars templates, one for the redirect link and one for the HTML to display.",
 			"Two template fields, one for phase and one for message notifications.",
-			"All templates will be parsed by the same parser as the FCM templates, using context objects containing the same data as the data payload of the FCM notifications + ` unsubscribeURL: [URL to unsubscribe] ` and ` diplicityMapLink: [URL to view map] `.",
+			"All templates will be parsed by the same parser as the FCM templates.",
 		},
 	})
 }
