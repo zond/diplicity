@@ -1175,7 +1175,10 @@ func (p *Phase) State(ctx context.Context, variant variants.Variant, orderMap ma
 func renderPhaseMap(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
-	user, loggedIn := r.Values()["user"].(*auth.User)
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthorized", 401}
+	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
 	if err != nil {
@@ -1201,10 +1204,8 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 
 	var nation dip.Nation
 
-	if loggedIn {
-		if member, found := game.GetMember(user.Id); found {
-			nation = member.Nation
-		}
+	if member, found := game.GetMember(user.Id); found {
+		nation = member.Nation
 	}
 
 	foundOrders, err := phase.Orders(ctx)
