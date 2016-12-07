@@ -72,7 +72,7 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 	var err error
 	res.phaseID, err = PhaseID(ctx, gameID, phaseOrdinal)
 	if err != nil {
-		log.Errorf(ctx, "PhaseID(..., %v, %v): %v; fix the PhaseID func", gameID, phaseOrdinal, err)
+		log.Errorf(ctx, "PhaseID(..., %q, %q, %v, %v): %v; fix the PhaseID func", host, scheme, gameID, phaseOrdinal, err)
 		return nil, err
 	}
 
@@ -116,10 +116,10 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 	res.mapURL.Scheme = scheme
 
 	res.data = map[string]interface{}{
-		"diplicityPhase":   res.phase,
-		"diplicityGame":    res.game,
-		"diplicityUser":    res.user,
-		"diplicityMapLink": res.mapURL.String(),
+		"diplicityPhaseMeta": res.phase.PhaseMeta,
+		"diplicityGame":      res.game,
+		"diplicityUser":      res.user,
+		"diplicityMapLink":   res.mapURL.String(),
 	}
 
 	return res, nil
@@ -148,9 +148,7 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 		return err
 	}
 
-	reqURL := fmt.Sprintf("%s://%s", scheme, host)
-
-	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, reqURL, userId)
+	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, host, scheme, userId)
 	if err != nil {
 		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix auth.GetUnsubscribeURL", userId, err)
 		return err
@@ -193,7 +191,7 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 }
 
 func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string, finishedTokens map[string]struct{}) error {
-	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %v, %v, %q, %+v)", gameID, phaseOrdinal, userId, finishedTokens)
+	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %q, %q, %v, %v, %q, %+v)", host, scheme, gameID, phaseOrdinal, userId, finishedTokens)
 
 	msgContext, err := getPhaseNotificationContext(ctx, host, scheme, gameID, phaseOrdinal, userId)
 	if err == noConfigError {
@@ -258,7 +256,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameI
 		return nil
 	}
 
-	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %v, %v, %q, %+v) *** SUCCESS ***", gameID, phaseOrdinal, userId, finishedTokens)
+	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %q, %q, %v, %v, %q, %+v) *** SUCCESS ***", host, scheme, gameID, phaseOrdinal, userId, finishedTokens)
 
 	return nil
 }

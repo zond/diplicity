@@ -77,18 +77,14 @@ func PP(i interface{}) string {
 	return string(b)
 }
 
-func GetUnsubscribeURL(ctx context.Context, r *mux.Router, reqURL string, userId string) (*url.URL, error) {
+func GetUnsubscribeURL(ctx context.Context, r *mux.Router, host, scheme string, userId string) (*url.URL, error) {
 	unsubscribeURL, err := r.Get(UnsubscribeRoute).URL("user_id", userId)
 	if err != nil {
 		return nil, err
 	}
 
-	reqU, err := url.Parse(reqURL)
-	if err != nil {
-		return nil, err
-	}
-	unsubscribeURL.Host = reqU.Host
-	unsubscribeURL.Scheme = reqU.Scheme
+	unsubscribeURL.Host = host
+	unsubscribeURL.Scheme = scheme
 
 	unsubToken, err := EncodeString(ctx, userId)
 	if err != nil {

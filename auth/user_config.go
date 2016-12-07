@@ -207,7 +207,7 @@ func (u *UserConfig) Item(r Request) *Item {
 		},
 		[]string{
 			"New phase FCM notifications",
-			"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhase: [phase JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz. The on click action will open an HTML page displaying the map of the new phase.",
+			"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhaseMeta: [phase JSON], diplicityGame: [game JSON], diplicityUser: [user JSON] }` compressed with libz. The on click action will open an HTML page displaying the map of the new phase.",
 		},
 		[]string{
 			"New message FCM notifications",
