@@ -131,11 +131,17 @@ func NewEnv() *Env {
 }
 
 type Env struct {
-	uid string
+	uid   string
+	email string
 }
 
 func (e *Env) GetUID() string {
 	return e.uid
+}
+
+func (e *Env) SetEmail(m string) *Env {
+	e.email = m
+	return e
 }
 
 func (e *Env) SetUID(uid string) *Env {
@@ -409,6 +415,9 @@ func (r *Req) do() *Result {
 	}
 	if r.env.uid != "" {
 		queryParams.Set("fake-id", r.env.uid)
+	}
+	if r.env.email != "" {
+		queryParams.Set("fake-email", r.env.email)
 	}
 	r.url.RawQuery = queryParams.Encode()
 	var bodyReader io.Reader
