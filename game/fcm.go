@@ -237,6 +237,8 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 		idsToRemove := map[string]map[string]string{}
 		idsToRetry = map[string][]string{}
 
+		failures := 0
+		successes := 0
 		for i, result := range resp.Results {
 			token := tokenStrings[i]
 			uid := userByToken[token]
@@ -269,12 +271,25 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 					fallthrough
 				case "InvalidPackageName":
 					log.Errorf(ctx, "Token %q got %q, wtf?", token, errMsg)
+				case "InvalidParameters":
+					fallthrough
 				case "MessageTooBig":
 					log.Errorf(ctx, "Token %q got %q, SEND SMALLER MESSAGES DAMNIT!", token, errMsg)
 				case "InvalidDataKey":
 					log.Errorf(ctx, "Token %q got %q, SEND CORRECT MESSAGES DAMNIT!", token, errMsg)
+				default:
+					log.Errorf(ctx, "Token %q got %q, wtf?", token, errMsg)
 				}
+				failures++
+			} else {
+				successes++
 			}
+		}
+		if successes != resp.Success {
+			log.Errorf(ctx, "Reported successes %v != nr of non failure results %v", resp.Success, successes)
+		}
+		if failures != resp.Fail {
+			log.Errorf(ctx, "Reported failures %v != nr of failure results %v", resp.Fail, failures)
 		}
 		if len(idsToRemove) > 0 || len(idsToUpdate) > 0 {
 			if err := manageFCMTokensFunc.EnqueueIn(ctx, 0, idsToRemove, idsToUpdate); err != nil {
