@@ -116,7 +116,7 @@ function dippyMap(container) {
 	that.addClickListener = function(province, handler, options) {
 		var nohighlight = (options || {}).nohighlight;
 		if (!nohighlight) {
-			highlightProvince(province);
+			that.highlightProvince(province);
 		}
 		var prov = $(el).find('#' + that.selEscape(province)).first();
 		var copy = prov.clone()[0];
@@ -138,15 +138,12 @@ function dippyMap(container) {
 		}
 		copy.setAttribute("transform", "translate(" + x + "," + y + ")");
 		el.appendChild(copy);
-		var ham = $(copy).hammer({
-		  prevent_default: true,
-		});
-		ham.bind('tap', handler);
+		$(copy).bind('click', handler);
 		return function() {
 			if (!nohighlight) {
 				that.unhighlightProvince(province); 
 			}
-			ham.unbind('tap', handler);
+			$(copy).unbind('click', handler);
 		};
 	};
 	that.addBox = function(province, corners, color) {
