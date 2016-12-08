@@ -22,7 +22,11 @@ func main() {
 	router := mux.NewRouter()
 	routes.Setup(router)
 	os.MkdirAll(*dir, 0755)
-	if err := goaeoas.GenerateJava(*dir, *pkg); err != nil {
+	classes, err := goaeoas.GenerateJava(*pkg)
+	if err != nil {
+		panic(err)
+	}
+	if err := goaeoas.DumpJava(*dir, classes); err != nil {
 		panic(err)
 	}
 }
