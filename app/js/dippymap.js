@@ -81,7 +81,7 @@ function dippyMap(container) {
 		path.setAttribute('fill', color);
 		path.setAttribute('fill-opacity', '0.8');
 	};
-  that.hideProvince = function(province) {
+	that.hideProvince = function(province) {
 		var path = $(el).find('#' + that.selEscape(province))[0];
 		path.removeAttribute('style');
 		path.setAttribute('fill', '#ffffff');
