@@ -1212,7 +1212,6 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 	if err != nil {
 		return err
 	}
-	log.Infof(ctx, "found %+v", foundOrders)
 
 	ordersToDisplay := map[dip.Nation]map[dip.Province][]string{}
 	for nat, orders := range foundOrders {
