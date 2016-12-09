@@ -138,7 +138,9 @@ function dippyMap(container) {
 		}
 		copy.setAttribute("transform", "translate(" + x + "," + y + ")");
 		el.appendChild(copy);
-		$(copy).bind('click', handler);
+		$(copy).bind('click', function() {
+			handler(province);
+		});
 		return function() {
 			if (!nohighlight) {
 				that.unhighlightProvince(province); 
