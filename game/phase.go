@@ -1088,6 +1088,7 @@ func listOptions(w ResponseWriter, r Request) error {
 			"Province",
 			"`Province` decisions represent picking a province from the game map.",
 			"The children of the root of the options tree indicate that the user needs to select which province to define an order for.",
+			"The first `Province` option just indicates which province the order is meant for.",
 		},
 		[]string{
 			"OrderType",
@@ -1099,7 +1100,8 @@ func listOptions(w ResponseWriter, r Request) error {
 		},
 		[]string{
 			"SrcProvince",
-			"`SrcProvince` is unique for `Hold` orders, and indicates that the value should be prepended to the order string list without presenting the player with a choice - i.e. a `Hold` order always only affects the source province of the order.",
+			"`SrcProvince` indicates that the value should be appended to the order string list without presenting the player with a choice - i.e. a `Hold` order always only affects the source province of the order.",
+			"Basically, used for the parts of an order that are by necessity identical to the province the order is for.",
 		},
 	}).AddLink(r.NewLink(Link{
 		Rel:         "self",

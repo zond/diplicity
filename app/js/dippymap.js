@@ -5,6 +5,9 @@ function dippyMap(container) {
 	if (container.find('svg').length > 0) {
 	  el = container.find('svg')[0];
 	}
+	that.addReadyAction = function(cb) {
+		cb();
+	};
 	that.contrasts = ["#e90068",
 		"#00a057",
 		"#ff57c3",
@@ -113,6 +116,12 @@ function dippyMap(container) {
 	that.unhighlightProvince = function(province) {
 		$(el).find('#' + that.selEscape(province) + '_highlight').remove();
 	};
+	var clickListenerRemovers = [];
+	that.clearClickListeners = function() {
+		for (var i = 0; i < clickListenerRemovers.length; i++) {
+			clickListenerRemovers[i]();
+		}
+	};
 	that.addClickListener = function(province, handler, options) {
 		var nohighlight = (options || {}).nohighlight;
 		if (!nohighlight) {
@@ -141,12 +150,12 @@ function dippyMap(container) {
 		$(copy).bind('click', function() {
 			handler(province);
 		});
-		return function() {
+		clickListenerRemovers.push(function() {
 			if (!nohighlight) {
 				that.unhighlightProvince(province); 
 			}
 			$(copy).unbind('click', handler);
-		};
+		});
 	};
 	that.addBox = function(province, corners, color) {
 		var loc = that.centerOf(province);
@@ -173,7 +182,7 @@ function dippyMap(container) {
     subBox(27);
 		subBox(20);
 		path.setAttribute("d", d);
-		el.appendChild(path);
+		$(el).find('#orders')[0].appendChild(path);
 	};
 	that.addArrow = function(provs, color) {
 	  var start = null;
@@ -222,7 +231,7 @@ function dippyMap(container) {
 		d += " C " + control1.x + "," + control1.y + "," + control1.x + "," + control1.y + "," + start1.x + "," + start1.y;
 		d += " z";
 		path.setAttribute("d", d);
-		el.appendChild(path);
+		$(el).find('#orders')[0].appendChild(path);
 	};
 	that.addCross = function(province, color) {
 		var bound = 14;
@@ -246,7 +255,10 @@ function dippyMap(container) {
 			"L " + (loc.x - bound - width) + "," + (loc.y + bound) + " " +
 			"L " + (loc.x - bound) + "," + (loc.y + bound + width) + " z");
 		path.setAttribute("d", d);
-		el.appendChild(path);
+		$(el).find('#orders')[0].appendChild(path);
+	};
+	that.removeOrders = function() {
+		$(el).find('#orders').empty()
 	};
 	that.addOrder = function(order, color) {
 	  if (order[1] == 'Hold') {

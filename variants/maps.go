@@ -64,15 +64,26 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
 	headNode.AddEl("script", "src", "/js/dippymap.js")
 	headNode.AddEl("script").AddText(fmt.Sprintf(
 		`
-var map = null;
+window.map = function() {
+  var that = this;
+	that.readyActions = [];
+  that.addReadyAction = function(cb) {
+		that.readyActions.push(cb);
+	};
+	return that;
+}();
 $(document).ready(function() {
 	$.ajax({
 		url: %q,
 		dataType: 'html',
 		success: function(data) {
 			$('#map').append(data);
-      map = dippyMap($('#map'));
+			var readyActions = window.map.readyActions;
+      window.map = dippyMap($('#map'));
 %s
+			for (var i = 0; i < readyActions.length; i++) {
+				readyActions[i]();
+			}
 		}
 	});
 });
