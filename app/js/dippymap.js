@@ -269,7 +269,7 @@ function dippyMap(container) {
 		  addArrow([order[0], order[2]], color);
 			addBox(order[0], 5, color);
 		} else if (order[1] == 'Build') {
-		  addUnit('unit' + order[2], order[0], color, false, true);
+		  addUnit('unit' + order[2], order[0], color, false, true, '#orders');
 		} else if (order[1] == 'Disband') {
 		  addCross(order[0], color);
 		} else if (order[1] == 'Convoy') {
@@ -285,7 +285,10 @@ function dippyMap(container) {
 			}
 		}
 	};
-	that.addUnit = function(sourceId, province, color, dislodged, build) {
+	that.addUnit = function(sourceId, province, color, dislodged, build, layer) {
+		if (typeof layer === 'undefined') {
+			layer = '#units';
+		}
 		var shadow = $('#' + sourceId).find('#shadow').first().clone();
 		var hullQuery = $('#' + sourceId + ' svg').find('#hull');
 		var bodyQuery = $('#' + sourceId + ' svg').find('#body');
@@ -313,8 +316,8 @@ function dippyMap(container) {
 			color = '#000000';
 		}
 		unit.attr("style", "fill:" + color + ";fill-opacity:" + opacity + ";stroke:#000000;stroke-width:1;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none");
-		el.appendChild(shadow[0]);
-		el.appendChild(unit[0]);
+		$(el).find(layer)[0].appendChild(shadow[0]);
+		$(el).find(layer)[0].appendChild(unit[0]);
 	};
 	return that;
 }

@@ -29,9 +29,14 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
+	staticJSBuf := []string{}
+	for _, nat := range variant.Nations {
+		staticJSBuf = append(staticJSBuf, fmt.Sprintf("var col%s;", nat))
+	}
+
 	jsBuf := []string{}
 	for i, nat := range variant.Nations {
-		jsBuf = append(jsBuf, fmt.Sprintf("var col%s = map.contrasts[%d];", nat, i))
+		jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nat, i))
 	}
 	for prov, unit := range phase.Units {
 		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s);", unit.Type, prov, unit.Nation))
@@ -64,6 +69,7 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
 	headNode.AddEl("script", "src", "/js/dippymap.js")
 	headNode.AddEl("script").AddText(fmt.Sprintf(
 		`
+%s
 window.map = function() {
   var that = this;
 	that.readyActions = [];
@@ -87,7 +93,7 @@ $(document).ready(function() {
 		}
 	});
 });
-`, mapURL.String(), strings.Join(jsBuf, "\n")))
+`, strings.Join(staticJSBuf, "\n"), mapURL.String(), strings.Join(jsBuf, "\n")))
 
 	bodyNode := htmlNode.AddEl("body", "style", "background:#ffffff;")
 	bodyNode.AddEl("div", "id", "map")
