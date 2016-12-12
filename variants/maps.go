@@ -95,7 +95,7 @@ $(document).ready(function() {
 });
 `, strings.Join(staticJSBuf, "\n"), mapURL.String(), strings.Join(jsBuf, "\n")))
 
-	bodyNode := htmlNode.AddEl("body", "style", "background:#ffffff;")
+	bodyNode := htmlNode.AddEl("body", "style", "background:#212121;")
 	bodyNode.AddEl("div", "id", "map")
 	for _, typ := range variant.UnitTypes {
 		hiddenRoot := bodyNode.AddEl("div", "id", fmt.Sprintf("unit%s", typ), "style", "display:none;")
