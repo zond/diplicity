@@ -29,7 +29,6 @@ const (
 )
 
 const (
-	GetManifestJSRoute          = "GetManifestJS"
 	GetSWJSRoute                = "GetSWJS"
 	GetMainJSRoute              = "GetMainJS"
 	ConfigureRoute              = "AuthConfigure"
