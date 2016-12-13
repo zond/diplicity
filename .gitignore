@@ -27,3 +27,5 @@ _testmain.go
 java/classes
 
 .DS_STORE
+
+app/autotest
