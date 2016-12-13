@@ -16,6 +16,25 @@ func main() {
 	emails := flag.String("emails", "", "',' separated list of emails to use when faking the provided uids.")
 
 	cmdFuncs := map[string]func(){
+		"resolvePhase": func() {
+			fmt.Printf("Resolving %q...", *gameDesc)
+			game := NewEnv().SetUID(String("fake")).GetRoute(game.ListStartedGamesRoute).Success().
+				Find(*gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			gameURLString := game.Find("self", []string{"Links"}, []string{"Rel"}).GetValue("URL").(string)
+			phaseOrdinal := int(game.GetValue("Properties", "NewestPhaseMeta").([]interface{})[0].(map[string]interface{})["PhaseOrdinal"].(float64))
+			members := game.GetValue("Properties", "Members").([]interface{})
+			for _, member := range members {
+				NewEnv().SetUID(member.(map[string]interface{})["User"].(map[string]interface{})["Id"].(string)).GetURL(gameURLString).Success().
+					Follow("phases", "Links").Success().
+					Find(phaseOrdinal, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+					Follow("phase-states", "Links").Success().
+					Find(phaseOrdinal, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+					Follow("update", "Links").Body(map[string]interface{}{
+					"ReadyToResolve": true,
+				}).Success()
+			}
+			fmt.Println("Success")
+		},
 		"startGame": func() {
 			fmt.Printf("Joining %q with enough users to start it...", *gameDesc)
 			started := false
