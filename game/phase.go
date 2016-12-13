@@ -385,14 +385,6 @@ func (p *PhaseResolver) Act() error {
 		return nil
 	}
 
-	// Finish and save old phase.
-
-	p.Phase.Resolved = true
-	if err := p.Phase.Save(p.Context); err != nil {
-		log.Errorf(p.Context, "Unable to save old phase %v: %v; hope datastore gets fixed", PP(p.Phase), err)
-		return err
-	}
-
 	// Roll forward the game state.
 
 	log.Infof(p.Context, "PhaseStates at resolve time: %v", PP(p.PhaseStates))
@@ -415,6 +407,24 @@ func (p *PhaseResolver) Act() error {
 		return err
 	}
 	scCounts := p.SCCounts(s)
+
+	// Set resolutions
+
+	for prov, err := range s.Resolutions() {
+		if err == nil {
+			p.Phase.Resolutions = append(p.Phase.Resolutions, Resolution{prov, "OK"})
+		} else {
+			p.Phase.Resolutions = append(p.Phase.Resolutions, Resolution{prov, err.Error()})
+		}
+	}
+
+	// Finish and save old phase.
+
+	p.Phase.Resolved = true
+	if err := p.Phase.Save(p.Context); err != nil {
+		log.Errorf(p.Context, "Unable to save old phase %v: %v; hope datastore gets fixed", PP(p.Phase), err)
+		return err
+	}
 
 	// Create the new phase.
 
@@ -995,7 +1005,7 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host, s
 		Host:   host,
 		Scheme: scheme,
 	}
-	units, scs, dislodgeds, dislodgers, bounces, resolutions := s.Dump()
+	units, scs, dislodgeds, dislodgers, bounces, _ := s.Dump()
 	for prov, unit := range units {
 		p.Units = append(p.Units, Unit{prov, unit})
 	}
@@ -1014,13 +1024,6 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host, s
 			bounceList = append(bounceList, string(prov))
 		}
 		p.Bounces = append(p.Bounces, Bounce{prov, strings.Join(bounceList, ",")})
-	}
-	for prov, err := range resolutions {
-		if err == nil {
-			p.Resolutions = append(p.Resolutions, Resolution{prov, "OK"})
-		} else {
-			p.Resolutions = append(p.Resolutions, Resolution{prov, err.Error()})
-		}
 	}
 	return p
 }
