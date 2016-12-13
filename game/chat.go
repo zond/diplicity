@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	messageKind = "Message"
-	channelKind = "Channel"
+	messageKind    = "Message"
+	channelKind    = "Channel"
+	seenMarkerKind = "SeenMarker"
 )
 
 var (
@@ -397,7 +398,7 @@ func (c Channels) Item(r Request, gameID *datastore.Key, isMember bool) *Item {
 		},
 		[]string{
 			"Counters",
-			"Channels tell you how many messages they have, and if you provide the `since` query parameter they will even tell you how many new messages they have received since then.",
+			"Channels tell you how many messages they have, and how many new since you last loaded messages from them.",
 		},
 	}).AddLink(r.NewLink(Link{
 		Rel:         "self",
@@ -420,6 +421,28 @@ type Channel struct {
 	Members        Nations
 	NMessages      int
 	NMessagesSince NMessagesSince `datastore:"-"`
+}
+
+type SeenMarker struct {
+	GameID  *datastore.Key
+	Members Nations
+	Owner   dip.Nation
+	At      time.Time `methods:"POST"`
+}
+
+func SeenMarkerID(ctx context.Context, channelID *datastore.Key, owner dip.Nation) (*datastore.Key, error) {
+	if channelID == nil || owner == "" {
+		return nil, fmt.Errorf("seen markers must have channels and owners")
+	}
+	return datastore.NewKey(ctx, seenMarkerKind, string(owner), 0, channelID), nil
+}
+
+func (s *SeenMarker) ID(ctx context.Context) (*datastore.Key, error) {
+	channelID, err := ChannelID(ctx, s.GameID, s.Members)
+	if err != nil {
+		return nil, err
+	}
+	return SeenMarkerID(ctx, channelID, s.Owner)
 }
 
 func (c *Channel) Item(r Request) *Item {
@@ -747,6 +770,22 @@ func listMessages(w ResponseWriter, r Request) error {
 		return err
 	}
 
+	if nation != "" && len(messages) > 0 {
+		seenMarker := &SeenMarker{
+			GameID:  gameID,
+			Owner:   nation,
+			Members: channelMembers,
+			At:      messages[0].CreatedAt,
+		}
+		seenMarkerID, err := seenMarker.ID(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err = datastore.Put(ctx, seenMarkerID, seenMarker); err != nil {
+			return err
+		}
+	}
+
 	filteredMessages := make(Messages, 0, len(messages))
 	for _, msg := range messages {
 		if _, isMuted := mutedNats[msg.Sender]; !isMuted {
@@ -769,15 +808,6 @@ func listChannels(w ResponseWriter, r Request) error {
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
 	if err != nil {
 		return err
-	}
-
-	var since *time.Time
-	if sinceParam := r.Req().URL.Query().Get("since"); sinceParam != "" {
-		sinceTime, err := time.Parse(time.RFC3339, sinceParam)
-		if err != nil {
-			return err
-		}
-		since = &sinceTime
 	}
 
 	game := &Game{}
@@ -820,12 +850,48 @@ func listChannels(w ResponseWriter, r Request) error {
 		}
 	}
 
-	if since != nil {
+	if isMember {
+		seenMarkerTimes := make([]time.Time, len(channels))
+
+		seenMarkerIDs := make([]*datastore.Key, len(channels))
+		for i := range channels {
+			channelID, err := channels[i].ID(ctx)
+			if err != nil {
+				return err
+			}
+			seenMarkerIDs[i], err = SeenMarkerID(ctx, channelID, member.Nation)
+			if err != nil {
+				return err
+			}
+		}
+		seenMarkers := make([]SeenMarker, len(channels))
+		err := datastore.GetMulti(ctx, seenMarkerIDs, seenMarkers)
+		if err == nil {
+			for i := range channels {
+				seenMarkerTimes[i] = seenMarkers[i].At
+			}
+		} else if merr, ok := err.(appengine.MultiError); ok {
+			for i, serr := range merr {
+				if serr == nil {
+					seenMarkerTimes[i] = seenMarkers[i].At
+				} else if serr != datastore.ErrNoSuchEntity {
+					return err
+				}
+			}
+		} else if err != datastore.ErrNoSuchEntity {
+			return err
+		}
+
 		results := make(chan error)
 		for i := range channels {
-			go func(c *Channel) {
-				results <- c.CountSince(ctx, *since)
-			}(&channels[i])
+			go func(c *Channel, since time.Time) {
+				if since.IsZero() {
+					channels[i].NMessagesSince.NMessages = channels[i].NMessages
+					results <- nil
+				} else {
+					results <- c.CountSince(ctx, since)
+				}
+			}(&channels[i], seenMarkerTimes[i])
 		}
 		merr := appengine.MultiError{}
 		for _ = range channels {

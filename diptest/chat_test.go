@@ -97,6 +97,28 @@ func testChat(t *testing.T) {
 			Follow("messages", "Links").Success().
 			Find(msg2, []string{"Properties"}, []string{"Properties", "Body"})
 	})
+
+	t.Run("TestNMessages", func(t *testing.T) {
+		startedGames[0].Follow("channels", "Links").Success().
+			Find(chanName, []string{"Properties"}, []string{"Name"}).
+			AssertEq(1.0, "Properties", "NMessages").
+			AssertEq(0.0, "Properties", "NMessagesSince", "NMessages")
+		bdy := String("body")
+		startedGames[1].Follow("channels", "Links").Success().
+			Follow("message", "Links").Body(map[string]interface{}{
+			"Body":           bdy,
+			"ChannelMembers": members,
+		}).Success()
+		startedGames[0].Follow("channels", "Links").Success().
+			Find(chanName, []string{"Properties"}, []string{"Name"}).
+			AssertEq(2.0, "Properties", "NMessages").
+			AssertEq(1.0, "Properties", "NMessagesSince", "NMessages").
+			Follow("messages", "Links").Success()
+		startedGames[0].Follow("channels", "Links").Success().
+			Find(chanName, []string{"Properties"}, []string{"Name"}).
+			AssertEq(2.0, "Properties", "NMessages").
+			AssertEq(0.0, "Properties", "NMessagesSince", "NMessages")
+	})
 }
 
 func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
