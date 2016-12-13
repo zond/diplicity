@@ -90,8 +90,8 @@ func (o *Order) Save(ctx context.Context) error {
 func (o *Order) Item(r Request) *Item {
 	orderItem := NewItem(o).SetName(strings.Join(o.Parts, " "))
 	if _, isUnresolved := r.Values()["is-unresolved"]; isUnresolved {
-		orderItem.AddLink(r.NewLink(OrderResource.Link("delete", Delete, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", string(o.Parts[0])})))
-		orderItem.AddLink(r.NewLink(OrderResource.Link("update", Update, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", string(o.Parts[0])})))
+		orderItem.AddLink(r.NewLink(OrderResource.Link("delete", Delete, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", strings.Replace(string(o.Parts[0]), "/", "_", -1)})))
+		orderItem.AddLink(r.NewLink(OrderResource.Link("update", Update, []string{"game_id", o.GameID.Encode(), "phase_ordinal", fmt.Sprint(o.PhaseOrdinal), "src_province", strings.Replace(string(o.Parts[0]), "/", "_", -1)})))
 	}
 	return orderItem
 }
@@ -119,7 +119,7 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	srcProvince := r.Vars()["src_province"]
+	srcProvince := strings.Replace(r.Vars()["src_province"], "_", "/", -1)
 	orderID, err := OrderID(ctx, phaseID, dip.Province(srcProvince))
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
-	srcProvince := r.Vars()["src_province"]
+	srcProvince := strings.Replace(r.Vars()["src_province"], "_", "/", -1)
 	orderID, err := OrderID(ctx, phaseID, dip.Province(srcProvince))
 	if err != nil {
 		return nil, err

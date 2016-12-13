@@ -41,15 +41,18 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
 	for prov, unit := range phase.Units {
 		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s);", unit.Type, prov, unit.Nation))
 	}
-	for _, prov := range variant.Graph.SuperProvinces(true) {
-		if nat, found := phase.SupplyCenters[prov]; found {
-			jsBuf = append(jsBuf, fmt.Sprintf("map.colorProvince(%q, col%s);", prov, nat))
-		} else {
-			jsBuf = append(jsBuf, fmt.Sprintf("map.hideProvince(%q);", prov))
+	for _, prov := range variant.Graph.Provinces() {
+		if prov.Super() == prov {
+			if variant.Graph.SC(prov) != nil {
+				if nat, found := phase.SupplyCenters[prov]; found {
+					jsBuf = append(jsBuf, fmt.Sprintf("map.colorProvince(%q, col%s);", prov, nat))
+				} else {
+					jsBuf = append(jsBuf, fmt.Sprintf("map.hideProvince(%q);", prov))
+				}
+			} else {
+				jsBuf = append(jsBuf, fmt.Sprintf("map.hideProvince(%q);", prov))
+			}
 		}
-	}
-	for _, prov := range variant.Graph.SuperProvinces(false) {
-		jsBuf = append(jsBuf, fmt.Sprintf("map.hideProvince(%q);", prov))
 	}
 	jsBuf = append(jsBuf, "map.showProvinces();")
 	for nat, orders := range phase.Orders {
