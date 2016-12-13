@@ -399,7 +399,7 @@ func DecodeBytes(ctx context.Context, b []byte) ([]byte, error) {
 
 	plain, ok := secretbox.Open([]byte{}, b[24:], &nonceAry, &secretAry)
 	if !ok {
-		return nil, HTTPErr{"badly encrypted token", 403}
+		return nil, HTTPErr{"badly encrypted token", 401}
 	}
 	return plain, nil
 }
