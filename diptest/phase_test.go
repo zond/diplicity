@@ -239,7 +239,9 @@ func TestTimeoutResolution(t *testing.T) {
 		t.Run("TestOldPhase-1", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
 				Find(1, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
-				AssertEq(true, "Properties", "Resolved")
+				AssertEq(true, "Properties", "Resolved").
+				AssertLen(22, "Properties", "Resolutions")
+
 			pr := p.Follow("phase-result", "Links").Success().
 				AssertLen(6, "Properties", "ReadyUsers").
 				AssertNil("Properties", "NMRUsers").
@@ -331,7 +333,8 @@ func TestTimeoutResolution(t *testing.T) {
 
 			p := startedGames[0].Follow("phases", "Links").Success().
 				Find(6, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
-				AssertEq(false, "Properties", "Resolved")
+				AssertEq(false, "Properties", "Resolved").
+				AssertNil("Properties", "Resolutions")
 
 			for _, loc := range expectedLocs {
 				p.Find(loc, []string{"Properties", "Units"}, []string{"Province"})
