@@ -511,6 +511,7 @@ type Message struct {
 	Sender         dip.Nation
 	Body           string `methods:"POST" datastore:",noindex"`
 	CreatedAt      time.Time
+	Age            time.Duration `datastore:"-"`
 }
 
 func (m *Message) NotifyRecipients(ctx context.Context, host, scheme string, channel *Channel, game *Game) error {
@@ -766,8 +767,13 @@ func listMessages(w ResponseWriter, r Request) error {
 	if since != nil {
 		q = q.Filter("CreatedAt>", *since)
 	}
-	if _, err := q.Order("-CreatedAt").GetAll(ctx, &messages); err != nil {
+	messageIDs, err := q.Order("-CreatedAt").GetAll(ctx, &messages)
+	if err != nil {
 		return err
+	}
+	for i := range messages {
+		messages[i].ID = messageIDs[i]
+		messages[i].Age = time.Now().Sub(messages[i].CreatedAt)
 	}
 
 	if nation != "" && len(messages) > 0 {
