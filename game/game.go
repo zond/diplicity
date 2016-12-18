@@ -28,6 +28,10 @@ const (
 	sendGridKind = "SendGrid"
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 var (
 	prodSendGrid     *SendGrid
 	prodSendGridLock = sync.RWMutex{}
