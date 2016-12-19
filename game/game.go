@@ -491,7 +491,9 @@ func (g *Game) Start(ctx context.Context, r Request) error {
 		scheme = "https"
 	}
 	phase := NewPhase(s, g.ID, 1, r.Req().Host, scheme)
-	phase.DeadlineAt = time.Now().Add(time.Minute * g.PhaseLengthMinutes)
+	if g.PhaseLengthMinutes > 0 {
+		phase.DeadlineAt = time.Now().Add(time.Minute * g.PhaseLengthMinutes)
+	}
 	if err := phase.Save(ctx); err != nil {
 		return err
 	}
@@ -553,6 +555,9 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 	}
 	game.ID = gameID
+	for i := range game.NewestPhaseMeta {
+		game.NewestPhaseMeta[i].Refresh()
+	}
 
 	if _, isMember := game.GetMember(user.Id); !isMember {
 		game.Redact()

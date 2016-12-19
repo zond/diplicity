@@ -429,7 +429,9 @@ func (p *PhaseResolver) Act() error {
 	// Create the new phase.
 
 	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1, p.Phase.Host, p.Phase.Scheme)
-	newPhase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
+	if p.Game.PhaseLengthMinutes > 0 {
+		newPhase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
+	}
 
 	// Check if we can roll forward again, and potentially create new phase states.
 
@@ -771,14 +773,21 @@ func (p Phases) Item(r Request, gameID *datastore.Key) *Item {
 }
 
 type PhaseMeta struct {
-	PhaseOrdinal int64
-	Season       dip.Season
-	Year         int
-	Type         dip.PhaseType
-	Resolved     bool
-	DeadlineAt   time.Time
-	UnitsJSON    string
-	SCsJSON      string
+	PhaseOrdinal   int64
+	Season         dip.Season
+	Year           int
+	Type           dip.PhaseType
+	Resolved       bool
+	DeadlineAt     time.Time
+	NextDeadlineIn time.Duration `datastore:"-"`
+	UnitsJSON      string
+	SCsJSON        string
+}
+
+func (p *PhaseMeta) Refresh() {
+	if !p.DeadlineAt.IsZero() {
+		p.NextDeadlineIn = p.DeadlineAt.Sub(time.Now())
+	}
 }
 
 func (p *Phase) Recalc() error {
@@ -919,6 +928,7 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 		return nil, err
 	}
 	game.ID = gameID
+	phase.Refresh()
 
 	member, isMember := game.GetMember(user.Id)
 	if isMember {
@@ -1257,6 +1267,9 @@ func listPhases(w ResponseWriter, r Request) error {
 	_, err = datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
 	if err != nil {
 		return err
+	}
+	for i := range phases {
+		phases[i].Refresh()
 	}
 
 	w.SetContent(phases.Item(r, gameID))

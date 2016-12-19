@@ -260,6 +260,9 @@ func (h *gamesHandler) fetch(iter *datastore.Iterator, max int) (Games, error) {
 	for err == nil && len(result) < max {
 		game := Game{}
 		game.ID, err = iter.Next(&game)
+		for i := range game.NewestPhaseMeta {
+			game.NewestPhaseMeta[i].Refresh()
+		}
 		if err == nil {
 			result = append(result, game)
 		}
