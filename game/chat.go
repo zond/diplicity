@@ -511,7 +511,7 @@ type Message struct {
 	Sender         dip.Nation
 	Body           string `methods:"POST" datastore:",noindex"`
 	CreatedAt      time.Time
-	Age            time.Duration `datastore:"-"`
+	Age            time.Duration `datastore:"-" ticker:"true"`
 }
 
 func (m *Message) NotifyRecipients(ctx context.Context, host, scheme string, channel *Channel, game *Game) error {

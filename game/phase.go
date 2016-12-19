@@ -779,7 +779,7 @@ type PhaseMeta struct {
 	Type           dip.PhaseType
 	Resolved       bool
 	DeadlineAt     time.Time
-	NextDeadlineIn time.Duration `datastore:"-"`
+	NextDeadlineIn time.Duration `datastore:"-" ticker:"true"`
 	UnitsJSON      string
 	SCsJSON        string
 }
