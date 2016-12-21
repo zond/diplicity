@@ -142,7 +142,7 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 		}
 
 		if order.Nation != member.Nation {
-			return HTTPErr{"can only update your own orders", 403}
+			return HTTPErr{"can only delete your own orders", 403}
 		}
 
 		return datastore.Delete(ctx, orderID)
