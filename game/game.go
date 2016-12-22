@@ -439,6 +439,9 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	if game.PhaseLengthMinutes < 0 {
 		return nil, HTTPErr{"no games with negative length allowed", 400}
 	}
+	if game.PhaseLengthMinutes > 30*24*60 {
+		return nil, HTTPErr{"no games with more than 30 day deadlines allowed", 400}
+	}
 	game.CreatedAt = time.Now()
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
