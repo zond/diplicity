@@ -8,6 +8,13 @@ A dippy API service based on [App Engine](https://cloud.google.com/appengine) an
 
 A regularly updated service running this code is available at [https://diplicity-engine.appspot.com/](https://diplicity-engine.appspot.com/).
 
+### Play the game
+
+To play, either be brave and use the auto generated HTML UI at [https://diplicity-engine.appspot.com/](https://diplicity-engine.appspot.com/), or use one of the client projects:
+
+* [https://github.com/spamguy/dipl.io](https://github.com/spamguy/dipl.io)
+* [https://github.com/zond/android-diplomacy](https://github.com/zond/android-diplomacy)
+
 ## Architecture
 
 The API uses a slightly tweaked [HATEOAS](https://en.wikipedia.org/wiki/HATEOAS) style, but is basically JSON/REST.
