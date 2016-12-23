@@ -1113,8 +1113,8 @@ func listOptions(w ResponseWriter, r Request) error {
 		},
 		[]string{
 			"SrcProvince",
-			"`SrcProvince` indicates that the value should be appended to the order string list without presenting the player with a choice - i.e. a `Hold` order always only affects the source province of the order.",
-			"Basically, used for the parts of an order that are by necessity identical to the province the order is for.",
+			"`SrcProvince` indicates that the value should replace the first `Province` value in the order list without presenting the player with a choice.",
+			"This is useful e.g. when the order has a coast as source province, but the click should be accepted in the entire province.",
 		},
 	}).AddLink(r.NewLink(Link{
 		Rel:         "self",
