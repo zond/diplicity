@@ -67,7 +67,7 @@ func OrderID(ctx context.Context, phaseID *datastore.Key, srcProvince dip.Provin
 	if phaseID == nil || srcProvince == "" {
 		return nil, fmt.Errorf("orders must have phases and source provinces")
 	}
-	return datastore.NewKey(ctx, orderKind, string(srcProvince), 0, phaseID), nil
+	return datastore.NewKey(ctx, orderKind, string(srcProvince.Super()), 0, phaseID), nil
 }
 
 func (o *Order) ID(ctx context.Context) (*datastore.Key, error) {
@@ -231,7 +231,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 			return HTTPErr{"can't issue orders for others", 403}
 		}
 
-		if order.Parts[0] != srcProvince {
+		if dip.Province(order.Parts[0]).Super() != dip.Province(srcProvince).Super() {
 			return HTTPErr{"unable to change source province for order", 400}
 		}
 
