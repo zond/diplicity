@@ -780,8 +780,8 @@ type PhaseMeta struct {
 	Resolved       bool
 	DeadlineAt     time.Time
 	NextDeadlineIn time.Duration `datastore:"-" ticker:"true"`
-	UnitsJSON      string
-	SCsJSON        string
+	UnitsJSON      string        `datastore:",noindex"`
+	SCsJSON        string        `datastore:",noindex"`
 }
 
 func (p *PhaseMeta) Refresh() {
