@@ -36,6 +36,7 @@ const (
 	UnsubscribeRoute      = "Unsubscribe"
 	ApproveRedirectRoute  = "ApproveRedirect"
 	ListRedirectURLsRoute = "ListRedirectURLs"
+	ReplaceFCMRoute       = "ReplaceFCM"
 )
 
 const (
@@ -795,6 +796,46 @@ func unsubscribe(w ResponseWriter, r Request) error {
 	return nil
 }
 
+type FCMValue struct {
+	Value string
+}
+
+func replaceFCM(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	userId := r.Vars()["user_id"]
+
+	replaceToken := r.Vars()["replace_token"]
+	if replaceToken == "" {
+		return HTTPErr{"no such FCM token found", 404}
+	}
+
+	fcmValue := &FCMValue{}
+	if err := json.NewDecoder(r.Req().Body).Decode(fcmValue); err != nil {
+		return err
+	}
+
+	userConfigs := []UserConfig{}
+	ids, err := datastore.NewQuery(userConfigKind).Filter("UserId=", userId).Filter("FCMTokens.ReplaceToken=", replaceToken).GetAll(ctx, &userConfigs)
+	if err != nil {
+		return err
+	}
+	if len(userConfigs) == 0 {
+		return HTTPErr{"no such FCM token found", 404}
+	}
+	if len(userConfigs) > 1 {
+		return HTTPErr{"too many FCM tokens found?", 500}
+	}
+	for i := range userConfigs[0].FCMTokens {
+		if userConfigs[0].FCMTokens[i].ReplaceToken == replaceToken {
+			userConfigs[0].FCMTokens[i].Value = fcmValue.Value
+		}
+	}
+
+	_, err = datastore.Put(ctx, ids[0], &userConfigs[0])
+	return err
+}
+
 func SetupRouter(r *mux.Router) {
 	router = r
 	HandleResource(router, UserConfigResource)
@@ -804,6 +845,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
 	Handle(router, "/Auth/ApproveRedirect", []string{"GET"}, ApproveRedirectRoute, handleApproveRedirect)
 	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
+	Handle(router, "/User/{user_id}/FCMToken/{replace_token}/Replace", []string{"PUT"}, ReplaceFCMRoute, replaceFCM)
 	AddFilter(tokenFilter)
 	AddPostProc(loginRedirect)
 }

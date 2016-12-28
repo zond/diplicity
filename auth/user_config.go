@@ -121,6 +121,7 @@ type FCMToken struct {
 	App           string                `methods:"PUT"`
 	MessageConfig FCMNotificationConfig `methods:"PUT"`
 	PhaseConfig   FCMNotificationConfig `methods:"PUT"`
+	ReplaceToken  string                `methods:"PUT"`
 }
 
 type UnsubscribeConfig struct {
@@ -187,42 +188,47 @@ func (u *UserConfig) Item(r Request) *Item {
 		AddLink(r.NewLink(UserConfigResource.Link("self", Load, []string{"user_id", u.UserId}))).
 		AddLink(r.NewLink(UserConfigResource.Link("update", Update, []string{"user_id", u.UserId}))).
 		SetDesc([][]string{
-		[]string{
-			"User configuration",
-			"Each diplicity user has exactly one user configuration. User configurations defined user selected configuration for all of diplicty, such as which FCM tokens should be notified of new press or new phases.",
-		},
-		[]string{
-			"FCM tokens",
-			"Each FCM token has several fields.",
-			"A value, which is the registration ID received when registering with FCM.",
-			"A disabled flag which will turn notification to that token off, and which the server toggles if FCM returns errors when notifications are sent to that token.",
-			"A note field, which the server will populate with the reason the token was disabled.",
-			"An app field, which the app populating the token can use to identify tokens belonging to it to avoid removing/updating tokens belonging to other apps.",
-			"Two template fields, one for phase and one for message notifications.",
-		},
-		[]string{
-			"FCM templates",
-			"The FCM templates define the title, body and click action of the FCM notifications sent out.",
-			"They are parsed by a Handlebars parser (https://github.com/aymerick/raymond).",
-		},
-		[]string{
-			"New phase FCM notifications",
-			"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhaseMeta: [phase JSON] }` compressed with libz. The on click action will open an HTML page displaying the map of the new phase.",
-		},
-		[]string{
-			"New message FCM notifications",
-			"FCM notifications for new messages will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON] }` compressed with libz.",
-		},
-		[]string{
-			"Email config",
-			"A user has an email config, defining if and how this user should receive email about new phases and messages.",
-			"The email config contains several fields.",
-			"An enabled flag which turns email notifications on.",
-			"Information about whether the unsubscribe link in the email should render some HTML or redirect to another host, defined by two Handlebars templates, one for the redirect link and one for the HTML to display.",
-			"Two template fields, one for phase and one for message notifications.",
-			"All templates will be parsed by the same parser as the FCM templates.",
-		},
-	})
+			[]string{
+				"User configuration",
+				"Each diplicity user has exactly one user configuration. User configurations defined user selected configuration for all of diplicty, such as which FCM tokens should be notified of new press or new phases.",
+			},
+			[]string{
+				"FCM tokens",
+				"Each FCM token has several fields.",
+				"A value, which is the registration ID received when registering with FCM.",
+				"A disabled flag which will turn notification to that token off, and which the server toggles if FCM returns errors when notifications are sent to that token.",
+				"A note field, which the server will populate with the reason the token was disabled.",
+				"An app field, which the app populating the token can use to identify tokens belonging to it to avoid removing/updating tokens belonging to other apps.",
+				"Two template fields, one for phase and one for message notifications.",
+				"Each token also has a `ReplaceToken` defined by the client. Defining a `ReplaceToken` other than the empty strings allows the client to replace the `Value` in the token without requiring a regular authentication token.",
+			},
+			[]string{
+				"ReplaceToken",
+				"To use the `ReplaceToken` to replace the `Value` of your FCM token, `PUT` a JSON body containing `{ 'Value': 'new token value' }` to `/User/{user_id}/FCMToken/{replace_token}/Replace`.",
+			},
+			[]string{
+				"FCM templates",
+				"The FCM templates define the title, body and click action of the FCM notifications sent out.",
+				"They are parsed by a Handlebars parser (https://github.com/aymerick/raymond).",
+			},
+			[]string{
+				"New phase FCM notifications",
+				"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhaseMeta: [phase JSON] }` compressed with libz. The on click action will open an HTML page displaying the map of the new phase.",
+			},
+			[]string{
+				"New message FCM notifications",
+				"FCM notifications for new messages will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON] }` compressed with libz.",
+			},
+			[]string{
+				"Email config",
+				"A user has an email config, defining if and how this user should receive email about new phases and messages.",
+				"The email config contains several fields.",
+				"An enabled flag which turns email notifications on.",
+				"Information about whether the unsubscribe link in the email should render some HTML or redirect to another host, defined by two Handlebars templates, one for the redirect link and one for the HTML to display.",
+				"Two template fields, one for phase and one for message notifications.",
+				"All templates will be parsed by the same parser as the FCM templates.",
+			},
+		})
 }
 
 func loadUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
