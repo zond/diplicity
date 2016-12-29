@@ -186,8 +186,10 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 	userByToken := map[string]string{}
 	for uid, userTokens := range tokens {
 		for _, tokenString := range userTokens {
-			tokenStrings = append(tokenStrings, tokenString)
-			userByToken[tokenString] = uid
+			if tokenString != "" {
+				tokenStrings = append(tokenStrings, tokenString)
+				userByToken[tokenString] = uid
+			}
 		}
 	}
 
