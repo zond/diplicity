@@ -189,8 +189,15 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 			if tokenString != "" {
 				tokenStrings = append(tokenStrings, tokenString)
 				userByToken[tokenString] = uid
+			} else {
+				log.Infof(ctx, "Ignoring empty token for %q", uid)
 			}
 		}
+	}
+
+	if len(tokenStrings) == 0 {
+		log.Infof(ctx, "No tokens left, exiting")
+		return nil
 	}
 
 	fcmConf, err := getFCMConf(ctx)
