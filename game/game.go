@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
@@ -131,7 +132,7 @@ func GetSendGrid(ctx context.Context) (*SendGrid, error) {
 func PP(i interface{}) string {
 	b, err := json.MarshalIndent(i, "  ", "  ")
 	if err != nil {
-		panic(fmt.Errorf("trying to marshal %+v: %v", i, err))
+		return spew.Sdump(i)
 	}
 	return string(b)
 }
