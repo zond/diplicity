@@ -179,6 +179,15 @@ func NewFCMData(payload interface{}) (*FCMData, error) {
 	}, nil
 }
 
+func nestPut(m1 map[string]map[string]string, k1, k2, v string) {
+	m2, found := m1[k1]
+	if !found {
+		m2 = map[string]string{}
+	}
+	m2[k2] = v
+	m1[k1] = m2
+}
+
 func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.NotificationPayload, data *FCMData, tokens map[string][]string) error {
 	log.Infof(ctx, "fcmSendToTokens(..., %v, %v, %+v)", PP(notif), PP(data), tokens)
 
@@ -252,7 +261,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 			token := tokenStrings[i]
 			uid := userByToken[token]
 			if newID, found := result["registration_id"]; found {
-				idsToUpdate[uid][token] = newID
+				nestPut(idsToUpdate, uid, token, newID)
 			}
 			if errMsg, found := result["error"]; found {
 				switch errMsg {
@@ -262,7 +271,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 					fallthrough
 				case "MismatchSenderId":
 					log.Errorf(ctx, "Token %q got %q, will remove it.", token, errMsg)
-					idsToRemove[uid][token] = errMsg
+					nestPut(idsToRemove, uid, token, errMsg)
 				case "Unavailable":
 					// Can be retried, it's supposed to be.
 					fallthrough

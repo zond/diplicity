@@ -832,7 +832,11 @@ func replaceFCM(w ResponseWriter, r Request) error {
 		}
 	}
 
-	_, err = datastore.Put(ctx, ids[0], &userConfigs[0])
+	if _, err = datastore.Put(ctx, ids[0], &userConfigs[0]); err != nil {
+		return err
+	}
+
+	w.SetContent(NewItem(fcmValue).SetName("value"))
 	return err
 }
 

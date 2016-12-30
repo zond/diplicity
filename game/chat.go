@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/aymerick/raymond"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/jhillyerd/enmime"
 	"github.com/zond/diplicity/auth"
@@ -26,6 +27,16 @@ import (
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
 )
+
+func init() {
+	raymond.RegisterHelper("joinNations", func(glue string, nats Nations) string {
+		parts := make([]string, len(nats))
+		for i, nat := range nats {
+			parts[i] = string(nat)
+		}
+		return strings.Join(parts, glue)
+	})
+}
 
 const (
 	messageKind    = "Message"

@@ -16,6 +16,12 @@ const (
 	userConfigKind = "UserConfig"
 )
 
+func init() {
+	raymond.RegisterHelper("encodeKey", func(key datastore.Key) string {
+		return key.Encode()
+	})
+}
+
 type FCMNotificationConfig struct {
 	ClickActionTemplate string `methods:"PUT" datastore:",noindex"`
 	TitleTemplate       string `methods:"PUT" datastore:",noindex"`
