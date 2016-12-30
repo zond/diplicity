@@ -140,15 +140,15 @@ func getMsgNotificationContext(ctx context.Context, host, scheme string, gameID 
 	res.mapURL.Scheme = scheme
 
 	res.mailData = map[string]interface{}{
-		"diplicityGame":    res.game,
-		"diplicityChannel": res.channel,
-		"diplicityMessage": res.message,
-		"diplicityUser":    res.user,
-		"diplicityMapLink": res.mapURL.String(),
+		"game":    res.game,
+		"channel": res.channel,
+		"message": res.message,
+		"user":    res.user,
+		"mapLink": res.mapURL.String(),
 	}
 	res.fcmData = map[string]interface{}{
-		"type":             "message",
-		"diplicityMessage": res.message,
+		"type":    "message",
+		"message": res.message,
 	}
 
 	return res, nil

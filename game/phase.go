@@ -117,14 +117,15 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 	res.mapURL.Scheme = scheme
 
 	res.mailData = map[string]interface{}{
-		"diplicityPhaseMeta": res.phase.PhaseMeta,
-		"diplicityGame":      res.game,
-		"diplicityUser":      res.user,
-		"diplicityMapLink":   res.mapURL.String(),
+		"phaseMeta": res.phase.PhaseMeta,
+		"game":      res.game,
+		"user":      res.user,
+		"mapLink":   res.mapURL.String(),
 	}
 	res.fcmData = map[string]interface{}{
-		"type":               "phase",
-		"diplicityPhaseMeta": res.phase.PhaseMeta,
+		"type":      "phase",
+		"gameID":    res.game.ID,
+		"phaseMeta": res.phase.PhaseMeta,
 	}
 
 	return res, nil
