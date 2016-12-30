@@ -219,11 +219,11 @@ func (u *UserConfig) Item(r Request) *Item {
 			},
 			[]string{
 				"New phase FCM notifications",
-				"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhaseMeta: [phase JSON] }` compressed with libz. The on click action will open an HTML page displaying the map of the new phase.",
+				"FCM notifications for new phases will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityPhaseMeta: [phase JSON], type: 'phase' }` compressed with libz. The on click action will open an HTML page displaying the map of the new phase.",
 			},
 			[]string{
 				"New message FCM notifications",
-				"FCM notifications for new messages will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON] }` compressed with libz.",
+				"FCM notifications for new messages will have the payload `{ DiplicityJSON: DATA }` where DATA is `{ diplicityMessage: [message JSON], type: 'message' }` compressed with libz.",
 			},
 			[]string{
 				"Email config",

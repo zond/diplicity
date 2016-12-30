@@ -147,6 +147,7 @@ func getMsgNotificationContext(ctx context.Context, host, scheme string, gameID 
 		"diplicityMapLink": res.mapURL.String(),
 	}
 	res.fcmData = map[string]interface{}{
+		"type":             "message",
 		"diplicityMessage": res.message,
 	}
 

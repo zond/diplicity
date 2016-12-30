@@ -123,6 +123,7 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 		"diplicityMapLink":   res.mapURL.String(),
 	}
 	res.fcmData = map[string]interface{}{
+		"type":               "phase",
 		"diplicityPhaseMeta": res.phase.PhaseMeta,
 	}
 
@@ -943,10 +944,10 @@ func (p *Phase) Item(r Request) *Item {
 	phaseItem.
 		AddLink(r.NewLink(PhaseResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)}))).
 		AddLink(r.NewLink(Link{
-		Rel:         "map",
-		Route:       RenderPhaseMapRoute,
-		RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
-	}))
+			Rel:         "map",
+			Route:       RenderPhaseMapRoute,
+			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
+		}))
 	_, isMember := r.Values()[memberNationFlag]
 	if isMember || p.Resolved {
 		phaseItem.AddLink(r.NewLink(Link{
