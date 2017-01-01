@@ -729,7 +729,7 @@ const (
 	memberNationFlag = "member-nation"
 )
 
-type Unit struct {
+type UnitWrapper struct {
 	Province dip.Province
 	Unit     dip.Unit
 }
@@ -809,7 +809,7 @@ func (p *Phase) Recalc() error {
 type Phase struct {
 	PhaseMeta
 	GameID      *datastore.Key
-	Units       []Unit
+	Units       []UnitWrapper
 	SCs         []SC
 	Dislodgeds  []Dislodged
 	Dislodgers  []Dislodger
@@ -1019,7 +1019,7 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host, s
 	}
 	units, scs, dislodgeds, dislodgers, bounces, _ := s.Dump()
 	for prov, unit := range units {
-		p.Units = append(p.Units, Unit{prov, unit})
+		p.Units = append(p.Units, UnitWrapper{prov, unit})
 	}
 	for prov, nation := range scs {
 		p.SCs = append(p.SCs, SC{prov, nation})
