@@ -25,6 +25,10 @@ func TestBans(t *testing.T) {
 		Follow("bans", "Links").Success().
 		AssertLen(0, "Properties")
 
+	env1.GetRoute("Ban.Load").
+		RouteParams("user_id", env1.GetUID(), "banned_id", env2.GetUID()).
+		Failure()
+
 	b1 := env1.GetRoute(game.IndexRoute).Success().
 		Follow("bans", "Links").Success()
 
@@ -40,6 +44,11 @@ func TestBans(t *testing.T) {
 	b1.Follow("create", "Links").Body(map[string]interface{}{
 		"UserIds": []string{env1.GetUID(), env2.GetUID()},
 	}).Success()
+
+	env1.GetRoute("Ban.Load").
+		RouteParams("user_id", env1.GetUID(), "banned_id", env2.GetUID()).
+		Success().
+		AssertEq([]interface{}{env1.GetUID(), env2.GetUID()}, "Properties", "UserIds")
 
 	bansRes := env1.GetRoute(game.IndexRoute).Success().
 		Follow("bans", "Links").Success()
@@ -207,9 +216,9 @@ func testBanEfficacy(t *testing.T) {
 	newEnv.GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").
 		Body(map[string]string{
-		"Variant": "Classical",
-		"Desc":    newGameDesc,
-	}).Success().
+			"Variant": "Classical",
+			"Desc":    newGameDesc,
+		}).Success().
 		AssertEq(newGameDesc, "Properties", "Desc")
 
 	newGameURLString := newEnv.GetRoute(game.IndexRoute).Success().

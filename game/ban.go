@@ -21,6 +21,7 @@ var BanResource *Resource
 
 func init() {
 	BanResource = &Resource{
+		Load:       loadBan,
 		Create:     createBan,
 		Delete:     deleteBan,
 		CreatePath: "/User/{user_id}/Ban",
@@ -106,6 +107,31 @@ func (b *Ban) Save(ctx context.Context) error {
 	}
 	_, err = datastore.Put(ctx, id, b)
 	return err
+}
+
+func loadBan(w ResponseWriter, r Request) (*Ban, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthorized", 401}
+	}
+
+	if r.Vars()["user_id"] != user.Id {
+		return nil, HTTPErr{"can only delete owned bans", 403}
+	}
+
+	banID, err := BanID(ctx, []string{user.Id, r.Vars()["banned_id"]})
+	if err != nil {
+		return nil, err
+	}
+
+	ban := &Ban{}
+	if err = datastore.Get(ctx, banID, ban); err != nil {
+		return nil, err
+	}
+
+	return ban, nil
 }
 
 func deleteBan(w ResponseWriter, r Request) (*Ban, error) {

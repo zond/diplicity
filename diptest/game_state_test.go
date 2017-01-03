@@ -8,11 +8,21 @@ func testGameState(t *testing.T) {
 	nat0 := startedGameNats[0]
 	nat1 := startedGameNats[1]
 
+	startedGameEnvs[0].
+		GetRoute("GameState.Load").
+		RouteParams("game_id", startedGameID, "nation", nat0).Success().
+		AssertNil("Properties", "Muted")
+
 	g0.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
 		Find(nat0, []string{"Properties"}, []string{"Properties", "Nation"}).
 		Follow("update", "Links").Body(map[string]interface{}{
 		"Muted": []string{nat1},
 	}).Success()
+
+	startedGameEnvs[0].
+		GetRoute("GameState.Load").
+		RouteParams("game_id", startedGameID, "nation", nat0).Success().
+		AssertEq([]interface{}{nat1}, "Properties", "Muted")
 
 	g0.Follow("game-states", "Links").Success().AssertLen(7, "Properties").
 		Find(nat0, []string{"Properties"}, []string{"Properties", "Nation"}).

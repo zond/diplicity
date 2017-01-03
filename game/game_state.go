@@ -21,6 +21,7 @@ var GameStateResource *Resource
 
 func init() {
 	GameStateResource = &Resource{
+		Load:     loadGameState,
 		Update:   updateGameState,
 		FullPath: "/Game/{game_id}/GameState/{nation}",
 		Listers: []Lister{
@@ -144,6 +145,53 @@ func updateGameState(w ResponseWriter, r Request) (*GameState, error) {
 		return gameState.Save(ctx)
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
+	}
+
+	return gameState, nil
+}
+
+func loadGameState(w ResponseWriter, r Request) (*GameState, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthorized", 401}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return nil, err
+	}
+
+	nation := dip.Nation(r.Vars()["nation"])
+
+	gameStateID, err := GameStateID(ctx, gameID, nation)
+	if err != nil {
+		return nil, err
+	}
+
+	game := &Game{}
+	gameState := &GameState{}
+	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, gameStateID}, []interface{}{game, gameState})
+	if err != nil {
+		if merr, ok := err.(appengine.MultiError); ok {
+			if merr[0] != nil {
+				return nil, err
+			} else if merr[1] == datastore.ErrNoSuchEntity {
+				gameState.GameID = gameID
+				gameState.Nation = nation
+			} else if merr[1] != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+	game.ID = gameID
+
+	member, isMember := game.GetMember(user.Id)
+	if isMember {
+		r.Values()[memberNationFlag] = member.Nation
 	}
 
 	return gameState, nil
