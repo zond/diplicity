@@ -184,7 +184,7 @@ func deleteBan(w ResponseWriter, r Request) (*Ban, error) {
 		return nil, err
 	}
 
-	return nil, nil
+	return ban, nil
 }
 
 func listBans(w ResponseWriter, r Request) error {
