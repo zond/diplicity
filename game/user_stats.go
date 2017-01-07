@@ -259,8 +259,8 @@ func (u *UserStats) Recalculate(ctx context.Context) error {
 	if u.ReadyPhases, err = datastore.NewQuery(phaseResultKind).Filter("ReadyUsers=", u.UserId).Count(ctx); err != nil {
 		return err
 	}
-	u.Reliability = float64(u.ReadyPhases+u.ActivePhases+1) / float64(u.ReadyPhases+u.ActivePhases+u.NMRPhases+1)
-	u.Quickness = float64(u.ReadyPhases+1) / float64(u.ReadyPhases+u.ActivePhases+u.NMRPhases+1)
+	u.Reliability = float64(u.ReadyPhases+u.ActivePhases) / float64(u.NMRPhases+1)
+	u.Quickness = float64(u.ReadyPhases) / float64(u.ActivePhases+u.NMRPhases+1)
 
 	if u.OwnedBans, err = datastore.NewQuery(banKind).Filter("OwnerIds=", u.UserId).Count(ctx); err != nil {
 		return err
