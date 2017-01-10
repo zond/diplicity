@@ -309,17 +309,17 @@ func getOAuth(ctx context.Context) (*OAuth, error) {
 	return prodOAuth, nil
 }
 
-func getOAuth2Config(ctx context.Context, r Request) (*oauth2.Config, error) {
+func getOAuth2Config(ctx context.Context, r *http.Request) (*oauth2.Config, error) {
 	redirectURL, err := router.Get(OAuth2CallbackRoute).URL()
 	if err != nil {
 		return nil, err
 	}
-	if r.Req().TLS == nil {
+	if r.TLS == nil {
 		redirectURL.Scheme = "http"
 	} else {
 		redirectURL.Scheme = "https"
 	}
-	redirectURL.Host = r.Req().Host
+	redirectURL.Host = r.Host
 
 	oauth, err := getOAuth(ctx)
 	if err != nil {
@@ -342,7 +342,7 @@ func getOAuth2Config(ctx context.Context, r Request) (*oauth2.Config, error) {
 func handleLogin(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
-	conf, err := getOAuth2Config(ctx, r)
+	conf, err := getOAuth2Config(ctx, r.Req())
 	if err != nil {
 		return err
 	}
@@ -413,37 +413,43 @@ func EncodeToken(ctx context.Context, user *User) (string, error) {
 	return EncodeString(ctx, string(plain))
 }
 
-func handleOAuth2Callback(w ResponseWriter, r Request) error {
-	ctx := appengine.NewContext(r.Req())
+func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
+	ctx := appengine.NewContext(r)
 
 	conf, err := getOAuth2Config(ctx, r)
 	if err != nil {
-		return err
+		HTTPError(w, r, err)
+		return
 	}
 
-	token, err := conf.Exchange(ctx, r.Req().URL.Query().Get("code"))
+	token, err := conf.Exchange(ctx, r.URL.Query().Get("code"))
 	if err != nil {
-		return err
+		HTTPError(w, r, err)
+		return
 	}
 
 	client := oauth2.NewClient(ctx, oauth2.StaticTokenSource(token))
 	service, err := oauth2service.New(client)
 	if err != nil {
-		return err
+		HTTPError(w, r, err)
+		return
 	}
 	userInfo, err := oauth2service.NewUserinfoService(service).Get().Context(ctx).Do()
 	if err != nil {
-		return err
+		HTTPError(w, r, err)
+		return
 	}
 	user := infoToUser(userInfo)
 	user.ValidUntil = time.Now().Add(time.Hour * 24)
 	if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
-		return err
+		HTTPError(w, r, err)
+		return
 	}
 
-	redirectURL, err := url.Parse(r.Req().URL.Query().Get("state"))
+	redirectURL, err := url.Parse(r.URL.Query().Get("state"))
 	if err != nil {
-		return err
+		HTTPError(w, r, err)
+		return
 	}
 
 	strippedRedirectURL := *redirectURL
@@ -455,9 +461,9 @@ func handleOAuth2Callback(w ResponseWriter, r Request) error {
 		RedirectURL: strippedRedirectURL.String(),
 	}
 	if err := datastore.Get(ctx, approvedURL.ID(ctx), approvedURL); err == datastore.ErrNoSuchEntity {
-		requestedURL := r.Req().URL
-		requestedURL.Host = r.Req().Host
-		if r.Req().TLS == nil {
+		requestedURL := r.URL
+		requestedURL.Host = r.Host
+		if r.TLS == nil {
 			requestedURL.Scheme = "http"
 		} else {
 			requestedURL.Scheme = "https"
@@ -467,32 +473,35 @@ func handleOAuth2Callback(w ResponseWriter, r Request) error {
 
 		cipher, err := EncodeString(ctx, fmt.Sprintf("%s,%s", redirectURL.String(), user.Id))
 		if err != nil {
-			return err
+			HTTPError(w, r, err)
+			return
 		}
 		approveURL, err := router.Get(ApproveRedirectRoute).URL()
 		if err != nil {
-			return err
+			HTTPError(w, r, err)
+			return
 		}
 
 		renderMessage(w, "Approval requested", fmt.Sprintf(`%s wants to act on your behalf on %s. Is this OK? Your decision will be remembered.</br>
 <form method="GET" action="%s"><input type="hidden" name="state" value="%s"><input type="submit" value="Yes"/></form>
 <form method="GET" action="%s"><input type="submit" value="No"/></form>`, strippedRedirectURL.String(), requestedURL.String(), approveURL.String(), cipher, redirectURL.String()))
-		return nil
+		return
 	} else if err != nil {
-		return err
+		HTTPError(w, r, err)
+		return
 	}
 
 	userToken, err := EncodeToken(ctx, user)
 	if err != nil {
-		return err
+		HTTPError(w, r, err)
+		return
 	}
 
 	query := url.Values{}
 	query.Set("token", userToken)
 	redirectURL.RawQuery = query.Encode()
 
-	http.Redirect(w, r.Req(), redirectURL.String(), 307)
-	return nil
+	http.Redirect(w, r, redirectURL.String(), 307)
 }
 
 func handleLogout(w ResponseWriter, r Request) error {
@@ -673,7 +682,7 @@ func handleApproveRedirect(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func renderMessage(w ResponseWriter, title, msg string) {
+func renderMessage(w http.ResponseWriter, title, msg string) {
 	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 	fmt.Fprintf(w, `
 <html>
@@ -846,7 +855,8 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(router, RedirectURLResource)
 	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
 	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
-	Handle(router, "/Auth/OAuth2Callback", []string{"GET"}, OAuth2CallbackRoute, handleOAuth2Callback)
+	// Don't use `Handle` here, because we don't want CORS support for this particular route.
+	router.Path("/Auth/OAuth2Callback").Methods("GET").Name(OAuth2CallbackRoute).HandlerFunc(handleOAuth2Callback)
 	Handle(router, "/Auth/ApproveRedirect", []string{"GET"}, ApproveRedirectRoute, handleApproveRedirect)
 	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
 	Handle(router, "/User/{user_id}/FCMToken/{replace_token}/Replace", []string{"PUT"}, ReplaceFCMRoute, replaceFCM)
