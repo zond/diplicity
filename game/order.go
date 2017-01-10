@@ -292,6 +292,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 		}
 		if err := datastore.Get(ctx, phaseStateID, phaseState); err == nil && phaseState.OnProbation {
 			phaseState.OnProbation = false
+			phaseState.ReadyToResolve = false
 			phaseState.Note = fmt.Sprintf("Auto updated to OnProbation = false due to order creation.")
 			keysToSave = append(keysToSave, phaseStateID)
 			valuesToSave = append(valuesToSave, phaseState)
