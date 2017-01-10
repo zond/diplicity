@@ -456,39 +456,41 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	strippedRedirectURL.RawQuery = ""
 	strippedRedirectURL.Path = ""
 
-	approvedURL := &RedirectURL{
-		UserId:      user.Id,
-		RedirectURL: strippedRedirectURL.String(),
-	}
-	if err := datastore.Get(ctx, approvedURL.ID(ctx), approvedURL); err == datastore.ErrNoSuchEntity {
-		requestedURL := r.URL
-		requestedURL.Host = r.Host
-		if r.TLS == nil {
-			requestedURL.Scheme = "http"
-		} else {
-			requestedURL.Scheme = "https"
+	if r.URL.Query().Get("approve-redirect") != "true" {
+		approvedURL := &RedirectURL{
+			UserId:      user.Id,
+			RedirectURL: strippedRedirectURL.String(),
 		}
-		requestedURL.RawQuery = ""
-		requestedURL.Path = ""
+		if err := datastore.Get(ctx, approvedURL.ID(ctx), approvedURL); err == datastore.ErrNoSuchEntity {
+			requestedURL := r.URL
+			requestedURL.Host = r.Host
+			if r.TLS == nil {
+				requestedURL.Scheme = "http"
+			} else {
+				requestedURL.Scheme = "https"
+			}
+			requestedURL.RawQuery = ""
+			requestedURL.Path = ""
 
-		cipher, err := EncodeString(ctx, fmt.Sprintf("%s,%s", redirectURL.String(), user.Id))
-		if err != nil {
-			HTTPError(w, r, err)
-			return
-		}
-		approveURL, err := router.Get(ApproveRedirectRoute).URL()
-		if err != nil {
-			HTTPError(w, r, err)
-			return
-		}
+			cipher, err := EncodeString(ctx, fmt.Sprintf("%s,%s", redirectURL.String(), user.Id))
+			if err != nil {
+				HTTPError(w, r, err)
+				return
+			}
+			approveURL, err := router.Get(ApproveRedirectRoute).URL()
+			if err != nil {
+				HTTPError(w, r, err)
+				return
+			}
 
-		renderMessage(w, "Approval requested", fmt.Sprintf(`%s wants to act on your behalf on %s. Is this OK? Your decision will be remembered.</br>
+			renderMessage(w, "Approval requested", fmt.Sprintf(`%s wants to act on your behalf on %s. Is this OK? Your decision will be remembered.</br>
 <form method="GET" action="%s"><input type="hidden" name="state" value="%s"><input type="submit" value="Yes"/></form>
 <form method="GET" action="%s"><input type="submit" value="No"/></form>`, strippedRedirectURL.String(), requestedURL.String(), approveURL.String(), cipher, redirectURL.String()))
-		return
-	} else if err != nil {
-		HTTPError(w, r, err)
-		return
+			return
+		} else if err != nil {
+			HTTPError(w, r, err)
+			return
+		}
 	}
 
 	userToken, err := EncodeToken(ctx, user)
