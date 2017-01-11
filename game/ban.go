@@ -84,6 +84,7 @@ func (b *Ban) Item(r Request) *Item {
 			}
 		}
 		banItem.AddLink(r.NewLink(BanResource.Link("unsign", Delete, []string{"user_id", user.Id, "banned_id", bannedId})))
+		banItem.AddLink(r.NewLink(BanResource.Link("self", Load, []string{"user_id", user.Id, "banned_id", bannedId})))
 	}
 	return banItem
 }

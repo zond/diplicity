@@ -99,6 +99,7 @@ func (p *GameState) Item(r Request) *Item {
 	memberNation, isMember := r.Values()[memberNationFlag]
 	if isMember && memberNation == p.Nation {
 		gameStateItem.AddLink(r.NewLink(GameStateResource.Link("update", Update, []string{"game_id", p.GameID.Encode(), "nation", fmt.Sprint(memberNation)})))
+		gameStateItem.AddLink(r.NewLink(GameStateResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "nation", fmt.Sprint(memberNation)})))
 	}
 	return gameStateItem
 }

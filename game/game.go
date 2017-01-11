@@ -280,9 +280,7 @@ func (g *Games) RemoveBanned(ctx context.Context, uid string) ([][]Ban, error) {
 func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit int, name string, desc []string, route string) *Item {
 	gameItems := make(List, len(g))
 	for i := range g {
-		if _, isMember := g[i].GetMember(user.Id); !isMember {
-			g[i].Redact()
-		}
+		g[i].Redact(user)
 		gameItems[i] = g[i].Item(r)
 	}
 	gamesItem := NewItem(gameItems).SetName(name).SetDesc([][]string{
@@ -376,6 +374,7 @@ func (g *Game) Item(r Request) *Item {
 			if g.Leavable() {
 				gameItem.AddLink(r.NewLink(MemberResource.Link("leave", Delete, []string{"game_id", g.ID.Encode(), "user_id", user.Id})))
 			}
+			gameItem.AddLink(r.NewLink(MemberResource.Link("update-membership", Update, []string{"game_id", g.ID.Encode(), "user_id", user.Id})))
 		} else {
 			if g.Joinable() {
 				gameItem.AddLink(r.NewLink(MemberResource.Link("join", Create, []string{"game_id", g.ID.Encode()})))
@@ -471,9 +470,10 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	return game, nil
 }
 
-func (g *Game) Redact() {
+func (g *Game) Redact(viewer *auth.User) {
+	_, isMember := g.GetMember(viewer.Id)
 	for index := range g.Members {
-		g.Members[index].Redact()
+		g.Members[index].Redact(viewer, isMember)
 	}
 }
 
@@ -563,9 +563,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 		game.NewestPhaseMeta[i].Refresh()
 	}
 
-	if _, isMember := game.GetMember(user.Id); !isMember {
-		game.Redact()
-	}
+	game.Redact(user)
 
 	filtered := Games{*game}
 	activeBans, err := filtered.RemoveBanned(ctx, user.Id)

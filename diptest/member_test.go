@@ -15,19 +15,41 @@ func TestJoinLeaveGame(t *testing.T) {
 	env1.GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").
 		Body(map[string]string{
-		"Variant": "Classical",
-		"Desc":    gameDesc,
-	}).Success().
+			"Variant": "Classical",
+			"Desc":    gameDesc,
+		}).Success().
 		AssertEq(gameDesc, "Properties", "Desc")
 
 	t.Run("TestJoiningExistingGame", func(t *testing.T) {
 		env2.GetRoute(game.IndexRoute).Success().
 			Follow("open-games", "Links").Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
-			Follow("join", "Links").Success()
+			Follow("join", "Links").Body(map[string]interface{}{}).Success()
 
 		env2.GetRoute(game.ListMyStagingGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	})
+
+	t.Run("TestGameAlias", func(t *testing.T) {
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			Find(env1.GetUID(), []string{"Properties", "Members"}, []string{"User", "Id"}).
+			AssertEq("", "GameAlias")
+		alias := String("alias")
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			Follow("update-membership", "Links").Body(map[string]interface{}{
+			"GameAlias": alias,
+		}).Success().
+			AssertEq(alias, "Properties", "GameAlias")
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			Find(env1.GetUID(), []string{"Properties", "Members"}, []string{"User", "Id"}).
+			AssertEq(alias, "GameAlias")
+		env2.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			Find(env1.GetUID(), []string{"Properties", "Members"}, []string{"User", "Id"}).
+			AssertEq("", "GameAlias")
 	})
 
 	t.Run("TestAllLeavingAndDestroyingGame", func(t *testing.T) {

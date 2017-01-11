@@ -32,17 +32,17 @@ func withStartedGame(f func()) {
 	envs[0].GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").
 		Body(map[string]interface{}{
-		"Variant":            "Classical",
-		"Desc":               gameDesc,
-		"PhaseLengthMinutes": 60 * 24,
-	}).Success().
+			"Variant":            "Classical",
+			"Desc":               gameDesc,
+			"PhaseLengthMinutes": 60 * 24,
+		}).Success().
 		AssertEq(gameDesc, "Properties", "Desc")
 
 	for _, env := range envs[1:] {
 		env.GetRoute(game.IndexRoute).Success().
 			Follow("open-games", "Links").Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
-			Follow("join", "Links").Success()
+			Follow("join", "Links").Body(map[string]interface{}{}).Success()
 	}
 
 	envs[0].GetRoute(game.IndexRoute).Success().
