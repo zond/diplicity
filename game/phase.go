@@ -587,27 +587,30 @@ func (p *PhaseResolver) Act() error {
 		eliminatedUsers := []string{}
 		scores := []GameScore{}
 
-		for nat, q := range quitters {
-			scores = append(scores, GameScore{
-				UserId: q.member.User.Id,
-				Member: nat,
-				SCs:    scCounts[nat],
-			})
-			switch q.state {
-			case diasState:
-				diasMembers = append(diasMembers, nat)
-				diasUsers = append(diasUsers, q.member.User.Id)
-			case nmrState:
-				nmrMembers = append(nmrMembers, nat)
-				nmrUsers = append(nmrUsers, q.member.User.Id)
-			case eliminatedState:
-				eliminatedMembers = append(eliminatedMembers, nat)
-				eliminatedUsers = append(eliminatedUsers, q.member.User.Id)
-			default:
-				msg := fmt.Sprintf("Unknown nation state %v for %q! Fix the resolver!", PP(q), nat)
-				log.Errorf(p.Context, msg)
-				return fmt.Errorf(msg)
+		for _, member := range p.Game.Members {
+			var state quitState
+			quitter, isQuitter := quitters[member.Nation]
+			if isQuitter {
+				state = quitter.state
 			}
+
+			switch state {
+			case diasState:
+				diasMembers = append(diasMembers, member.Nation)
+				diasUsers = append(diasUsers, member.User.Id)
+			case nmrState:
+				nmrMembers = append(nmrMembers, member.Nation)
+				nmrUsers = append(nmrUsers, member.User.Id)
+			case eliminatedState:
+				eliminatedMembers = append(eliminatedMembers, member.Nation)
+				eliminatedUsers = append(eliminatedUsers, member.User.Id)
+			}
+
+			scores = append(scores, GameScore{
+				UserId: member.User.Id,
+				Member: member.Nation,
+				SCs:    scCounts[member.Nation],
+			})
 		}
 
 		gameResult := &GameResult{
