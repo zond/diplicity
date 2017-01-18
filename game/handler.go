@@ -57,6 +57,7 @@ const (
 	DevUserStatsUpdateRoute     = "DevUserStatsUpdate"
 	ReceiveMailRoute            = "ReceiveMail"
 	RenderPhaseMapRoute         = "RenderPhaseMap"
+	ReRateRoute                 = "ReRate"
 )
 
 type userStatsHandler struct {
@@ -371,9 +372,10 @@ var (
 )
 
 type configuration struct {
-	OAuth    *auth.OAuth
-	FCMConf  *FCMConf
-	SendGrid *SendGrid
+	OAuth      *auth.OAuth
+	FCMConf    *FCMConf
+	SendGrid   *SendGrid
+	Superusers *auth.Superusers
 }
 
 func handleConfigure(w ResponseWriter, r Request) error {
@@ -398,12 +400,18 @@ func handleConfigure(w ResponseWriter, r Request) error {
 			return err
 		}
 	}
+	if conf.Superusers != nil {
+		if err := auth.SetSuperusers(ctx, conf.Superusers); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func SetupRouter(r *mux.Router) {
 	router = r
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
+	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
 	Handle(r, "/_ah/mail", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
