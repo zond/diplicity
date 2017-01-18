@@ -81,18 +81,18 @@ func (h *userStatsHandler) handle(w ResponseWriter, r Request) error {
 		err = nil
 	}
 
-	var iter *datastore.Iterator
+	query := h.query
 
 	cursor := r.Req().URL.Query().Get("cursor")
-	if cursor == "" {
-		iter = h.query.Run(ctx)
-	} else {
+	if cursor != "" {
 		decoded, err := datastore.DecodeCursor(cursor)
 		if err != nil {
 			return err
 		}
-		iter = h.query.Start(decoded).Run(ctx)
+		query = query.Start(decoded)
 	}
+
+	iter := query.Run(ctx)
 
 	stats := UserStatsSlice{}
 	for err == nil && len(stats) < int(limit) {
