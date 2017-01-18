@@ -1,6 +1,8 @@
 queue:
 - name: game-updateGlickos
   rate: 500/s
+- name: game-reRateGlickos
+  rate: 500/s
 - name: game-updateUserStats
   rate: 500/s
 - name: game-updateUserStat
