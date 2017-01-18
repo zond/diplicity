@@ -5,11 +5,13 @@ import (
 	"time"
 
 	"github.com/Kashomon/goglicko"
+	"github.com/zond/diplicity/auth"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
 
+	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
 )
 
@@ -19,9 +21,11 @@ const (
 
 var (
 	updateGlickosFunc *DelayFunc
+	reRateGlickosFunc *DelayFunc
 )
 
 func init() {
+	reRateGlickosFunc = NewDelayFunc("game-reRateGlickos", reRateGlickos)
 	updateGlickosFunc = NewDelayFunc("game-updateGlickos", updateGlickos)
 }
 
@@ -69,12 +73,51 @@ func makeOpponentsAndResults(userId string, glickos []Glicko, scores []GameScore
 	return opponents, results, nil
 }
 
-func updateGlickos(ctx context.Context) error {
-	log.Infof(ctx, "updateGlickos(...)")
+func handleReRate(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
 
-	unratedGameResults := datastore.NewQuery(gameResultKind).Filter("Rated=", false).Order("CreatedAt").Run(ctx)
-	gameResult := &GameResult{}
-	for gameResultID, err := unratedGameResults.Next(gameResult); err == nil; _, err = unratedGameResults.Next(gameResult) {
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthorized", 401}
+	}
+
+	superusers, err := auth.GetSuperusers(ctx)
+	if err != nil {
+		return err
+	}
+
+	if !superusers.Includes(user.Id) {
+		return HTTPErr{"unauthorized", 403}
+	}
+
+	ids, err := datastore.NewQuery(glickoKind).KeysOnly().GetAll(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	if err := datastore.DeleteMulti(ctx, ids); err != nil {
+		return err
+	}
+
+	return reRateGlickosFunc.EnqueueIn(ctx, 0)
+}
+
+func processGlickos(ctx context.Context, onlyUnrated bool) error {
+	query := datastore.NewQuery(gameResultKind).Order("CreatedAt").Limit(2)
+	if onlyUnrated {
+		query = query.Filter("Rated=", false)
+	}
+
+	unratedGameResults := GameResults{}
+	ids, err := query.GetAll(ctx, &unratedGameResults)
+	if err != nil {
+		log.Errorf(ctx, "Unable to load unrated game results: %v; hope datastore gets fixed", err)
+		return err
+	}
+
+	if len(ids) > 0 {
+		gameResultID := ids[0]
+		gameResult := &unratedGameResults[0]
 
 		game := &Game{}
 		if err := datastore.Get(ctx, gameResult.GameID, game); err != nil {
@@ -135,7 +178,7 @@ func updateGlickos(ctx context.Context) error {
 				log.Errorf(ctx, "Unable to get game result %v: %v; hope datastore gets fixed", gameResultID, err)
 				return err
 			}
-			if gameResult.Rated {
+			if onlyUnrated && gameResult.Rated {
 				log.Infof(ctx, "%v got rated while we worked, exiting", PP(gameResult))
 				return nil
 			}
@@ -167,18 +210,33 @@ func updateGlickos(ctx context.Context) error {
 				log.Errorf(ctx, "Unable to enqueue updating of user stats: %v; hope datastore gets fixed", err)
 				return err
 			}
+
+			if len(ids) > 1 {
+				log.Infof(ctx, "Still unrated games left, triggering another updateGlickos")
+				return updateGlickosFunc.EnqueueIn(ctx, 0)
+			}
 			return nil
-		}, &datastore.TransactionOptions{XG: false}); err != nil {
+		}, &datastore.TransactionOptions{XG: true}); err != nil {
 			log.Errorf(ctx, "Unable to commit rating tx: %v", err)
 			return err
 		}
-
-		gameResult = &GameResult{}
 	}
 
-	log.Infof(ctx, "updateGlickos(...) *** SUCCESS ***")
+	log.Infof(ctx, "processGlickos(..., %v) *** SUCCESS ***", onlyUnrated)
 
 	return nil
+}
+
+func updateGlickos(ctx context.Context) error {
+	log.Infof(ctx, "updateGlickos(...) delegating to processGlickos(..., true)")
+
+	return processGlickos(ctx, true)
+}
+
+func reRateGlickos(ctx context.Context) error {
+	log.Infof(ctx, "reRateGlickos(...) delegating to processGlickos(..., false)")
+
+	return processGlickos(ctx, false)
 }
 
 func GetGlicko(ctx context.Context, userId string) (*Glicko, error) {
