@@ -44,15 +44,18 @@ const (
 	naClKind        = "NaCl"
 	oAuthKind       = "OAuth"
 	redirectURLKind = "RedirectURL"
+	superusersKind  = "Superusers"
 	prodKey         = "prod"
 )
 
 var (
-	prodOAuth     *OAuth
-	prodOAuthLock = sync.RWMutex{}
-	prodNaCl      *naCl
-	prodNaClLock  = sync.RWMutex{}
-	router        *mux.Router
+	prodOAuth          *OAuth
+	prodOAuthLock      = sync.RWMutex{}
+	prodNaCl           *naCl
+	prodNaClLock       = sync.RWMutex{}
+	prodSuperusers     *Superusers
+	prodSuperusersLock = sync.RWMutex{}
+	router             *mux.Router
 
 	RedirectURLResource *Resource
 )
@@ -220,6 +223,55 @@ func infoToUser(ui *oauth2service.Userinfoplus) *User {
 		u.VerifiedEmail = *ui.VerifiedEmail
 	}
 	return u
+}
+
+type Superusers struct {
+	UserIds string
+}
+
+func (s *Superusers) Includes(userId string) bool {
+	superusers := strings.Split(s.UserIds, ",")
+	for i := range superusers {
+		if superusers[i] == userId {
+			return true
+		}
+	}
+	return false
+}
+
+func getSuperusersKey(ctx context.Context) *datastore.Key {
+	return datastore.NewKey(ctx, superusersKind, prodKey, 0, nil)
+}
+
+func SetSuperusers(ctx context.Context, superusers *Superusers) error {
+	log.Infof(ctx, "setting superusers to %+v", superusers)
+	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		currentSuperusers := &Superusers{}
+		if err := datastore.Get(ctx, getSuperusersKey(ctx), currentSuperusers); err == nil {
+			return HTTPErr{"Superusers already configured", 400}
+		}
+		if _, err := datastore.Put(ctx, getSuperusersKey(ctx), superusers); err != nil {
+			return err
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: false})
+}
+
+func GetSuperusers(ctx context.Context) (*Superusers, error) {
+	prodSuperusersLock.RLock()
+	if prodSuperusers != nil {
+		defer prodSuperusersLock.RUnlock()
+		return prodSuperusers, nil
+	}
+	prodSuperusersLock.RUnlock()
+	prodSuperusersLock.Lock()
+	defer prodSuperusersLock.Unlock()
+	foundSuperusers := &Superusers{}
+	if err := datastore.Get(ctx, getSuperusersKey(ctx), foundSuperusers); err != nil {
+		return nil, err
+	}
+	prodSuperusers = foundSuperusers
+	return prodSuperusers, nil
 }
 
 type naCl struct {
