@@ -242,7 +242,7 @@ func updateGlickos(ctx context.Context) error {
 }
 
 func reRateGlickos(ctx context.Context, cursor string) error {
-	log.Infof(ctx, "reRateGlickos(...) delegating to processGlickos(..., false)")
+	log.Infof(ctx, "reRateGlickos(..., %q)", cursor)
 
 	query := datastore.NewQuery(gameResultKind).Order("CreatedAt")
 	if cursor != "" {
