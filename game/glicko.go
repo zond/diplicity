@@ -99,7 +99,7 @@ func handleReRate(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	return reRateGlickosFunc.EnqueueIn(ctx, 0)
+	return reRateGlickosFunc.EnqueueIn(ctx, 0, "")
 }
 
 func processGlickos(ctx context.Context, gameResult *GameResult, onlyUnrated bool, continuation func(context.Context) error) error {
