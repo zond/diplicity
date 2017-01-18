@@ -23,6 +23,8 @@ type GameScore struct {
 	Score  float64
 }
 
+type GameResults []GameResult
+
 type GameResult struct {
 	GameID            *datastore.Key
 	SoloWinnerMember  dip.Nation
