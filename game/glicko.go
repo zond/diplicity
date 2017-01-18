@@ -102,141 +102,184 @@ func handleReRate(w ResponseWriter, r Request) error {
 	return reRateGlickosFunc.EnqueueIn(ctx, 0)
 }
 
-func processGlickos(ctx context.Context, onlyUnrated bool) error {
-	query := datastore.NewQuery(gameResultKind).Order("CreatedAt").Limit(2)
-	if onlyUnrated {
-		query = query.Filter("Rated=", false)
+func processGlickos(ctx context.Context, gameResult *GameResult, onlyUnrated bool, continuation func(context.Context) error) error {
+	game := &Game{}
+	if err := datastore.Get(ctx, gameResult.GameID, game); err != nil {
+		log.Errorf(ctx, "Unable to load game for %v: %v; hope datastore gets fixed", gameResult, err)
+		return err
+	}
+	game.ID = gameResult.GameID
+
+	glickos := make([]Glicko, len(game.Members))
+	done := make(chan error, len(game.Members))
+	for i, member := range game.Members {
+		go func(i int, member Member) {
+			found, err := GetGlicko(ctx, member.User.Id)
+			if err == nil {
+				glickos[i] = *found
+			}
+			done <- err
+		}(i, member)
+	}
+	for _ = range game.Members {
+		if err := <-done; err != nil {
+			log.Errorf(ctx, "Unable to fetch latest glicko for all members: %v; fix GetGlicko or hope datastore gets fixed", err)
+			return err
+		}
 	}
 
+	newGlickos := []Glicko{}
+	for _, member := range game.Members {
+		rating, err := makeRating(member.User.Id, glickos)
+		if err != nil {
+			log.Errorf(ctx, "Unable to make a rating for %v with %v: %v; fix makeRating", PP(member), PP(glickos), err)
+			return err
+		}
+		opponents, results, err := makeOpponentsAndResults(member.User.Id, glickos, gameResult.Scores)
+		if err != nil {
+			log.Errorf(ctx, "Unable to make opponents and scores for %v with %v and %v: %v; fix makeOpponentsAndResults", PP(member), PP(glickos), PP(gameResult.Scores), err)
+			return err
+		}
+		newRating, err := goglicko.CalculateRating(rating, opponents, results)
+		if err != nil {
+			log.Errorf(ctx, "Unable to calculate new rating for %v with %v, %v and %v: %v; fix goglicko?", PP(member), PP(rating), PP(opponents), PP(results), err)
+			return err
+		}
+		newGlickos = append(newGlickos, Glicko{
+			GameID:          game.ID,
+			UserId:          member.User.Id,
+			CreatedAt:       gameResult.CreatedAt,
+			Member:          member.Nation,
+			Rating:          newRating.Rating,
+			PracticalRating: newRating.Rating - 2*newRating.Deviation,
+			Deviation:       newRating.Deviation,
+			Volatility:      newRating.Volatility,
+		})
+	}
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		gameResultID := gameResult.ID(ctx)
+
+		if err := datastore.Get(ctx, gameResultID, gameResult); err != nil {
+			log.Errorf(ctx, "Unable to get game result %v: %v; hope datastore gets fixed", gameResultID, err)
+			return err
+		}
+		if onlyUnrated && gameResult.Rated {
+			log.Infof(ctx, "%v got rated while we worked, exiting", PP(gameResult))
+			return nil
+		}
+		gameResult.Rated = true
+		if _, err := datastore.Put(ctx, gameResultID, gameResult); err != nil {
+			log.Errorf(ctx, "Unable to save game result %v after setting it as rated: %v; hope datastore gets fixed", PP(gameResult), err)
+			return err
+		}
+
+		glickoIDs := make([]*datastore.Key, len(newGlickos))
+		for i, glicko := range newGlickos {
+			id, err := glicko.ID(ctx)
+			if err != nil {
+				log.Errorf(ctx, "Unable to create ID for %v: %v; fix Glicko#ID", PP(glicko), err)
+				return err
+			}
+			glickoIDs[i] = id
+		}
+		if _, err := datastore.PutMulti(ctx, glickoIDs, newGlickos); err != nil {
+			log.Errorf(ctx, "Unable to store new glickos %v => %v: %v; hope datastore gets fixed", PP(glickoIDs), PP(newGlickos), err)
+			return err
+		}
+
+		uids := make([]string, len(newGlickos))
+		for i, glicko := range newGlickos {
+			uids[i] = glicko.UserId
+		}
+		if err := UpdateUserStatsASAP(ctx, uids); err != nil {
+			log.Errorf(ctx, "Unable to enqueue updating of user stats: %v; hope datastore gets fixed", err)
+			return err
+		}
+
+		if continuation != nil {
+			if err := continuation(ctx); err != nil {
+				log.Errorf(ctx, "Unable to run continuation: %v; fix the queue func", err)
+				return err
+			}
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
+		log.Errorf(ctx, "Unable to commit rating tx: %v", err)
+		return err
+	}
+	return nil
+}
+
+func updateGlickos(ctx context.Context) error {
+	log.Infof(ctx, "updateGlickos(...)")
+
 	unratedGameResults := GameResults{}
-	ids, err := query.GetAll(ctx, &unratedGameResults)
+	_, err := datastore.NewQuery(gameResultKind).Filter("Rated=", false).Order("CreatedAt").Limit(2).GetAll(ctx, &unratedGameResults)
 	if err != nil {
 		log.Errorf(ctx, "Unable to load unrated game results: %v; hope datastore gets fixed", err)
 		return err
 	}
 
-	if len(ids) > 0 {
-		gameResultID := ids[0]
-		gameResult := &unratedGameResults[0]
-
-		game := &Game{}
-		if err := datastore.Get(ctx, gameResult.GameID, game); err != nil {
-			log.Errorf(ctx, "Unable to load game for %v: %v; hope datastore gets fixed", gameResult, err)
-			return err
+	var continuation func(context.Context) error
+	if len(unratedGameResults) > 1 {
+		continuation = func(ctx context.Context) error {
+			log.Infof(ctx, "Still unrated games left, triggering another updateGlickos")
+			return updateGlickosFunc.EnqueueIn(ctx, 0)
 		}
-		game.ID = gameResult.GameID
+	}
 
-		glickos := make([]Glicko, len(game.Members))
-		done := make(chan error, len(game.Members))
-		for i, member := range game.Members {
-			go func(i int, member Member) {
-				found, err := GetGlicko(ctx, member.User.Id)
-				if err == nil {
-					glickos[i] = *found
-				}
-				done <- err
-			}(i, member)
-		}
-		for _ = range game.Members {
-			if err := <-done; err != nil {
-				log.Errorf(ctx, "Unable to fetch latest glicko for all members: %v; fix GetGlicko or hope datastore gets fixed", err)
-				return err
-			}
-		}
-
-		newGlickos := []Glicko{}
-		for _, member := range game.Members {
-			rating, err := makeRating(member.User.Id, glickos)
-			if err != nil {
-				log.Errorf(ctx, "Unable to make a rating for %v with %v: %v; fix makeRating", PP(member), PP(glickos), err)
-				return err
-			}
-			opponents, results, err := makeOpponentsAndResults(member.User.Id, glickos, gameResult.Scores)
-			if err != nil {
-				log.Errorf(ctx, "Unable to make opponents and scores for %v with %v and %v: %v; fix makeOpponentsAndResults", PP(member), PP(glickos), PP(gameResult.Scores), err)
-				return err
-			}
-			newRating, err := goglicko.CalculateRating(rating, opponents, results)
-			if err != nil {
-				log.Errorf(ctx, "Unable to calculate new rating for %v with %v, %v and %v: %v; fix goglicko?", PP(member), PP(rating), PP(opponents), PP(results), err)
-				return err
-			}
-			newGlickos = append(newGlickos, Glicko{
-				GameID:          game.ID,
-				UserId:          member.User.Id,
-				CreatedAt:       gameResult.CreatedAt,
-				Member:          member.Nation,
-				Rating:          newRating.Rating,
-				PracticalRating: newRating.Rating - 2*newRating.Deviation,
-				Deviation:       newRating.Deviation,
-				Volatility:      newRating.Volatility,
-			})
-		}
-
-		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-			if err := datastore.Get(ctx, gameResultID, gameResult); err != nil {
-				log.Errorf(ctx, "Unable to get game result %v: %v; hope datastore gets fixed", gameResultID, err)
-				return err
-			}
-			if onlyUnrated && gameResult.Rated {
-				log.Infof(ctx, "%v got rated while we worked, exiting", PP(gameResult))
-				return nil
-			}
-			gameResult.Rated = true
-			if _, err := datastore.Put(ctx, gameResultID, gameResult); err != nil {
-				log.Errorf(ctx, "Unable to save game result %v after setting it as rated: %v; hope datastore gets fixed", PP(gameResult), err)
-				return err
-			}
-
-			glickoIDs := make([]*datastore.Key, len(newGlickos))
-			for i, glicko := range newGlickos {
-				id, err := glicko.ID(ctx)
-				if err != nil {
-					log.Errorf(ctx, "Unable to create ID for %v: %v; fix Glicko#ID", PP(glicko), err)
-					return err
-				}
-				glickoIDs[i] = id
-			}
-			if _, err := datastore.PutMulti(ctx, glickoIDs, newGlickos); err != nil {
-				log.Errorf(ctx, "Unable to store new glickos %v => %v: %v; hope datastore gets fixed", PP(glickoIDs), PP(newGlickos), err)
-				return err
-			}
-
-			uids := make([]string, len(newGlickos))
-			for i, glicko := range newGlickos {
-				uids[i] = glicko.UserId
-			}
-			if err := UpdateUserStatsASAP(ctx, uids); err != nil {
-				log.Errorf(ctx, "Unable to enqueue updating of user stats: %v; hope datastore gets fixed", err)
-				return err
-			}
-
-			if len(ids) > 1 {
-				log.Infof(ctx, "Still unrated games left, triggering another updateGlickos")
-				return updateGlickosFunc.EnqueueIn(ctx, 0)
-			}
-			return nil
-		}, &datastore.TransactionOptions{XG: true}); err != nil {
-			log.Errorf(ctx, "Unable to commit rating tx: %v", err)
+	if len(unratedGameResults) > 0 {
+		if err := processGlickos(ctx, &unratedGameResults[0], true, continuation); err != nil {
+			log.Errorf(ctx, "Unable to process glickos for %v: %v; fix processGlickos", PP(unratedGameResults[0]), err)
 			return err
 		}
 	}
 
-	log.Infof(ctx, "processGlickos(..., %v) *** SUCCESS ***", onlyUnrated)
+	log.Infof(ctx, "updateGlickos(...) *** SUCCESS ***")
 
 	return nil
 }
 
-func updateGlickos(ctx context.Context) error {
-	log.Infof(ctx, "updateGlickos(...) delegating to processGlickos(..., true)")
-
-	return processGlickos(ctx, true)
-}
-
-func reRateGlickos(ctx context.Context) error {
+func reRateGlickos(ctx context.Context, cursor string) error {
 	log.Infof(ctx, "reRateGlickos(...) delegating to processGlickos(..., false)")
 
-	return processGlickos(ctx, false)
+	query := datastore.NewQuery(gameResultKind).Order("CreatedAt")
+	if cursor != "" {
+		decoded, err := datastore.DecodeCursor(cursor)
+		if err != nil {
+			log.Errorf(ctx, "Unable to decode cursor %q: %v; giving up", cursor, err)
+			return err
+		}
+		query = query.Start(decoded)
+	}
+
+	iter := query.Run(ctx)
+
+	gameResult := &GameResult{}
+	_, err := iter.Next(gameResult)
+	if err == datastore.Done {
+		log.Infof(ctx, "No more game results to re rate, exiting")
+	} else if err != nil {
+		log.Errorf(ctx, "Unable to load next game result: %v; hope datastore gets fixed", err)
+		return err
+	} else {
+		nextCursor, err := iter.Cursor()
+		if err != nil {
+			log.Errorf(ctx, "Unable to get next cursor: %v; hope datastore gets fixed", err)
+			return err
+		}
+		if err := processGlickos(ctx, gameResult, false, func(ctx context.Context) error {
+			return reRateGlickosFunc.EnqueueIn(ctx, 0, nextCursor.String())
+		}); err != nil {
+			log.Errorf(ctx, "Unable to process glickos for %v: %v; fix processGlickos", PP(gameResult), err)
+			return err
+		}
+	}
+
+	log.Infof(ctx, "reRateGlickos(..., %q) *** SUCCESS ***", cursor)
+
+	return nil
 }
 
 func GetGlicko(ctx context.Context, userId string) (*Glicko, error) {
