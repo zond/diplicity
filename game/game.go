@@ -350,9 +350,9 @@ type Game struct {
 }
 
 func (g *Game) GetMember(userID string) (*Member, bool) {
-	for _, member := range g.Members {
-		if member.User.Id == userID {
-			return &member, true
+	for i := range g.Members {
+		if g.Members[i].User.Id == userID {
+			return &g.Members[i], true
 		}
 	}
 	return nil, false

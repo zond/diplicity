@@ -166,6 +166,14 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		phaseState.PhaseOrdinal = phaseOrdinal
 		phaseState.Nation = member.Nation
 		phaseState.OnProbation = false
+		member.NewestPhaseState = *phaseState
+
+		if err := phaseState.Save(ctx); err != nil {
+			return err
+		}
+		if err := game.Save(ctx); err != nil {
+			return err
+		}
 
 		if phaseState.ReadyToResolve {
 			allStates := []PhaseState{}
@@ -204,8 +212,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 				}
 			}
 		}
-
-		return phaseState.Save(ctx)
+		return nil
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}
