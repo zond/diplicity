@@ -360,7 +360,7 @@ func (p *PhaseResolver) SCCounts(s *state.State) map[dip.Nation]int {
 
 type quitter struct {
 	state  quitState
-	member Member
+	member *Member
 }
 
 type quitState int
@@ -448,21 +448,27 @@ func (p *PhaseResolver) Act() error {
 		PhaseOrdinal: p.Phase.PhaseOrdinal,
 	}
 
-	for _, member := range p.Game.Members {
-		nat := member.Nation
+	for i := range p.Game.Members {
+		member := &p.Game.Members[i]
+
+		newPhaseState := &PhaseState{
+			GameID:       p.Phase.GameID,
+			PhaseOrdinal: newPhase.PhaseOrdinal,
+			Nation:       member.Nation,
+		}
 
 		// Collect data on each nation.
-		_, hadOrders := orderMap[nat]
+		_, hadOrders := orderMap[member.Nation]
 		wasReady := false
 		wantedDIAS := false
 		wasOnProbation := false
 		wasEliminated := false
 		for _, phaseState := range p.PhaseStates {
-			if phaseState.Nation == nat {
+			if phaseState.Nation == member.Nation {
 				wasReady = phaseState.ReadyToResolve
 				wantedDIAS = phaseState.WantsDIAS
 				if phaseState.WantsDIAS {
-					quitters[nat] = quitter{
+					quitters[member.Nation] = quitter{
 						state:  diasState,
 						member: member,
 					}
@@ -471,28 +477,28 @@ func (p *PhaseResolver) Act() error {
 				break
 			}
 		}
-		newOptions := len(s.Phase().Options(s, nat))
-		if scCounts[nat] == 0 {
+		newOptions := len(s.Phase().Options(s, member.Nation))
+		if scCounts[member.Nation] == 0 {
 			wasEliminated = true
 			// Overwrite DIAS with eliminated, you can't be part of a DIAS if you are eliminated...
-			quitters[nat] = quitter{
+			quitters[member.Nation] = quitter{
 				state:  eliminatedState,
 				member: member,
 			}
-		} else if scCounts[nat] >= variant.SoloSupplyCenters {
+		} else if scCounts[member.Nation] >= variant.SoloSupplyCenters {
 			if soloWinner != "" {
-				msg := fmt.Sprintf("Found that %q has >= variant.SoloSupplyCenters (%d) SCs, but %q was already marked as solo winner? WTF?; fix godip?", nat, variant.SoloSupplyCenters, soloWinner)
+				msg := fmt.Sprintf("Found that %q has >= variant.SoloSupplyCenters (%d) SCs, but %q was already marked as solo winner? WTF?; fix godip?", member.Nation, variant.SoloSupplyCenters, soloWinner)
 				log.Errorf(p.Context, msg)
 				return fmt.Errorf(msg)
 			}
-			log.Infof(p.Context, "Found that %q has >= variant.SoloSupplyCenters (%d) SCs, marking %q as solo winner", nat, variant.SoloSupplyCenters, nat)
-			soloWinner = nat
+			log.Infof(p.Context, "Found that %q has >= variant.SoloSupplyCenters (%d) SCs, marking %q as solo winner", member.Nation, variant.SoloSupplyCenters, member.Nation)
+			soloWinner = member.Nation
 			soloWinnerUser = member.User.Id
 		}
 
 		// Log what we're doing.
 		stateString := fmt.Sprintf("wasReady = %v, wantedDIAS = %v, onProbation = %v, hadOrders = %v, newOptions = %v, wasEliminated = %v", wasReady, wantedDIAS, wasOnProbation, hadOrders, newOptions, wasEliminated)
-		log.Infof(p.Context, "%v at phase change: %s", nat, stateString)
+		log.Infof(p.Context, "%v at phase change: %s", member.Nation, stateString)
 
 		// Calculate states for next phase.
 		// When a player creates an order, the phase state for that order is updated to 'OnProbation = false'.
@@ -517,8 +523,8 @@ func (p *PhaseResolver) Act() error {
 		}
 
 		// Overwrite DIAS but not eliminated with NMR.
-		if q := quitters[nat]; autoProbation && q.state != eliminatedState {
-			quitters[nat] = quitter{
+		if q := quitters[member.Nation]; autoProbation && q.state != eliminatedState {
+			quitters[member.Nation] = quitter{
 				state:  nmrState,
 				member: member,
 			}
@@ -526,18 +532,19 @@ func (p *PhaseResolver) Act() error {
 
 		// If the next phase state is non-default, we must save and append it.
 		if autoReady || autoDIAS {
-			newPhaseState := &PhaseState{
+			newPhaseState = &PhaseState{
 				GameID:         p.Phase.GameID,
 				PhaseOrdinal:   newPhase.PhaseOrdinal,
-				Nation:         nat,
+				Nation:         member.Nation,
 				ReadyToResolve: autoReady,
 				WantsDIAS:      autoDIAS,
 				OnProbation:    autoProbation,
 				Note:           fmt.Sprintf("Auto generated due to phase change at %v/%v: %s", p.Phase.GameID, p.Phase.PhaseOrdinal, stateString),
 			}
-			newPhaseStates = append(newPhaseStates, *newPhaseState)
 		}
 
+		member.NewestPhaseState = *newPhaseState
+		newPhaseStates = append(newPhaseStates, *newPhaseState)
 		oldPhaseResult.AllUsers = append(oldPhaseResult.AllUsers, member.User.Id)
 	}
 

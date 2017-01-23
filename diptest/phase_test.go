@@ -191,6 +191,21 @@ func TestTimeoutResolution(t *testing.T) {
 			}
 		})
 
+		t.Run("TestNewestPhaseState-1", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
+				Find(startedGameID, []string{"NewestPhaseState", "GameID"})
+			startedGameEnvs[1].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
+				Find(startedGameID, []string{"NewestPhaseState", "GameID"})
+			startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
+				AssertNil("NewestPhaseState", "GameID")
+			startedGameEnvs[1].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
+				AssertNil("NewestPhaseState", "GameID")
+		})
+
 		t.Run("TestNoResolve-1", func(t *testing.T) {
 			startedGames[0].Follow("phases", "Links").Success().
 				AssertNotFind(2, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
@@ -202,6 +217,21 @@ func TestTimeoutResolution(t *testing.T) {
 		t.Run("TimeoutResolve-1", func(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
 				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "1").Success()
+		})
+
+		t.Run("TestNewestPhaseState-1", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
+				Find(startedGameID, []string{"NewestPhaseState", "GameID"})
+			startedGameEnvs[1].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
+				Find(startedGameID, []string{"NewestPhaseState", "GameID"})
+			startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
+				AssertNil("NewestPhaseState", "GameID")
+			startedGameEnvs[1].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
+				AssertNil("NewestPhaseState", "GameID")
 		})
 
 		t.Run("TestNextPhaseNoProbation", func(t *testing.T) {

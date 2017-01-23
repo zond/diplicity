@@ -23,9 +23,10 @@ var MemberResource = &Resource{
 }
 
 type Member struct {
-	User      auth.User
-	Nation    dip.Nation
-	GameAlias string `methods:"POST,PUT"`
+	User             auth.User
+	Nation           dip.Nation
+	GameAlias        string `methods:"POST,PUT"`
+	NewestPhaseState PhaseState
 }
 
 func (m *Member) Item(r Request) *Item {
@@ -38,6 +39,7 @@ func (m *Member) Redact(viewer *auth.User, isMember bool) {
 	}
 	if viewer.Id != m.User.Id {
 		m.GameAlias = ""
+		m.NewestPhaseState = PhaseState{}
 	}
 }
 
@@ -187,6 +189,9 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 			return HTTPErr{"game not joinable", 412}
 		}
 		member.User = *user
+		member.NewestPhaseState = PhaseState{
+			GameID: gameID,
+		}
 		game.Members = append(game.Members, *member)
 		if len(game.Members) == len(variants.Variants[game.Variant].Nations) {
 			if err := game.Start(ctx, r); err != nil {
