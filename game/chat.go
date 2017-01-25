@@ -208,7 +208,14 @@ func sendMsgNotificationsToMail(ctx context.Context, host, scheme string, gameID
 
 	msg := sendgrid.NewMail()
 	msg.SetText(fmt.Sprintf("%s\n\nVisit %s to stop receiving email like this.\n\nVisit %s to see the latest phase in this game.", msgContext.message.Body, unsubscribeURL.String(), msgContext.mapURL.String()))
-	msg.SetSubject(fmt.Sprintf("%s: Message from %s", msgContext.message.ChannelMembers.String(), msgContext.message.Sender))
+	msg.SetSubject(
+		fmt.Sprintf(
+			"%s: %s => %s",
+			msgContext.game.DescFor(msgContext.member.Nation),
+			msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
+			msgContext.game.AbbrNat(msgContext.message.Sender),
+		),
+	)
 	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
 
 	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.mailData)
@@ -282,7 +289,12 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 		log.Infof(ctx, "Found an FCM token to send to: %v", PP(fcmToken))
 		finishedTokens[fcmToken.Value] = struct{}{}
 		notificationPayload := &fcm.NotificationPayload{
-			Title:       fmt.Sprintf("%s: Message from %s", msgContext.message.ChannelMembers.String(), msgContext.message.Sender),
+			Title: fmt.Sprintf(
+				"%s: %s => %s",
+				msgContext.game.DescFor(msgContext.member.Nation),
+				msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
+				msgContext.game.AbbrNat(msgContext.message.Sender),
+			),
 			Body:        msgContext.message.Body,
 			Tag:         "diplicity-engine-new-message",
 			ClickAction: fmt.Sprintf("%s://%s/Game/%s/Channel/%s/Messages", scheme, host, gameID.Encode(), channelMembers.String()),

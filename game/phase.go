@@ -168,7 +168,15 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 		msgContext.game.Desc,
 		msgContext.mapURL.String(),
 		unsubscribeURL.String()))
-	msg.SetSubject(fmt.Sprintf("%s %d, %s", msgContext.phase.Season, msgContext.phase.Year, msgContext.phase.Type))
+	msg.SetSubject(
+		fmt.Sprintf(
+			"%s: %s %d, %s",
+			msgContext.game.DescFor(msgContext.member.Nation),
+			msgContext.phase.Season,
+			msgContext.phase.Year,
+			msgContext.phase.Type,
+		),
+	)
 	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
 
 	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.mailData)
@@ -223,7 +231,13 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameI
 		}
 		finishedTokens[fcmToken.Value] = struct{}{}
 		notificationPayload := &fcm.NotificationPayload{
-			Title:       fmt.Sprintf("%s %d, %s", msgContext.phase.Season, msgContext.phase.Year, msgContext.phase.Type),
+			Title: fmt.Sprintf(
+				"%s: %s %d, %s",
+				msgContext.game.DescFor(msgContext.member.Nation),
+				msgContext.phase.Season,
+				msgContext.phase.Year,
+				msgContext.phase.Type,
+			),
 			Body:        fmt.Sprintf("%s has a new phase.", msgContext.game.Desc),
 			Tag:         "diplicity-engine-new-phase",
 			ClickAction: msgContext.mapURL.String(),

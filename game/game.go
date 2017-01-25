@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"google.golang.org/appengine/taskqueue"
 
 	. "github.com/zond/goaeoas"
+	dip "github.com/zond/godip/common"
 )
 
 const (
@@ -347,6 +349,46 @@ type Game struct {
 
 	CreatedAt  time.Time
 	FinishedAt time.Time
+}
+
+func (g *Game) abbrMatchesNations(abbr dip.Nation) int {
+	matches := 0
+	for _, m := range g.Members {
+		if strings.Index(string(m.Nation), string(abbr)) == 0 {
+			matches++
+		}
+	}
+	return matches
+}
+
+func (g *Game) AbbrNats(nats Nations) Nations {
+	result := make(Nations, len(nats))
+	for i, nat := range nats {
+		result[i] = g.AbbrNat(nat)
+	}
+	return result
+}
+
+func (g *Game) AbbrNat(nat dip.Nation) dip.Nation {
+	if len(nat) < 2 {
+		return nat
+	}
+	runes := []rune(string(nat))
+	for i := 1; i < len(runes); i++ {
+		if g.abbrMatchesNations(dip.Nation(runes[:i])) == 1 {
+			return dip.Nation(runes[:i])
+		}
+	}
+	return nat
+}
+
+func (g *Game) DescFor(nat dip.Nation) string {
+	for _, m := range g.Members {
+		if m.Nation == nat && m.GameAlias != "" {
+			return m.GameAlias
+		}
+	}
+	return g.Desc
 }
 
 func (g *Game) GetMember(userID string) (*Member, bool) {
