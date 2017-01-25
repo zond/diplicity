@@ -945,6 +945,8 @@ func listChannels(w ResponseWriter, r Request) error {
 func receiveMail(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
+	log.Infof(ctx, "Received incoming email")
+
 	b, err := ioutil.ReadAll(r.Req().Body)
 	if err != nil {
 		log.Errorf(ctx, "Unable to read body from request %v: %v", spew.Sdump(r.Req()), err)

@@ -412,7 +412,7 @@ func SetupRouter(r *mux.Router) {
 	router = r
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
-	Handle(r, "/_ah/mail", []string{"POST"}, ReceiveMailRoute, receiveMail)
+	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/_dev_resolve_timeout", []string{"GET"}, DevResolvePhaseTimeoutRoute, devResolvePhaseTimeout)
