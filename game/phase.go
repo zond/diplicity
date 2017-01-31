@@ -1115,7 +1115,11 @@ func listOptions(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	w.SetContent(NewItem(state.Phase().Options(state, member.Nation)).SetName("options").SetDesc([][]string{
+	options := state.Phase().Options(state, member.Nation)
+	for k, v := range state.GetProfile() {
+		log.Debugf(ctx, "Profiling state: %v => %v", k, v)
+	}
+	w.SetContent(NewItem(options).SetName("options").SetDesc([][]string{
 		[]string{
 			"Options explained",
 			"The options consist of a decision tree where each node represents a decision a player has to make when defining an order.",
