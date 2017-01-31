@@ -641,6 +641,20 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 
 		log.Infof(ctx, "Request by %+v", user)
 
+		if fakeID := r.Req().URL.Query().Get("fake-id"); fakeID != "" {
+			superusers, err := GetSuperusers(ctx)
+			if err != nil {
+				return false, err
+			}
+
+			if !superusers.Includes(user.Id) {
+				return false, HTTPErr{"unauthorized", 403}
+			}
+
+			log.Infof(ctx, "Faking user Id %q", fakeID)
+			user.Id = fakeID
+		}
+
 		r.Values()["user"] = user
 
 		if queryToken {
