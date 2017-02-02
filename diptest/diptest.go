@@ -22,6 +22,37 @@ import (
 	"google.golang.org/appengine/aetest"
 )
 
+func QueueEmpty(name string) (bool, error) {
+	resp, err := (&http.Client{}).Get(fmt.Sprintf("http://localhost:8000/taskqueue/queue/%s", name))
+	if err != nil {
+		return false, err
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return false, err
+	}
+	body := string(b)
+	if resp.StatusCode != 200 {
+		return false, fmt.Errorf("Status: %v, Body: %v", resp.StatusCode, body)
+	}
+	return strings.Index(body, "This queue doesn't contain any tasks.") != -1, nil
+}
+
+func WaitForEmptyQueue(name string) {
+	deadline := time.Now().Add(10 * time.Second)
+	for deadline.After(time.Now()) {
+		empty, err := QueueEmpty(name)
+		if err != nil {
+			panic(err)
+		}
+		if empty {
+			return
+		}
+		time.Sleep(time.Millisecond * 200)
+	}
+	panic(fmt.Errorf("Queue not empty within deadline"))
+}
+
 type aetestTransport struct {
 	instance aetest.Instance
 }
