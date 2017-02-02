@@ -13,7 +13,7 @@ A regularly updated service running this code is available at [https://diplicity
 To play, either be brave and use the auto generated HTML UI at [https://diplicity-engine.appspot.com/](https://diplicity-engine.appspot.com/), or use one of the client projects:
 
 * [https://github.com/spamguy/dipl.io](https://github.com/spamguy/dipl.io)
-* [https://github.com/zond/android-diplomacy](https://github.com/zond/android-diplomacy)
+* [https://github.com/zond/android-diplicity](https://github.com/zond/android-diplicity)
 
 ## Architecture
 
