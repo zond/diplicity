@@ -27,6 +27,7 @@ type Member struct {
 	Nation           dip.Nation
 	GameAlias        string `methods:"POST,PUT"`
 	NewestPhaseState PhaseState
+	UnreadMessages   int
 }
 
 func (m *Member) Item(r Request) *Item {
@@ -40,6 +41,7 @@ func (m *Member) Redact(viewer *auth.User, isMember bool) {
 	if viewer.Id != m.User.Id {
 		m.GameAlias = ""
 		m.NewestPhaseState = PhaseState{}
+		m.UnreadMessages = 0
 	}
 }
 

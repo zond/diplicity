@@ -827,6 +827,90 @@ func listMessages(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func loadChannels(ctx context.Context, game *Game, viewer dip.Nation) (Channels, error) {
+	channels := Channels{}
+	if game.Finished {
+		_, err := datastore.NewQuery(channelKind).Filter("GameID=", game.ID).GetAll(ctx, &channels)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if viewer == "" {
+			channelID, err := ChannelID(ctx, game.ID, publicChannel(game.Variant))
+			if err != nil {
+				return nil, err
+			}
+			channel := &Channel{}
+			if err := datastore.Get(ctx, channelID, channel); err == nil {
+				channels = append(channels, *channel)
+			} else if err != datastore.ErrNoSuchEntity {
+				return nil, err
+			}
+		} else {
+			_, err := datastore.NewQuery(channelKind).Filter("GameID=", game.ID).Filter("Members=", viewer).GetAll(ctx, &channels)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return channels, nil
+}
+
+func countUnreadMessages(ctx context.Context, channels Channels, viewer dip.Nation) error {
+	seenMarkerTimes := make([]time.Time, len(channels))
+
+	seenMarkerIDs := make([]*datastore.Key, len(channels))
+	for i := range channels {
+		channelID, err := channels[i].ID(ctx)
+		if err != nil {
+			return err
+		}
+		seenMarkerIDs[i], err = SeenMarkerID(ctx, channelID, viewer)
+		if err != nil {
+			return err
+		}
+	}
+	seenMarkers := make([]SeenMarker, len(channels))
+	err := datastore.GetMulti(ctx, seenMarkerIDs, seenMarkers)
+	if err == nil {
+		for i := range channels {
+			seenMarkerTimes[i] = seenMarkers[i].At
+		}
+	} else if merr, ok := err.(appengine.MultiError); ok {
+		for i, serr := range merr {
+			if serr == nil {
+				seenMarkerTimes[i] = seenMarkers[i].At
+			} else if serr != datastore.ErrNoSuchEntity {
+				return err
+			}
+		}
+	} else if err != datastore.ErrNoSuchEntity {
+		return err
+	}
+
+	results := make(chan error)
+	for i := range channels {
+		go func(c *Channel, since time.Time) {
+			if since.IsZero() {
+				channels[i].NMessagesSince.NMessages = channels[i].NMessages
+				results <- nil
+			} else {
+				results <- c.CountSince(ctx, since)
+			}
+		}(&channels[i], seenMarkerTimes[i])
+	}
+	merr := appengine.MultiError{}
+	for _ = range channels {
+		if err := <-results; err != nil {
+			merr = append(merr, err)
+		}
+	}
+	if len(merr) > 0 {
+		return merr
+	}
+	return nil
+}
+
 func listChannels(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -854,83 +938,14 @@ func listChannels(w ResponseWriter, r Request) error {
 		nation = member.Nation
 	}
 
-	channels := Channels{}
-	if game.Finished {
-		_, err = datastore.NewQuery(channelKind).Filter("GameID=", gameID).GetAll(ctx, &channels)
-		if err != nil {
-			return err
-		}
-	} else {
-		if nation == "" {
-			channelID, err := ChannelID(ctx, gameID, publicChannel(game.Variant))
-			if err != nil {
-				return err
-			}
-			channel := &Channel{}
-			if err := datastore.Get(ctx, channelID, channel); err == nil {
-				channels = append(channels, *channel)
-			} else if err != datastore.ErrNoSuchEntity {
-				return err
-			}
-		} else {
-			_, err = datastore.NewQuery(channelKind).Filter("GameID=", gameID).Filter("Members=", nation).GetAll(ctx, &channels)
-			if err != nil {
-				return err
-			}
-		}
+	channels, err := loadChannels(ctx, game, nation)
+	if err != nil {
+		return err
 	}
 
 	if isMember {
-		seenMarkerTimes := make([]time.Time, len(channels))
-
-		seenMarkerIDs := make([]*datastore.Key, len(channels))
-		for i := range channels {
-			channelID, err := channels[i].ID(ctx)
-			if err != nil {
-				return err
-			}
-			seenMarkerIDs[i], err = SeenMarkerID(ctx, channelID, member.Nation)
-			if err != nil {
-				return err
-			}
-		}
-		seenMarkers := make([]SeenMarker, len(channels))
-		err := datastore.GetMulti(ctx, seenMarkerIDs, seenMarkers)
-		if err == nil {
-			for i := range channels {
-				seenMarkerTimes[i] = seenMarkers[i].At
-			}
-		} else if merr, ok := err.(appengine.MultiError); ok {
-			for i, serr := range merr {
-				if serr == nil {
-					seenMarkerTimes[i] = seenMarkers[i].At
-				} else if serr != datastore.ErrNoSuchEntity {
-					return err
-				}
-			}
-		} else if err != datastore.ErrNoSuchEntity {
+		if err := countUnreadMessages(ctx, channels, nation); err != nil {
 			return err
-		}
-
-		results := make(chan error)
-		for i := range channels {
-			go func(c *Channel, since time.Time) {
-				if since.IsZero() {
-					channels[i].NMessagesSince.NMessages = channels[i].NMessages
-					results <- nil
-				} else {
-					results <- c.CountSince(ctx, since)
-				}
-			}(&channels[i], seenMarkerTimes[i])
-		}
-		merr := appengine.MultiError{}
-		for _ = range channels {
-			if err := <-results; err != nil {
-				merr = append(merr, err)
-			}
-		}
-		if len(merr) > 0 {
-			return merr
 		}
 	} else {
 		for i := range channels {
