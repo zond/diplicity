@@ -367,7 +367,7 @@ func sendMsgNotificationsToUsers(ctx context.Context, host, scheme string, gameI
 			total += channel.NMessagesSince.NMessages
 		}
 		member.UnreadMessages = total
-		if _, err := datastore.Put(ctx, gameID, game); err != nil {
+		if err := game.Save(ctx); err != nil {
 			log.Errorf(ctx, "Unable to save %v after updating unread messages for %v: %v; hope datastore gets fixed", gameID, member.Nation, err)
 			return err
 		}
@@ -818,21 +818,40 @@ func listMessages(w ResponseWriter, r Request) error {
 	}
 
 	messages := Messages{}
-	q := datastore.NewQuery(messageKind).Ancestor(channelID)
-	if since != nil {
-		q = q.Filter("CreatedAt>", *since)
-	}
-	messageIDs, err := q.Order("-CreatedAt").GetAll(ctx, &messages)
-	if err != nil {
+	var seenMarker *SeenMarker
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		q := datastore.NewQuery(messageKind).Ancestor(channelID)
+		if since != nil {
+			q = q.Filter("CreatedAt>", *since)
+		}
+		messageIDs, err := q.Order("-CreatedAt").GetAll(ctx, &messages)
+		if err != nil {
+			return err
+		}
+		for i := range messages {
+			messages[i].ID = messageIDs[i]
+			messages[i].Age = time.Now().Sub(messages[i].CreatedAt)
+		}
+		if nation != "" {
+			seenMarkerID, err := SeenMarkerID(ctx, channelID, nation)
+			if err != nil {
+				return err
+			}
+			seenMarker = &SeenMarker{}
+			if err := datastore.Get(ctx, seenMarkerID, seenMarker); err == datastore.ErrNoSuchEntity {
+				err = nil
+				seenMarker = nil
+			} else if err != nil {
+				return err
+			}
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return err
 	}
-	for i := range messages {
-		messages[i].ID = messageIDs[i]
-		messages[i].Age = time.Now().Sub(messages[i].CreatedAt)
-	}
 
-	if nation != "" && len(messages) > 0 {
-		seenMarker := &SeenMarker{
+	if nation != "" && len(messages) > 0 && (seenMarker == nil || seenMarker.At.Before(messages[0].CreatedAt)) {
+		seenMarker = &SeenMarker{
 			GameID:  gameID,
 			Owner:   nation,
 			Members: channelMembers,
@@ -842,7 +861,50 @@ func listMessages(w ResponseWriter, r Request) error {
 		if err != nil {
 			return err
 		}
-		if _, err = datastore.Put(ctx, seenMarkerID, seenMarker); err != nil {
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			game := &Game{}
+			err = datastore.Get(ctx, gameID, game)
+			if err != nil {
+				return err
+			}
+			game.ID = gameID
+
+			member, isMember := game.GetMember(user.Id)
+			if !isMember {
+				return fmt.Errorf("not member of the game?")
+			}
+
+			channels, err := loadChannels(ctx, game, nation)
+			if err != nil {
+				return err
+			}
+			filteredChannels := Channels{}
+			for _, channel := range channels {
+				if channel.Members.String() != seenMarker.Members.String() {
+					filteredChannels = append(filteredChannels, channel)
+				}
+			}
+
+			if err := countUnreadMessages(ctx, filteredChannels, nation); err != nil {
+				return err
+			}
+
+			unread := 0
+			for _, channel := range channels {
+				unread += channel.NMessagesSince.NMessages
+			}
+
+			member.UnreadMessages = unread
+			if err := game.Save(ctx); err != nil {
+				return err
+			}
+
+			if _, err = datastore.Put(ctx, seenMarkerID, seenMarker); err != nil {
+				return err
+			}
+
+			return nil
+		}, &datastore.TransactionOptions{XG: false}); err != nil {
 			return err
 		}
 	}
