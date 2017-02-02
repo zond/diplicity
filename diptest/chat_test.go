@@ -20,11 +20,37 @@ func testChat(t *testing.T) {
 		startedGames[1].Follow("channels", "Links").Success().AssertEmpty("Properties")
 		startedGames[2].Follow("channels", "Links").Success().AssertEmpty("Properties")
 
+		startedGameEnvs[1].GetRoute(game.IndexRoute).Success().
+			Follow("my-started-games", "Links").Success().
+			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
+			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
+			Find(float64(0), []string{"UnreadMessages"})
+
+		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+			Follow("my-started-games", "Links").Success().
+			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
+			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
+			Find(float64(0), []string{"UnreadMessages"})
+
 		startedGames[0].Follow("channels", "Links").Success().
 			Follow("message", "Links").Body(map[string]interface{}{
 			"Body":           msg1,
 			"ChannelMembers": members,
 		}).Success()
+
+		WaitForEmptyQueue("game-sendMsgNotificationsToUsers")
+
+		startedGameEnvs[1].GetRoute(game.IndexRoute).Success().
+			Follow("my-started-games", "Links").Success().
+			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
+			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
+			Find(float64(1), []string{"UnreadMessages"})
+
+		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+			Follow("my-started-games", "Links").Success().
+			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
+			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
+			Find(float64(0), []string{"UnreadMessages"})
 
 		startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"})
