@@ -890,7 +890,7 @@ func listMessages(w ResponseWriter, r Request) error {
 			}
 
 			unread := 0
-			for _, channel := range channels {
+			for _, channel := range filteredChannels {
 				unread += channel.NMessagesSince.NMessages
 			}
 
