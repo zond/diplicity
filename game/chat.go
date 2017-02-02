@@ -342,6 +342,36 @@ func sendMsgNotificationsToUsers(ctx context.Context, host, scheme string, gameI
 	log.Infof(ctx, "sendMsgNotificationsToUsers(..., %q, %q, %v, %+v, %v, %+v)", host, scheme, gameID, channelMembers, messageID, uids)
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		if err := datastore.Get(ctx, gameID, game); err != nil {
+			log.Errorf(ctx, "Unable to load game %v: %v; hope datastore gets fixed", gameID, err)
+			return err
+		}
+		game.ID = gameID
+		member, isMember := game.GetMember(uids[0])
+		if !isMember {
+			log.Errorf(ctx, "%v isn't a member of %v, wtf? Giving up.", uids[0], gameID)
+			return nil
+		}
+		channels, err := loadChannels(ctx, game, member.Nation)
+		if err != nil {
+			log.Errorf(ctx, "Unable to load channels for %v in %v: %v; hope datastore gets fixed", member.Nation, gameID, err)
+			return err
+		}
+		if err := countUnreadMessages(ctx, channels, member.Nation); err != nil {
+			log.Errorf(ctx, "Unable to count unread messages for %v in %v; hope datastore gets fixed", member.Nation, gameID, err)
+			return err
+		}
+		total := 0
+		for _, channel := range channels {
+			total += channel.NMessagesSince.NMessages
+		}
+		member.UnreadMessages = total
+		if _, err := datastore.Put(ctx, gameID, game); err != nil {
+			log.Errorf(ctx, "Unable to save %v after updating unread messages for %v: %v; hope datastore gets fixed", gameID, member.Nation, err)
+			return err
+		}
+
 		if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, scheme, gameID, channelMembers, messageID, uids[0], map[string]struct{}{}); err != nil {
 			log.Errorf(ctx, "Unable to enqueue sending FCM to %q: %v; hope datastore gets fixed", uids[0], err)
 			return err
@@ -487,7 +517,8 @@ func ChannelID(ctx context.Context, gameID *datastore.Key, members Nations) (*da
 	if gameID.IntID() == 0 {
 		return nil, fmt.Errorf("gameIDs must have int IDs")
 	}
-	return datastore.NewKey(ctx, channelKind, fmt.Sprintf("%d:%s", gameID.IntID(), members.String()), 0, nil), nil
+	sort.Sort(members)
+	return datastore.NewKey(ctx, channelKind, members.String(), 0, gameID), nil
 }
 
 func (c *Channel) ID(ctx context.Context) (*datastore.Key, error) {
@@ -830,7 +861,7 @@ func listMessages(w ResponseWriter, r Request) error {
 func loadChannels(ctx context.Context, game *Game, viewer dip.Nation) (Channels, error) {
 	channels := Channels{}
 	if game.Finished {
-		_, err := datastore.NewQuery(channelKind).Filter("GameID=", game.ID).GetAll(ctx, &channels)
+		_, err := datastore.NewQuery(channelKind).Ancestor(game.ID).GetAll(ctx, &channels)
 		if err != nil {
 			return nil, err
 		}
@@ -847,7 +878,7 @@ func loadChannels(ctx context.Context, game *Game, viewer dip.Nation) (Channels,
 				return nil, err
 			}
 		} else {
-			_, err := datastore.NewQuery(channelKind).Filter("GameID=", game.ID).Filter("Members=", viewer).GetAll(ctx, &channels)
+			_, err := datastore.NewQuery(channelKind).Ancestor(game.ID).Filter("Members=", viewer).GetAll(ctx, &channels)
 			if err != nil {
 				return nil, err
 			}
