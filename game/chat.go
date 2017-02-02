@@ -212,8 +212,8 @@ func sendMsgNotificationsToMail(ctx context.Context, host, scheme string, gameID
 		fmt.Sprintf(
 			"%s: %s => %s",
 			msgContext.game.DescFor(msgContext.member.Nation),
-			msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
 			msgContext.game.AbbrNat(msgContext.message.Sender),
+			msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
 		),
 	)
 	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
@@ -292,8 +292,8 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 			Title: fmt.Sprintf(
 				"%s: %s => %s",
 				msgContext.game.DescFor(msgContext.member.Nation),
-				msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
 				msgContext.game.AbbrNat(msgContext.message.Sender),
+				msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
 			),
 			Body:        msgContext.message.Body,
 			Tag:         "diplicity-engine-new-message",
