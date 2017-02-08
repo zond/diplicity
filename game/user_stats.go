@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
@@ -225,7 +226,24 @@ func loadUserStats(w ResponseWriter, r Request) (*UserStats, error) {
 
 func (u *UserStats) Item(r Request) *Item {
 	u.User.Email = ""
-	return NewItem(u).SetName("user-stats").AddLink(r.NewLink(UserStatsResource.Link("self", Load, []string{"user_id", u.UserId})))
+	log.Infof(appengine.NewContext(r.Req()), "*** %v", spew.Sdump(u))
+	return NewItem(u).SetName("user-stats").
+		AddLink(r.NewLink(UserStatsResource.Link("self", Load, []string{"user_id", u.UserId}))).
+		AddLink(r.NewLink(Link{
+			Rel:         "finished-games",
+			Route:       ListOtherFinishedGamesRoute,
+			RouteParams: []string{"user_id", u.UserId},
+		})).
+		AddLink(r.NewLink(Link{
+			Rel:         "staging-games",
+			Route:       ListOtherStagingGamesRoute,
+			RouteParams: []string{"user_id", u.UserId},
+		})).
+		AddLink(r.NewLink(Link{
+			Rel:         "started-games",
+			Route:       ListOtherStartedGamesRoute,
+			RouteParams: []string{"user_id", u.UserId},
+		}))
 }
 
 func (u *UserStats) Recalculate(ctx context.Context) error {

@@ -39,6 +39,9 @@ const (
 	ListMyStagingGamesRoute     = "ListMyStagingGames"
 	ListMyStartedGamesRoute     = "ListMyStartedGames"
 	ListMyFinishedGamesRoute    = "ListMyFinishedGames"
+	ListOtherStagingGamesRoute  = "ListOtherStagingGames"
+	ListOtherStartedGamesRoute  = "ListOtherStartedGames"
+	ListOtherFinishedGamesRoute = "ListOtherFinishedGames"
 	ListOrdersRoute             = "ListOrders"
 	ListPhasesRoute             = "ListPhases"
 	ListPhaseStatesRoute        = "ListPhaseStates"
@@ -182,7 +185,7 @@ func (req *gamesReq) intervalFilter(fieldName, paramName string) func(*Game) boo
 	}
 }
 
-func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*gamesReq, error) {
+func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string) (*gamesReq, error) {
 	req := &gamesReq{
 		ctx: appengine.NewContext(r.Req()),
 		w:   w,
@@ -213,8 +216,8 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, private bool) (*game
 	req.limit = int(limit)
 
 	q := h.query
-	if private {
-		q = q.Filter("Members.User.Id=", user.Id)
+	if userId != nil {
+		q = q.Filter("Members.User.Id=", *userId)
 	}
 
 	if variantFilter := uq.Get("variant"); variantFilter != "" {
@@ -271,14 +274,14 @@ func (h *gamesHandler) fetch(iter *datastore.Iterator, max int) (Games, error) {
 	return result, err
 }
 
-func (req *gamesReq) handle(private bool) error {
+func (req *gamesReq) handle(userId *string) error {
 	var err error
 	games := make(Games, 0, req.limit)
 	for err == nil && len(games) < req.limit {
 		var nextBatch Games
 		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
 		nextBatch.RemoveCustomFiltered(req.detailFilters)
-		if !private {
+		if userId == nil {
 			nextBatch.RemoveFiltered(req.userStats)
 			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
 				return filtErr
@@ -297,21 +300,37 @@ func (req *gamesReq) handle(private bool) error {
 }
 
 func (h *gamesHandler) handlePublic(w ResponseWriter, r Request) error {
-	req, err := h.prepare(w, r, false)
+	req, err := h.prepare(w, r, nil)
 	if err != nil {
 		return err
 	}
 
-	return req.handle(false)
+	return req.handle(nil)
+}
+
+func (h gamesHandler) handleOther(w ResponseWriter, r Request) error {
+	userId := r.Vars()["user_id"]
+
+	req, err := h.prepare(w, r, &userId)
+	if err != nil {
+		return err
+	}
+
+	return req.handle(&userId)
 }
 
 func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
-	req, err := h.prepare(w, r, true)
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthorized", 401}
+	}
+
+	req, err := h.prepare(w, r, &user.Id)
 	if err != nil {
 		return err
 	}
 
-	return req.handle(true)
+	return req.handle(&user.Id)
 }
 
 var (

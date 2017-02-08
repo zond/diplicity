@@ -89,6 +89,24 @@ func init() {
 				Handler:     finishedGamesHandler.handlePrivate,
 				QueryParams: gameListerParams,
 			},
+			{
+				Path:        "/Games/{user_id}/Staging",
+				Route:       ListOtherStagingGamesRoute,
+				Handler:     stagingGamesHandler.handleOther,
+				QueryParams: gameListerParams,
+			},
+			{
+				Path:        "/Games/{user_id}/Started",
+				Route:       ListOtherStartedGamesRoute,
+				Handler:     startedGamesHandler.handleOther,
+				QueryParams: gameListerParams,
+			},
+			{
+				Path:        "/Games/{user_id}/Finished",
+				Route:       ListOtherFinishedGamesRoute,
+				Handler:     finishedGamesHandler.handleOther,
+				QueryParams: gameListerParams,
+			},
 		},
 	}
 }
