@@ -172,14 +172,13 @@ func deleteBan(w ResponseWriter, r Request) (*Ban, error) {
 		}
 		ban.OwnerIds = newOwners
 
-		if len(ban.OwnerIds) == 0 {
-			return datastore.Delete(ctx, banID)
-		}
-
 		if err := UpdateUserStatsASAP(ctx, ban.UserIds); err != nil {
 			return err
 		}
 
+		if len(ban.OwnerIds) == 0 {
+			return datastore.Delete(ctx, banID)
+		}
 		return ban.Save(ctx)
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
