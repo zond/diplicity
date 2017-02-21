@@ -200,9 +200,9 @@ function dippyMap(container) {
 			middle = that.centerOf(provs[1]);
 			end = that.centerOf(provs[2]);
 		}
-		var boundF = 2;
-		var headF1 = boundF * 2;
-		var headF2 = boundF * 4;
+		var boundF = 3;
+		var headF1 = boundF * 3;
+		var headF2 = boundF * 6;
 		var spacer = boundF * 2;
 		var boundFDiag = Math.sqrt(Math.pow(boundF, 2) + Math.pow(boundF, 2));
 		var part1 = new that.Vec(start, middle);
