@@ -764,7 +764,11 @@ type SC struct {
 }
 
 type Dislodger struct {
-	Province  dip.Province
+	Province dip.Province
+	// The name of this is crap.
+	// The Dislodger struct is used so that
+	// Province is the actual dislodger, while
+	// Dislodger is the province that was dislodged.
 	Dislodger dip.Province
 }
 
