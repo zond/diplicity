@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	. "github.com/zond/goaeoas"
 	"github.com/zond/godip/variants"
+
+	. "github.com/zond/goaeoas"
 )
 
 func handleRenderMap(w ResponseWriter, r Request) error {
@@ -65,6 +66,11 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
 				parts = append(parts, fmt.Sprintf("%q", part))
 			}
 			jsBuf = append(jsBuf, fmt.Sprintf("map.addOrder([%s], col%s);", strings.Join(parts, ","), nat))
+		}
+	}
+	for prov, res := range phase.Resolutions {
+		if res != "OK" {
+			jsBuf = append(jsBuf, fmt.Sprintf("map.addCross(%q, '#ff0000');", prov))
 		}
 	}
 
