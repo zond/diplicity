@@ -77,6 +77,7 @@ type PhaseState struct {
 	WantsDIAS      bool `methods:"PUT"`
 	OnProbation    bool
 	NoOrders       bool
+	Eliminated     bool
 	Note           string `datastore:",noindex"`
 }
 
@@ -163,6 +164,9 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 			return err
 		}
 
+		if phaseState.NoOrders {
+			phaseState.ReadyToResolve = true
+		}
 		phaseState.GameID = gameID
 		phaseState.PhaseOrdinal = phaseOrdinal
 		phaseState.Nation = member.Nation
