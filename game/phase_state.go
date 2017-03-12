@@ -76,6 +76,7 @@ type PhaseState struct {
 	ReadyToResolve bool `methods:"PUT"`
 	WantsDIAS      bool `methods:"PUT"`
 	OnProbation    bool
+	NoOrders       bool
 	Note           string `datastore:",noindex"`
 }
 

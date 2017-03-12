@@ -551,6 +551,7 @@ func (p *PhaseResolver) Act() error {
 				PhaseOrdinal:   newPhase.PhaseOrdinal,
 				Nation:         member.Nation,
 				ReadyToResolve: autoReady,
+				NoOrders:       newOptions == 0,
 				WantsDIAS:      autoDIAS,
 				OnProbation:    autoProbation,
 				Note:           fmt.Sprintf("Auto generated due to phase change at %v/%v: %s", p.Phase.GameID, p.Phase.PhaseOrdinal, stateString),
