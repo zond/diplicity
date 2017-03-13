@@ -3,6 +3,7 @@ package diptest
 import (
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/zond/diplicity/game"
 )
@@ -13,10 +14,11 @@ func TestCreateLeaveGame(t *testing.T) {
 	t.Run("TestCreateGame", func(t *testing.T) {
 		env.GetRoute(game.IndexRoute).Success().
 			Follow("create-game", "Links").
-			Body(map[string]string{
-			"Variant": "Classical",
-			"Desc":    gameDesc,
-		}).Success().
+			Body(map[string]interface{}{
+				"Variant":            "Classical",
+				"Desc":               gameDesc,
+				"PhaseLengthMinutes": time.Duration(60),
+			}).Success().
 			AssertEq(gameDesc, "Properties", "Desc")
 
 		env.GetRoute(game.ListMyStagingGamesRoute).Success().
@@ -60,14 +62,15 @@ func TestGameListFilters(t *testing.T) {
 	}).Success()
 	gameURLString := env.GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").Body(map[string]interface{}{
-		"Variant":        "Classical",
-		"Desc":           gameDesc,
-		"MaxHated":       10,
-		"MaxHater":       10,
-		"MinReliability": 10,
-		"MinQuickness":   10,
-		"MinRating":      10,
-		"MaxRating":      100,
+		"Variant":            "Classical",
+		"Desc":               gameDesc,
+		"MaxHated":           10,
+		"MaxHater":           10,
+		"MinReliability":     10,
+		"MinQuickness":       10,
+		"MinRating":          10,
+		"MaxRating":          100,
+		"PhaseLengthMinutes": time.Duration(60),
 	}).Success().
 		AssertEq(gameDesc, "Properties", "Desc").
 		Find("self", []string{"Links"}, []string{"Rel"}).GetValue("URL").(string)

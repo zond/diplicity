@@ -2,6 +2,7 @@ package diptest
 
 import (
 	"testing"
+	"time"
 
 	"github.com/zond/diplicity/game"
 )
@@ -14,9 +15,10 @@ func TestJoinLeaveGame(t *testing.T) {
 
 	env1.GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").
-		Body(map[string]string{
-			"Variant": "Classical",
-			"Desc":    gameDesc,
+		Body(map[string]interface{}{
+			"Variant":            "Classical",
+			"Desc":               gameDesc,
+			"PhaseLengthMinutes": time.Duration(60),
 		}).Success().
 		AssertEq(gameDesc, "Properties", "Desc")
 

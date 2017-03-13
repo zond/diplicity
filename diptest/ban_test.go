@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/zond/diplicity/game"
 )
@@ -215,9 +216,10 @@ func testBanEfficacy(t *testing.T) {
 	newGameDesc := String("game")
 	newEnv.GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").
-		Body(map[string]string{
-			"Variant": "Classical",
-			"Desc":    newGameDesc,
+		Body(map[string]interface{}{
+			"Variant":            "Classical",
+			"Desc":               newGameDesc,
+			"PhaseLengthMinutes": time.Duration(60),
 		}).Success().
 		AssertEq(newGameDesc, "Properties", "Desc")
 
