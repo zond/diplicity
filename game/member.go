@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"io/ioutil"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
@@ -62,6 +63,10 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 		return nil, err
 	}
 
+	bodyBytes, err := ioutil.ReadAll(r.Req().Body)
+	if err != nil {
+		return nil, err
+	}
 	var member *Member
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
@@ -74,7 +79,7 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 		if !isMember {
 			return HTTPErr{"non existing member", 404}
 		}
-		if err := Copy(member, r, "PUT"); err != nil {
+		if err := CopyBytes(member, r, bodyBytes, "PUT"); err != nil {
 			return err
 		}
 		updated := false

@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"io/ioutil"
 	"strconv"
 	"strings"
 
@@ -182,6 +183,10 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
+	bodyBytes, err := ioutil.ReadAll(r.Req().Body)
+	if err != nil {
+		return nil, err
+	}
 	order := &Order{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
@@ -202,7 +207,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 			return HTTPErr{"can only update your own orders", 403}
 		}
 
-		err = Copy(order, r, "POST")
+		err = CopyBytes(order, r, bodyBytes, "POST")
 		if err != nil {
 			return err
 		}
@@ -266,6 +271,10 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 		return nil, err
 	}
 
+	bodyBytes, err := ioutil.ReadAll(r.Req().Body)
+	if err != nil {
+		return nil, err
+	}
 	order := &Order{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
@@ -298,7 +307,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 			valuesToSave = append(valuesToSave, phaseState)
 		}
 
-		err = Copy(order, r, "POST")
+		err = CopyBytes(order, r, bodyBytes, "POST")
 		if err != nil {
 			return err
 		}

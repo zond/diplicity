@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"io/ioutil"
 
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/variants"
@@ -119,6 +120,10 @@ func updateGameState(w ResponseWriter, r Request) (*GameState, error) {
 
 	nation := dip.Nation(r.Vars()["nation"])
 
+	bodyBytes, err := ioutil.ReadAll(r.Req().Body)
+	if err != nil {
+		return nil, err
+	}
 	gameState := &GameState{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
@@ -135,7 +140,7 @@ func updateGameState(w ResponseWriter, r Request) (*GameState, error) {
 			return HTTPErr{"can only update own game state", 404}
 		}
 
-		err = Copy(gameState, r, "PUT")
+		err = CopyBytes(gameState, r, bodyBytes, "PUT")
 		if err != nil {
 			return err
 		}

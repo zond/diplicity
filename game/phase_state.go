@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"io/ioutil"
 	"strconv"
 
 	"github.com/zond/diplicity/auth"
@@ -138,6 +139,10 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		return nil, err
 	}
 
+	bodyBytes, err := ioutil.ReadAll(r.Req().Body)
+	if err != nil {
+		return nil, err
+	}
 	phaseState := &PhaseState{}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
@@ -159,11 +164,18 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 			return HTTPErr{"can only update phase states of unresolved phases", 412}
 		}
 
-		err = Copy(phaseState, r, "PUT")
+		phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
 		if err != nil {
 			return err
 		}
+		if err := datastore.Get(ctx, phaseStateID, phaseState); err != nil && err != datastore.ErrNoSuchEntity {
+			return err
+		}
 
+		err = CopyBytes(phaseState, r, bodyBytes, "PUT")
+		if err != nil {
+			return err
+		}
 		if phaseState.NoOrders {
 			phaseState.ReadyToResolve = true
 		}
