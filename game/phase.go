@@ -445,9 +445,11 @@ func (p *PhaseResolver) Act() error {
 	// Create the new phase.
 
 	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1, p.Phase.Host, p.Phase.Scheme)
-	if p.Game.PhaseLengthMinutes > 0 {
-		newPhase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
+	// To make old games work.
+	if p.Game.PhaseLengthMinutes == 0 {
+		p.Game.PhaseLengthMinutes = MAX_PHASE_DEADLINE
 	}
+	newPhase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
 
 	// Check if we can roll forward again, and potentially create new phase states.
 
@@ -700,15 +702,11 @@ func (p *PhaseResolver) Act() error {
 
 			// Otherwise, schedule new phase resolution if necessary.
 
-			if p.Game.PhaseLengthMinutes > 0 {
-				if err := newPhase.ScheduleResolution(p.Context); err != nil {
-					log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(newPhase), err)
-					return err
-				}
-				log.Infof(p.Context, "%v has phase length of %v minutes, scheduled new resolve", PP(p.Game), p.Game.PhaseLengthMinutes)
-			} else {
-				log.Infof(p.Context, "%v has a zero phase length, skipping resolve scheduling", PP(p.Game))
+			if err := newPhase.ScheduleResolution(p.Context); err != nil {
+				log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(newPhase), err)
+				return err
 			}
+			log.Infof(p.Context, "%v has phase length of %v minutes, scheduled new resolve", PP(p.Game), p.Game.PhaseLengthMinutes)
 		}
 	}
 

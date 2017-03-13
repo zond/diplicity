@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	gameKind     = "Game"
-	sendGridKind = "SendGrid"
+	gameKind           = "Game"
+	sendGridKind       = "SendGrid"
+	MAX_PHASE_DEADLINE = 30 * 24 * 60
 )
 
 func init() {
@@ -496,10 +497,10 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	if _, found := variants.Variants[game.Variant]; !found {
 		return nil, HTTPErr{"unknown variant", 400}
 	}
-	if game.PhaseLengthMinutes < 0 {
-		return nil, HTTPErr{"no games with negative length allowed", 400}
+	if game.PhaseLengthMinutes < 1 {
+		return nil, HTTPErr{"no games with zero or negative phase deadline allowed", 400}
 	}
-	if game.PhaseLengthMinutes > 30*24*60 {
+	if game.PhaseLengthMinutes > MAX_PHASE_DEADLINE {
 		return nil, HTTPErr{"no games with more than 30 day deadlines allowed", 400}
 	}
 	game.CreatedAt = time.Now()
@@ -561,9 +562,11 @@ func (g *Game) Start(ctx context.Context, r Request) error {
 		scheme = "https"
 	}
 	phase := NewPhase(s, g.ID, 1, r.Req().Host, scheme)
-	if g.PhaseLengthMinutes > 0 {
-		phase.DeadlineAt = time.Now().Add(time.Minute * g.PhaseLengthMinutes)
+	// To make old games work.
+	if g.PhaseLengthMinutes == 0 {
+		g.PhaseLengthMinutes = MAX_PHASE_DEADLINE
 	}
+	phase.DeadlineAt = time.Now().Add(time.Minute * g.PhaseLengthMinutes)
 	if err := phase.Save(ctx); err != nil {
 		return err
 	}
@@ -573,14 +576,10 @@ func (g *Game) Start(ctx context.Context, r Request) error {
 	}
 	g.NewestPhaseMeta = []PhaseMeta{phase.PhaseMeta}
 
-	if g.PhaseLengthMinutes != 0 {
-		if err := phase.ScheduleResolution(ctx); err != nil {
-			return err
-		}
-		log.Infof(ctx, "%v has a %d minutes phase length, scheduled resolve", PP(g), g.PhaseLengthMinutes)
-	} else {
-		log.Infof(ctx, "%v has a zero phase length, skipping resolve scheduling", PP(g))
+	if err := phase.ScheduleResolution(ctx); err != nil {
+		return err
 	}
+	log.Infof(ctx, "%v has a %d minutes phase length, scheduled resolve", PP(g), g.PhaseLengthMinutes)
 
 	if err := phase.NotifyMembers(ctx, g); err != nil {
 		return err
