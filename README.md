@@ -34,7 +34,7 @@ To run it locally
 1. Clone this repo.
 2. Install the [App Engine SDK for Go](https://cloud.google.com/appengine/docs/go/download).
 3. Run `go get -v ./...` in the root directory.
-4. Run `goapp serve` in the `app` directory.
+4. Run `dev_appserver.py .` in the `app` directory.
 5. Run `curl -XPOST http://localhost:8080/_configure -d '{"FCMConf": {"ServerKey": SERVER_KEY_FROM_FCM}, "OAuth": {"ClientID": CLIENT_ID_FROM_GOOGLE_CLOUD_PROJECT, "Secret": SECRET_FROM_GOOGLE_CLOUD_PROJECT}, "SendGrid": {"APIKey": SEND_GRID_API_KEY}}'`.
    - This isn't necessary to run the server per se, but `FCMConf` is necessary for FCM message sending, `OAuth` is necessary for non `fake-id` login, and `SendGrid` is necessary for email sending.
 
