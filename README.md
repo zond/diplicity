@@ -33,9 +33,11 @@ To run it locally
 
 1. Clone this repo.
 2. Install the [App Engine SDK for Go](https://cloud.google.com/appengine/docs/go/download).
-3. Run `go get -v ./...` in the root directory.
-4. Run `dev_appserver.py .` in the `app` directory.
-5. Run `curl -XPOST http://localhost:8080/_configure -d '{"FCMConf": {"ServerKey": SERVER_KEY_FROM_FCM}, "OAuth": {"ClientID": CLIENT_ID_FROM_GOOGLE_CLOUD_PROJECT, "Secret": SECRET_FROM_GOOGLE_CLOUD_PROJECT}, "SendGrid": {"APIKey": SEND_GRID_API_KEY}}'`.
+4. Make sure your `$GOPATH` is set to something reasonable, like `$HOME/go`.
+5. Run `go get -v ./...` in the root directory.
+6. Run `go get -v -u github.com/gorilla/sessions`. I have no idea why, but for some reason `github.com/gorilla/context` won't get downloaded automatically by the previous command, while this one does download it...
+7. Run `dev_appserver.py .` in the `app` directory.
+8. Run `curl -XPOST http://localhost:8080/_configure -d '{"FCMConf": {"ServerKey": SERVER_KEY_FROM_FCM}, "OAuth": {"ClientID": CLIENT_ID_FROM_GOOGLE_CLOUD_PROJECT, "Secret": SECRET_FROM_GOOGLE_CLOUD_PROJECT}, "SendGrid": {"APIKey": SEND_GRID_API_KEY}}'`.
    - This isn't necessary to run the server per se, but `FCMConf` is necessary for FCM message sending, `OAuth` is necessary for non `fake-id` login, and `SendGrid` is necessary for email sending.
 
 ### Faking user ID
