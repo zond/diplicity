@@ -70,6 +70,7 @@ func (rv RenderVariants) Item(r Request) *Item {
 type RenderVariant struct {
 	variants.Variant
 	Start RenderPhase
+	Graph dip.Graph
 }
 
 func (rv *RenderVariant) Item(r Request) *Item {
@@ -107,6 +108,7 @@ func listVariants(w ResponseWriter, r Request) error {
 				SCs:    s.SupplyCenters(),
 				Units:  s.Units(),
 			},
+			Graph: v.Graph(),
 		}
 	}
 	w.SetContent(renderVariants.Item(r))

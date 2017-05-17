@@ -45,9 +45,10 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
 	for prov, unit := range phase.Dislodgeds {
 		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s, true);", unit.Type, prov, unit.Nation))
 	}
-	for _, prov := range variant.Graph.Provinces() {
+	gr := variant.Graph()
+	for _, prov := range gr.Provinces() {
 		if prov.Super() == prov {
-			if variant.Graph.SC(prov) != nil {
+			if gr.SC(prov) != nil {
 				if nat, found := phase.SupplyCenters[prov]; found {
 					jsBuf = append(jsBuf, fmt.Sprintf("map.colorProvince(%q, col%s);", prov, nat))
 				} else {
