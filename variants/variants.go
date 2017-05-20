@@ -126,7 +126,7 @@ func variantMap(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	etag := variant.SVGMapVersion
+	etag := variant.SVGVersion
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Etag", etag)
 	w.Header().Set("Cache-Control", "max-age=2592000") // 30 days
