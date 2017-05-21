@@ -11,6 +11,7 @@ import (
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
+	vrt "github.com/zond/godip/variants/common"
 )
 
 var (
@@ -67,7 +68,7 @@ func (rv RenderVariants) Item(r Request) *Item {
 }
 
 type RenderVariant struct {
-	variants.Variant
+	vrt.Variant
 	Start RenderPhase
 	Graph dip.Graph
 }
