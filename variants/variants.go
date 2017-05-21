@@ -129,7 +129,7 @@ func variantMap(w ResponseWriter, r Request) error {
 	etag := variant.SVGVersion
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Etag", etag)
-	w.Header().Set("Cache-Control", "max-age=2592000") // 30 days
+	w.Header().Set("Cache-Control", "max-age=3600") // 1 hour
 	if match := r.Req().Header.Get("If-None-Match"); match != "" && strings.Contains(match, etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return nil
