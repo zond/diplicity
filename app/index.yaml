@@ -13,8 +13,7 @@ indexes:
 - kind: Game
   properties:
   - name: Closed
-  - name: NMembers
-    direction: desc
+  - name: Spaces
   - name: CreatedAt
 
 - kind: Game
@@ -41,14 +40,6 @@ indexes:
   properties:
   - name: Finished
   - name: Started
-  - name: CreatedAt
-
-- kind: Game
-  properties:
-  - name: Members.User.Id
-  - name: Started
-  - name: NMembers
-    direction: desc
   - name: CreatedAt
 
 - kind: GameResult

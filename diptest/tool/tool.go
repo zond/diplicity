@@ -44,7 +44,7 @@ func main() {
 				game := env.GetRoute(game.ListOpenGamesRoute).Success().
 					Find(*gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 				if missing == nil {
-					realMissing := 7 - int(game.GetValue("Properties", "NMembers").(float64))
+					realMissing := int(game.GetValue("Properties", "Spaces").(float64))
 					missing = &realMissing
 				}
 				started = game.GetValue("Properties", "Started").(bool)
