@@ -9,7 +9,7 @@ dependencies:
     - mv -v $HOME/diplicity $HOME/.go_workspace/src/github.com/zond/diplicity
     - ln -s $HOME/.go_workspace/src/github.com/zond/diplicity diplicity
     - env GOROOT=$HOME/golang $HOME/golang/bin/go get -u -v ./... || true
-    - env GOROOT=$HOME/golang $HOME/golang/bin/go get -u -v github.om/gorilla/context
+    - env GOROOT=$HOME/golang $HOME/golang/bin/go get -u -v github.com/gorilla/context
     - env GOROOT=$HOME/golang $HOME/golang/bin/go get github.com/jstemmer/go-junit-report
     - ./circle/maybe_install_sdk.sh
 test:
