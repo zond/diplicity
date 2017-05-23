@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/zond/godip/classical"
 	"github.com/zond/godip/variants"
 
 	. "github.com/zond/goaeoas"
@@ -116,20 +115,21 @@ func listVariants(w ResponseWriter, r Request) error {
 }
 
 func variantMap(w ResponseWriter, r Request) error {
-	f := "svg/map.svg"
-	info, err := classical.AssetInfo(f)
-	if err != nil {
-		return err
+	variantName := r.Vars()["name"]
+	variant, found := variants.Variants[variantName]
+	if !found {
+		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), 404}
 	}
-	b, err := classical.Asset(f)
+
+	b, err := variant.SVGMap()
 	if err != nil {
 		return err
 	}
 
-	etag := fmt.Sprintf("%x", info.ModTime().UnixNano())
+	etag := variant.SVGVersion
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Etag", etag)
-	w.Header().Set("Cache-Control", "max-age=2592000") // 30 days
+	w.Header().Set("Cache-Control", "max-age=3600") // 1 hour
 	if match := r.Req().Header.Get("If-None-Match"); match != "" && strings.Contains(match, etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return nil
