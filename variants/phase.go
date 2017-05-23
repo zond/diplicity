@@ -11,6 +11,7 @@ import (
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
+	vrt "github.com/zond/godip/variants/common"
 )
 
 type Phase struct {
@@ -155,7 +156,7 @@ func NewPhase(state *state.State, variantName string) *Phase {
 	return p
 }
 
-func (self *Phase) State(variant variants.Variant) (*state.State, error) {
+func (self *Phase) State(variant vrt.Variant) (*state.State, error) {
 	parsedOrders, err := variant.ParseOrders(self.Orders)
 	if err != nil {
 		return nil, err
