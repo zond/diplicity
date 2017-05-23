@@ -23,6 +23,7 @@ import (
 	dvars "github.com/zond/diplicity/variants"
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
+	vrt "github.com/zond/godip/variants/common"
 )
 
 var (
@@ -1183,7 +1184,7 @@ func (p *Phase) Orders(ctx context.Context) (map[dip.Nation]map[dip.Province][]s
 	return orderMap, nil
 }
 
-func (p *Phase) State(ctx context.Context, variant variants.Variant, orderMap map[dip.Nation]map[dip.Province][]string) (*state.State, error) {
+func (p *Phase) State(ctx context.Context, variant vrt.Variant, orderMap map[dip.Nation]map[dip.Province][]string) (*state.State, error) {
 	parsedOrders, err := variant.ParseOrders(orderMap)
 	if err != nil {
 		return nil, err
