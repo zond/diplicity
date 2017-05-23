@@ -5,6 +5,7 @@ dependencies:
   override:
     - ./circle/maybe_install_go.sh
     - rm -rf $HOME/.go_workspace/src/github.com/zond/diplicity
+    - mkdir -p $HOME/.go_workspace/src/github.com/zond
     - mv -v $HOME/diplicity $HOME/.go_workspace/src/github.com/zond/diplicity
     - ln -s $HOME/.go_workspace/src/github.com/zond/diplicity diplicity
     - env GOROOT=$HOME/golang $HOME/golang/bin/go get -u -v ./... || true
