@@ -103,13 +103,10 @@ function dippyMap(container) {
 		while (curr != null && curr.getAttribute != null) {
 			var trans = curr.getAttribute("transform");
 			if (trans != null) {
-				var transMatch = /^translate\(([\d.-]+),\s*([\d.-]+)\)$/.exec(trans);
-				x += Number(transMatch[1]);
-				y += Number(transMatch[2]);
+				copy.setAttribute("transform", trans);
 			}
 			curr = curr.parentNode;
 		}
-		copy.setAttribute("transform", "translate(" + x + "," + y + ")");
 		copy.setAttribute("stroke", 'none');
 		$(el).find('#highlights')[0].appendChild(copy);
 	};
