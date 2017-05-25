@@ -347,13 +347,13 @@ var (
 		route: ListStartedGamesRoute,
 	}
 	openGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("-NMembers").Order("CreatedAt"),
+		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("Spaces").Order("CreatedAt"),
 		name:  "open-games",
 		desc:  []string{"Open games", "Open games, sorted with fullest and oldest first."},
 		route: ListOpenGamesRoute,
 	}
 	stagingGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("-NMembers").Order("CreatedAt"),
+		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("Spaces").Order("CreatedAt"),
 		name:  "my-staging-games",
 		desc:  []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
 		route: ListMyStagingGamesRoute,

@@ -358,7 +358,7 @@ type Game struct {
 	MinReliability     float64       `methods:"POST"`
 	MinQuickness       float64       `methods:"POST"`
 
-	NMembers int
+	Spaces   int
 	Members  []Member
 
 	NewestPhaseMeta []PhaseMeta
@@ -424,7 +424,7 @@ func (g *Game) Leavable() bool {
 }
 
 func (g *Game) Joinable() bool {
-	return !g.Closed && g.NMembers < len(variants.Variants[g.Variant].Nations) && len(g.ActiveBans) == 0 && len(g.FailedRequirements) == 0
+	return !g.Closed && g.Spaces > 0 && len(g.ActiveBans) == 0 && len(g.FailedRequirements) == 0
 }
 
 func (g *Game) Item(r Request) *Item {
@@ -470,7 +470,7 @@ func (g *Game) Item(r Request) *Item {
 }
 
 func (g *Game) Save(ctx context.Context) error {
-	g.NMembers = len(g.Members)
+	g.Spaces = len(variants.Variants[g.Variant].Nations) - len(g.Members)
 
 	var err error
 	if g.ID == nil {
