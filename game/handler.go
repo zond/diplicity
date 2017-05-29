@@ -25,7 +25,7 @@ var (
 )
 
 const (
-	maxLimit = 256
+	maxLimit = 128
 )
 
 const (
