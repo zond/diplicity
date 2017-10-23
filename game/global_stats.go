@@ -40,6 +40,7 @@ func bumpUserStatsHistograms(userStats UserStats, m map[string]map[string]int) {
 	bumpNamedHistogram("SharedBans", userStats.SharedBans, m)
 	bumpNamedHistogram("Hated", int(userStats.Hated), m)
 	bumpNamedHistogram("Hater", int(userStats.Hater), m)
+	bumpNamedHistogram("Rating", int(userStats.Glicko.PracticalRating), m)
 }
 
 func handleGlobalStats(w ResponseWriter, r Request) error {
