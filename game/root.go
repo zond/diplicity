@@ -21,29 +21,32 @@ func handleIndex(w ResponseWriter, r Request) error {
 	}).
 		SetName("diplicity").
 		SetDesc([][]string{
-		[]string{
-			"Usage",
-			"Use the `Accept` header or `accept` query parameter to choose `text/html` or `application/json` as output.",
-			"Use the `login` link to log in to the system.",
-			"CORS requests are allowed.",
-		},
-		[]string{
-			"Authentication",
-			"The `login` link redirects to the Google OAuth2 login flow, and then back the `redirect-to` query param used when loading the `login` link.",
-			"In the final redirect, the query parameter `token` will be your OAuth2 token.",
-			"Use this token as the URL parameter `token`, or use it inside an `Authorization: Bearer ...` header to authenticate requests.",
-		},
-		[]string{
-			"Source code",
-			"The source code for this service can be found at https://github.com/zond/diplicity.",
-			"Patches are welcome!",
-		},
-	}).AddLink(r.NewLink(Link{
+			[]string{
+				"Usage",
+				"Use the `Accept` header or `accept` query parameter to choose `text/html` or `application/json` as output.",
+				"Use the `login` link to log in to the system.",
+				"CORS requests are allowed.",
+			},
+			[]string{
+				"Authentication",
+				"The `login` link redirects to the Google OAuth2 login flow, and then back the `redirect-to` query param used when loading the `login` link.",
+				"In the final redirect, the query parameter `token` will be your OAuth2 token.",
+				"Use this token as the URL parameter `token`, or use it inside an `Authorization: Bearer ...` header to authenticate requests.",
+			},
+			[]string{
+				"Source code",
+				"The source code for this service can be found at https://github.com/zond/diplicity.",
+				"Patches are welcome!",
+			},
+		}).AddLink(r.NewLink(Link{
 		Rel:   "self",
 		Route: IndexRoute,
 	})).AddLink(r.NewLink(Link{
 		Rel:   "variants",
 		Route: variants.ListVariantsRoute,
+	})).AddLink(r.NewLink(Link{
+		Rel:   "global-stats",
+		Route: GlobalStatsRoute,
 	}))
 
 	if user == nil {
@@ -111,10 +114,10 @@ func handleIndex(w ResponseWriter, r Request) error {
 		})).AddLink(r.NewLink(GameResource.Link("create-game", Create, nil))).
 			AddLink(r.NewLink(auth.UserConfigResource.Link("user-config", Load, []string{"user_id", user.Id}))).
 			AddLink(r.NewLink(Link{
-			Rel:         "bans",
-			Route:       ListBansRoute,
-			RouteParams: []string{"user_id", user.Id},
-		})).AddLink(r.NewLink(UserStatsResource.Link("user-stats", Load, []string{"user_id", user.Id})))
+				Rel:         "bans",
+				Route:       ListBansRoute,
+				RouteParams: []string{"user_id", user.Id},
+			})).AddLink(r.NewLink(UserStatsResource.Link("user-stats", Load, []string{"user_id", user.Id})))
 	}
 	w.SetContent(index)
 	return nil

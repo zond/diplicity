@@ -2,7 +2,6 @@ package game
 
 import (
 	"encoding/json"
-	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -15,10 +14,6 @@ import (
 
 	. "github.com/zond/goaeoas"
 )
-
-func preflight(w http.ResponseWriter, r *http.Request) {
-	CORSHeaders(w)
-}
 
 var (
 	router = mux.NewRouter()
@@ -61,6 +56,7 @@ const (
 	ReceiveMailRoute            = "ReceiveMail"
 	RenderPhaseMapRoute         = "RenderPhaseMap"
 	ReRateRoute                 = "ReRate"
+	GlobalStatsRoute            = "GlobalStats"
 )
 
 type userStatsHandler struct {
@@ -438,6 +434,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/User/{user_id}/Stats/_dev_update", []string{"PUT"}, DevUserStatsUpdateRoute, devUserStatsUpdate)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Options", []string{"GET"}, ListOptionsRoute, listOptions)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Map", []string{"GET"}, RenderPhaseMapRoute, renderPhaseMap)
+	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
 	HandleResource(r, GameResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)
