@@ -1,0 +1,70 @@
+<html>
+	<head>
+		<style>
+.hist-container {
+	margin-bottom: 10px;
+}
+		</style>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+		<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+		<script>
+function drawPlot(histType, histVal, data, bins) {
+	var id = histType + '-' + histVal;
+	$('#hist-' + id).remove();
+	$('#hist-' + id + '-graphics-container').prepend('<div id="hist-' + id + '" style="height: 370px; width: 100%;"></div>');
+	var x = [];
+	var min = Number.MAX_SAFE_INTEGER;
+	var max = Number.MIN_SAFE_INTEGER;
+	for (var valueStr in data) {
+		var value = parseInt(valueStr);
+		for (var i = 0; i < data[valueStr]; i++) {
+			x.push(value);
+			if (value < min) {
+				min = value;
+			}
+			if (value > max) {
+				max = value;
+			}
+		}
+	};
+	var opts = {
+		x: x,
+		type: 'histogram',
+	};
+	if (bins != null) {
+		opts.nbinsx = bins;
+	}
+	Plotly.newPlot('hist-' + id, [
+			opts,
+	]);
+	return [min, max];
+}
+function addHistogram(histType, histVal, data) {
+	var id = histType + '-' + histVal;
+	$('body').append('<div class="hist-container" id="hist-' + id + '-container">' + histType + '.' + histVal + '</div>');
+	$('#hist-' + id + '-container').append('<div id="hist-' + id + '-graphics-container"></div>');
+	var minAndMax = drawPlot(histType, histVal, data, null);
+	$('#hist-' + id + '-container').append('Force bins to: <span id="hist-' + id + '-force-bins">-</span><input id="hist-' + id + '-bin-slider" type="range" min="2" max="' + minAndMax[1] + '" style="width: 100%" />');
+	$('#hist-' + id + '-bin-slider').change(function(ev) {
+		drawPlot(histType, histVal, data, parseInt($(ev.target).val()) - 1);
+		$('#hist-' + id + '-force-bins').text($(ev.target).val());
+	});
+}
+$.ajax('/GlobalStats', {
+	method: 'GET',
+    headers: {
+		'Accept': 'application/json',
+	},
+	success: function(data) {
+		for (var histType in data.Properties) {
+			for (var histVal in data.Properties[histType]) {
+				addHistogram(histType, histVal, data.Properties[histType][histVal]);
+			}
+		}
+	},
+});
+		</script>
+	</head>
+	<body>
+	</body>
+</html>

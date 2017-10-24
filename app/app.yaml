@@ -8,6 +8,8 @@ handlers:
 - url: /(firebase-messaging-sw.js)
   static_files: js/\1
   upload: js/firebase-messaging-sw.js
+- url: /html
+  static_dir: html
 - url: /js
   static_dir: js
 - url: /css

@@ -113,6 +113,9 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 			"ActiveMemberUserStatsHistograms",
 			"Contains histograms for all non-NMR and non-Eliminated members of currently started but not yet finished games.",
 		},
-	}))
+	}).AddLink(r.NewLink(Link{
+		Rel: "visualizations",
+		URL: "/html/global-stats.html",
+	})))
 	return nil
 }
