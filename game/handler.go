@@ -138,6 +138,7 @@ type gamesReq struct {
 	limit         int
 	h             *gamesHandler
 	detailFilters []func(g *Game) bool
+	viewerFilter  bool
 }
 
 func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
@@ -181,12 +182,13 @@ func (req *gamesReq) intervalFilter(fieldName, paramName string) func(*Game) boo
 	}
 }
 
-func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string) (*gamesReq, error) {
+func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, viewerFilter bool) (*gamesReq, error) {
 	req := &gamesReq{
-		ctx: appengine.NewContext(r.Req()),
-		w:   w,
-		r:   r,
-		h:   h,
+		ctx:          appengine.NewContext(r.Req()),
+		w:            w,
+		r:            r,
+		h:            h,
+		viewerFilter: viewerFilter,
 	}
 
 	user, ok := r.Values()["user"].(*auth.User)
@@ -270,14 +272,14 @@ func (h *gamesHandler) fetch(iter *datastore.Iterator, max int) (Games, error) {
 	return result, err
 }
 
-func (req *gamesReq) handle(userId *string) error {
+func (req *gamesReq) handle() error {
 	var err error
 	games := make(Games, 0, req.limit)
 	for err == nil && len(games) < req.limit {
 		var nextBatch Games
 		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
 		nextBatch.RemoveCustomFiltered(req.detailFilters)
-		if userId == nil {
+		if req.viewerFilter {
 			nextBatch.RemoveFiltered(req.userStats)
 			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
 				return filtErr
@@ -295,24 +297,26 @@ func (req *gamesReq) handle(userId *string) error {
 	return nil
 }
 
-func (h *gamesHandler) handlePublic(w ResponseWriter, r Request) error {
-	req, err := h.prepare(w, r, nil)
-	if err != nil {
-		return err
-	}
+func (h *gamesHandler) handlePublic(viewerFilter bool) func(w ResponseWriter, r Request) error {
+	return func(w ResponseWriter, r Request) error {
+		req, err := h.prepare(w, r, nil, viewerFilter)
+		if err != nil {
+			return err
+		}
 
-	return req.handle(nil)
+		return req.handle()
+	}
 }
 
 func (h gamesHandler) handleOther(w ResponseWriter, r Request) error {
 	userId := r.Vars()["user_id"]
 
-	req, err := h.prepare(w, r, &userId)
+	req, err := h.prepare(w, r, &userId, false)
 	if err != nil {
 		return err
 	}
 
-	return req.handle(&userId)
+	return req.handle()
 }
 
 func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
@@ -321,12 +325,12 @@ func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
 		return HTTPErr{"unauthorized", 401}
 	}
 
-	req, err := h.prepare(w, r, &user.Id)
+	req, err := h.prepare(w, r, &user.Id, false)
 	if err != nil {
 		return err
 	}
 
-	return req.handle(&user.Id)
+	return req.handle()
 }
 
 var (

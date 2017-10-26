@@ -208,7 +208,7 @@ func testBanEfficacy(t *testing.T) {
 
 	newEnv.GetRoute(game.IndexRoute).Success().
 		Follow("started-games", "Links").Success().
-		AssertNotFind(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
 	newEnv.GetURL(gameURL.String()).Success().
 		Find(newEnv.GetUID(), []string{"Properties", "ActiveBans"}, []string{"UserIds"}, nil)

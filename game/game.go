@@ -57,19 +57,19 @@ func init() {
 			{
 				Path:        "/Games/Open",
 				Route:       ListOpenGamesRoute,
-				Handler:     openGamesHandler.handlePublic,
+				Handler:     openGamesHandler.handlePublic(true),
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/Started",
 				Route:       ListStartedGamesRoute,
-				Handler:     startedGamesHandler.handlePublic,
+				Handler:     startedGamesHandler.handlePublic(false),
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/Finished",
 				Route:       ListFinishedGamesRoute,
-				Handler:     finishedGamesHandler.handlePublic,
+				Handler:     finishedGamesHandler.handlePublic(false),
 				QueryParams: gameListerParams,
 			},
 			{
