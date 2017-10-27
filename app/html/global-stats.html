@@ -8,8 +8,30 @@
 		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 		<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 		<script>
-function drawPlot(histType, histVal, data, bins) {
-	var id = histType + '-' + histVal;
+var pies = {
+	"ActiveGameHistograms-Variant": true,
+	"ActiveGameHistograms-NMembers": true,
+};
+function drawPie(histType, histName, data) {
+	var id = histType + '-' + histName;
+	$('#hist-' + id).remove();
+	$('#hist-' + id + '-graphics-container').prepend('<div id="hist-' + id + '"></div>');
+    var values = [];
+	var labels = [];
+	for (var label in data) {
+		labels.push(label);
+		values.push(data[label]);
+	}
+	Plotly.newPlot('hist-' + id, [
+		{
+			values: values,
+			labels: labels,
+			type: 'pie',
+		},
+    ]);
+}
+function drawHist(histType, histName, data, bins) {
+	var id = histType + '-' + histName;
 	$('#hist-' + id).remove();
 	$('#hist-' + id + '-graphics-container').prepend('<div id="hist-' + id + '" style="height: 370px; width: 100%;"></div>');
 	var x = [];
@@ -39,26 +61,30 @@ function drawPlot(histType, histVal, data, bins) {
 	]);
 	return [min, max];
 }
-function addHistogram(histType, histVal, data) {
-	var id = histType + '-' + histVal;
-	$('body').append('<div class="hist-container" id="hist-' + id + '-container">' + histType + '.' + histVal + '</div>');
+function addHistogram(histType, histName, hist) {
+	var id = histType + '-' + histName;
+	$('body').append('<div class="hist-container" id="hist-' + id + '-container"><h3>' + histType + '.' + histName + '</h3>' + hist.Description + '</div>');
 	$('#hist-' + id + '-container').append('<div id="hist-' + id + '-graphics-container"></div>');
-	var minAndMax = drawPlot(histType, histVal, data, null);
-	$('#hist-' + id + '-container').append('Force bins to: <span id="hist-' + id + '-force-bins">-</span><input id="hist-' + id + '-bin-slider" type="range" min="2" max="' + minAndMax[1] + '" style="width: 100%" />');
-	$('#hist-' + id + '-bin-slider').change(function(ev) {
-		drawPlot(histType, histVal, data, parseInt($(ev.target).val()) - 1);
-		$('#hist-' + id + '-force-bins').text($(ev.target).val());
-	});
+	if (!!pies[id]) {
+		drawPie(histType, histName, hist.Data);
+	} else {
+		var minAndMax = drawHist(histType, histName, hist.Data, null);
+		$('#hist-' + id + '-container').append('Force bins to: <span id="hist-' + id + '-force-bins">-</span><input id="hist-' + id + '-bin-slider" type="range" min="2" max="' + minAndMax[1] + '" style="width: 100%" />');
+		$('#hist-' + id + '-bin-slider').change(function(ev) {
+			drawHist(histType, histType, hist.Data, parseInt($(ev.target).val()) - 1);
+			$('#hist-' + id + '-force-bins').text($(ev.target).val());
+		});
+	}
 }
-$.ajax('/GlobalStats', {
+$.ajax('https://diplicity-engine.appspot.com/GlobalStats', {
 	method: 'GET',
     headers: {
 		'Accept': 'application/json',
 	},
 	success: function(data) {
 		for (var histType in data.Properties) {
-			for (var histVal in data.Properties[histType]) {
-				addHistogram(histType, histVal, data.Properties[histType][histVal]);
+			for (var histName in data.Properties[histType]) {
+				addHistogram(histType, histName, data.Properties[histType][histName]);
 			}
 		}
 	},

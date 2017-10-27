@@ -9,22 +9,22 @@ import (
 	. "github.com/zond/goaeoas"
 )
 
+type Histogram struct {
+	Data        map[string]int
+	Description string
+}
+
 type GlobalStats struct {
-	ActiveGameHistograms                map[string]map[string]int
-	ActiveGameMemberUserStatsHistograms map[string]map[string]int
-	ActiveMemberUserStatsHistograms     map[string]map[string]int
+	ActiveGameHistograms                map[string]Histogram
+	ActiveGameMemberUserStatsHistograms map[string]Histogram
+	ActiveMemberUserStatsHistograms     map[string]Histogram
 }
 
-func bumpNamedHistogram(name string, value int, m map[string]map[string]int) {
-	hist, found := m[name]
-	if !found {
-		hist = map[string]int{}
-		m[name] = hist
-	}
-	hist[fmt.Sprint(value)] += 1
+func bumpNamedHistogram(name string, value interface{}, m map[string]Histogram) {
+	m[name].Data[fmt.Sprint(value)] += 1
 }
 
-func bumpUserStatsHistograms(userStats UserStats, m map[string]map[string]int) {
+func bumpUserStatsHistograms(userStats UserStats, m map[string]Histogram) {
 	bumpNamedHistogram("StartedGames", userStats.StartedGames, m)
 	bumpNamedHistogram("FinishedGames", userStats.FinishedGames, m)
 	bumpNamedHistogram("SoloGames", userStats.SoloGames, m)
@@ -43,13 +43,51 @@ func bumpUserStatsHistograms(userStats UserStats, m map[string]map[string]int) {
 	bumpNamedHistogram("Rating", int(userStats.Glicko.PracticalRating), m)
 }
 
+func newHist(desc string) Histogram {
+	return Histogram{
+		Data:        map[string]int{},
+		Description: desc,
+	}
+}
+
+func newUserStatsHistograms(userDesc string) map[string]Histogram {
+	return map[string]Histogram{
+		"StartedGames":    newHist(fmt.Sprintf("Number of started games %s are members of", userDesc)),
+		"FinishedGames":   newHist(fmt.Sprintf("Number of finished games %s are members of", userDesc)),
+		"SoloGames":       newHist(fmt.Sprintf("Number of solo victories won by %s", userDesc)),
+		"DIASGames":       newHist(fmt.Sprintf("Number of shared draws by %s", userDesc)),
+		"EliminatedGames": newHist(fmt.Sprintf("Number of games %s have been eliminated from", userDesc)),
+		"DroppedGames":    newHist(fmt.Sprintf("Number of games %s have been inactive at the end of", userDesc)),
+		"NMRPhases":       newHist(fmt.Sprintf("Number of phases (in all games) %s have been inactive", userDesc)),
+		"ActivePhases":    newHist(fmt.Sprintf("Number of phases (in all games) %s have issued orders (but not marked RDY)", userDesc)),
+		"ReadyPhases":     newHist(fmt.Sprintf("Number of phases (in all games) %s have marked RDY", userDesc)),
+		"Reliability":     newHist(fmt.Sprintf("Reliability [(ReadyPhases + ActivePhases) / (NMRPhases + 1)] attribute of %s", userDesc)),
+		"Quickness":       newHist(fmt.Sprintf("Quickness [ReadyPhases / (NMRPhases + ActivePhases + 1)] attribute of %s", userDesc)),
+		"OwnedBans":       newHist(fmt.Sprintf("Number of bans created by %s", userDesc)),
+		"SharedBans":      newHist(fmt.Sprintf("Number of bans involving (created by or just mentioning) %s", userDesc)),
+		"Hater":           newHist(fmt.Sprintf("Hater [OwnedBans / (StartedGames + 1)] attribute of %s", userDesc)),
+		"Hated":           newHist(fmt.Sprintf("Hated [(SharedBans - OwnedBans) / (StartedGames + 1)] attribute of %s", userDesc)),
+		"Rating":          newHist(fmt.Sprintf("Rating [an ELO variant called Glicko] of %s", userDesc)),
+	}
+}
+
 func handleGlobalStats(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
 	globalStats := GlobalStats{
-		ActiveGameHistograms:                map[string]map[string]int{},
-		ActiveGameMemberUserStatsHistograms: map[string]map[string]int{},
-		ActiveMemberUserStatsHistograms:     map[string]map[string]int{},
+		ActiveGameHistograms: map[string]Histogram{
+			"PhaseLengthMinutes": newHist("Phase length of active games, in minutes"),
+			"MaxHated":           newHist("Max hated attribute for players to have joined active games"),
+			"MaxHater":           newHist("Max hater attribute for players to have joined active games"),
+			"MinRating":          newHist("Min rating attribute for players to have joined active games"),
+			"MaxRating":          newHist("Max rating attribute for players to have joined active games"),
+			"MinReliability":     newHist("Min reliability attribute for players to have joined active games"),
+			"MinQuickness":       newHist("Min quickness attribute for players to have joined active games"),
+			"NMembers":           newHist("Number of players in active games"),
+			"Variant":            newHist("Variant of active games"),
+		},
+		ActiveGameMemberUserStatsHistograms: newUserStatsHistograms("members of active games"),
+		ActiveMemberUserStatsHistograms:     newUserStatsHistograms("active members of active games"),
 	}
 
 	activeGames := Games{}
@@ -70,6 +108,7 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 		bumpNamedHistogram("MinReliability", int(game.MinReliability), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("MinQuickness", int(game.MinQuickness), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("NMembers", game.NMembers, globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("Variant", game.Variant, globalStats.ActiveGameHistograms)
 		for _, member := range game.Members {
 			activeGameMemberUserIds[member.User.Id] = struct{}{}
 			if !member.NewestPhaseState.OnProbation && !member.NewestPhaseState.Eliminated {
