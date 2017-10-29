@@ -71,7 +71,7 @@ function addHistogram(histType, histName, hist) {
 		var minAndMax = drawHist(histType, histName, hist.Data, null);
 		$('#hist-' + id + '-container').append('Force bins to: <span id="hist-' + id + '-force-bins">-</span><input id="hist-' + id + '-bin-slider" type="range" min="2" max="' + minAndMax[1] + '" style="width: 100%" />');
 		$('#hist-' + id + '-bin-slider').change(function(ev) {
-			drawHist(histType, histType, hist.Data, parseInt($(ev.target).val()) - 1);
+			drawHist(histType, histName, hist.Data, parseInt($(ev.target).val()) - 1);
 			$('#hist-' + id + '-force-bins').text($(ev.target).val());
 		});
 	}
