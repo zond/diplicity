@@ -1,5 +1,8 @@
 runtime: go
 api_version: go1
+automatic_scaling:
+  max_idle_instances: 1
+  max_concurrent_requests: 100
 
 inbound_services:
 - mail
