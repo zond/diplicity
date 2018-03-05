@@ -455,8 +455,8 @@ func (p *PhaseResolver) Act() error {
 	// Check if we can roll forward again, and potentially create new phase states.
 
 	// Prepare some data to collect.
-	allReady := true          // All nations are ready to resolve the new phase as well.
-	var soloWinner dip.Nation // The nation, if any, reaching solo victory.
+	allReady := true                    // All nations are ready to resolve the new phase as well.
+	soloWinner := variant.SoloWinner(s) // The nation, if any, reaching solo victory.
 	var soloWinnerUser string
 	quitters := map[dip.Nation]quitter{} // One per nation that wants to quit, with either dias or eliminated.
 	newPhaseStates := PhaseStates{}      // The new phase states to save if we want to prepare resolution of a new phase.
@@ -502,14 +502,8 @@ func (p *PhaseResolver) Act() error {
 				state:  eliminatedState,
 				member: member,
 			}
-		} else if scCounts[member.Nation] >= variant.SoloSupplyCenters {
-			if soloWinner != "" {
-				msg := fmt.Sprintf("Found that %q has >= variant.SoloSupplyCenters (%d) SCs, but %q was already marked as solo winner? WTF?; fix godip?", member.Nation, variant.SoloSupplyCenters, soloWinner)
-				log.Errorf(p.Context, msg)
-				return fmt.Errorf(msg)
-			}
-			log.Infof(p.Context, "Found that %q has >= variant.SoloSupplyCenters (%d) SCs, marking %q as solo winner", member.Nation, variant.SoloSupplyCenters, member.Nation)
-			soloWinner = member.Nation
+		} else if member.Nation == soloWinner {
+			log.Infof(p.Context, "Marking %q as solo winner", member.Nation)
 			soloWinnerUser = member.User.Id
 		}
 
