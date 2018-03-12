@@ -15,7 +15,7 @@ function dippyMap(container) {
 		"#026fe7",
 		"#d2ae00",
 		"#00b4dd",
-		"#ca3803",
+		"#ca5d36",
 		"#fcb1cf",
 		"#6f5400"];
 	that.Poi = function(x, y) {
