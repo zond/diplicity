@@ -1179,7 +1179,7 @@ func (p *Phase) Orders(ctx context.Context) (map[dip.Nation]map[dip.Province][]s
 }
 
 func (p *Phase) State(ctx context.Context, variant vrt.Variant, orderMap map[dip.Nation]map[dip.Province][]string) (*state.State, error) {
-	parsedOrders, err := variant.ParseOrders(orderMap)
+	parsedOrders, err := variant.Parser.ParseAll(orderMap)
 	if err != nil {
 		return nil, err
 	}
