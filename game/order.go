@@ -218,7 +218,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 
 		variant := variants.Variants[game.Variant]
 
-		parsedOrder, err := variant.ParseOrder(order.Parts)
+		parsedOrder, err := variant.Parser.Parse(order.Parts)
 		if err != nil {
 			return err
 		}
@@ -318,7 +318,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 
 		variant := variants.Variants[game.Variant]
 
-		parsedOrder, err := variant.ParseOrder(order.Parts)
+		parsedOrder, err := variant.Parser.Parse(order.Parts)
 		if err != nil {
 			return err
 		}
