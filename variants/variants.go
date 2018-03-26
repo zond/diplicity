@@ -69,8 +69,10 @@ func (rv RenderVariants) Item(r Request) *Item {
 
 type RenderVariant struct {
 	vrt.Variant
-	Start RenderPhase
-	Graph dip.Graph
+	// OrderTypes are the types of orders this variant has.
+	OrderTypes []dip.OrderType
+	Start      RenderPhase
+	Graph      dip.Graph
 }
 
 func (rv *RenderVariant) Item(r Request) *Item {
@@ -100,7 +102,8 @@ func listVariants(w ResponseWriter, r Request) error {
 		}
 		p := s.Phase()
 		renderVariants[k] = RenderVariant{
-			Variant: v,
+			Variant:    v,
+			OrderTypes: v.Parser.OrderTypes(),
 			Start: RenderPhase{
 				Year:   p.Year(),
 				Season: p.Season(),

@@ -127,11 +127,11 @@ func (p *Phase) ToQuery() url.Values {
 func (p *Phase) Item(r Request) *Item {
 	return NewItem(p).SetName(fmt.Sprintf("%s %d, %s", p.Season, p.Year, p.Type)).
 		AddLink(r.NewLink(Link{
-		Rel:         "map",
-		Route:       RenderMapRoute,
-		RouteParams: []string{"name", p.Variant},
-		QueryParams: p.ToQuery(),
-	}))
+			Rel:         "map",
+			Route:       RenderMapRoute,
+			RouteParams: []string{"name", p.Variant},
+			QueryParams: p.ToQuery(),
+		}))
 }
 
 func NewPhase(state *state.State, variantName string) *Phase {
@@ -157,7 +157,7 @@ func NewPhase(state *state.State, variantName string) *Phase {
 }
 
 func (self *Phase) State(variant vrt.Variant) (*state.State, error) {
-	parsedOrders, err := variant.ParseOrders(self.Orders)
+	parsedOrders, err := variant.Parser.ParseAll(self.Orders)
 	if err != nil {
 		return nil, err
 	}
