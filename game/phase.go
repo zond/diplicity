@@ -1115,8 +1115,9 @@ func listOptions(w ResponseWriter, r Request) error {
 	}
 
 	options := state.Phase().Options(state, member.Nation)
-	for k, v := range state.GetProfile() {
-		log.Debugf(ctx, "Profiling state: %v => %v", k, v)
+	profile, counts := state.GetProfile()
+	for k, v := range profile {
+		log.Debugf(ctx, "Profiling state: %v => %v, %v", k, v, counts[k])
 	}
 	w.SetContent(NewItem(options).SetName("options").SetDesc([][]string{
 		[]string{
