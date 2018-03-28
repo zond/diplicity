@@ -1,6 +1,8 @@
 package game
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"net/mail"
@@ -51,6 +53,34 @@ func init() {
 			},
 		},
 	}
+}
+
+func zipOptions(ctx context.Context, options dip.Options) ([]byte, error) {
+	zippedOptionsBuffer := &bytes.Buffer{}
+	marshalledOptionsWriter := gzip.NewWriter(zippedOptionsBuffer)
+	if err := json.NewEncoder(marshalledOptionsWriter).Encode(options); err != nil {
+		log.Errorf(ctx, "While trying to decode zipped options: %v", err)
+		return nil, err
+	}
+	if err := marshalledOptionsWriter.Close(); err != nil {
+		log.Errorf(ctx, "While trying to close zipped options: %v", err)
+		return nil, err
+	}
+	return zippedOptionsBuffer.Bytes(), nil
+}
+
+func unzipOptions(ctx context.Context, b []byte) (dip.Options, error) {
+	zippedReader, err := gzip.NewReader(bytes.NewBuffer(b))
+	if err != nil {
+		log.Errorf(ctx, "While trying to create zipped options reader: %v", err)
+		return nil, err
+	}
+	var opts dip.Options
+	if err := json.NewDecoder(zippedReader).Decode(&opts); err != nil {
+		log.Errorf(ctx, "While trying to read zipped options: %v", err)
+		return nil, err
+	}
+	return opts, nil
 }
 
 type phaseNotificationContext struct {
@@ -494,7 +524,8 @@ func (p *PhaseResolver) Act() error {
 				break
 			}
 		}
-		newOptions := len(s.Phase().Options(s, member.Nation))
+		orderOptions := s.Phase().Options(s, member.Nation)
+		newOptions := len(orderOptions)
 		if scCounts[member.Nation] == 0 {
 			wasEliminated = true
 			// Overwrite DIAS with eliminated, you can't be part of a DIAS if you are eliminated...
@@ -542,7 +573,12 @@ func (p *PhaseResolver) Act() error {
 		}
 
 		// If the next phase state is non-default, we must save and append it.
-		if autoReady || autoDIAS {
+		if autoReady || autoDIAS || newOptions > 0 {
+			zippedOptions, err := zipOptions(p.Context, orderOptions)
+			if err != nil {
+				log.Errorf(p.Context, "Resolved phase %v unable to marshal options for %v: %v; fix this code!", PP(p.Phase), member.Nation, err)
+				return err
+			}
 			newPhaseState = &PhaseState{
 				GameID:         p.Phase.GameID,
 				PhaseOrdinal:   newPhase.PhaseOrdinal,
@@ -552,6 +588,7 @@ func (p *PhaseResolver) Act() error {
 				Eliminated:     wasEliminated,
 				WantsDIAS:      autoDIAS,
 				OnProbation:    autoProbation,
+				ZippedOptions:  zippedOptions,
 				Note:           fmt.Sprintf("Auto generated due to phase change at %v/%v: %s", p.Phase.GameID, p.Phase.PhaseOrdinal, stateString),
 			}
 		}
@@ -1109,15 +1146,52 @@ func listOptions(w ResponseWriter, r Request) error {
 		return HTTPErr{"can only load options for member games", 404}
 	}
 
-	state, err := phase.State(ctx, variants.Variants[game.Variant], nil)
+	phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
 	if err != nil {
 		return err
 	}
 
-	options := state.Phase().Options(state, member.Nation)
-	profile, counts := state.GetProfile()
-	for k, v := range profile {
-		log.Debugf(ctx, "Profiling state: %v => %v, %v", k, v, counts[k])
+	var options dip.Options
+
+	// First try to load pre-cooked options.
+
+	phaseState := &PhaseState{}
+	foundPhaseState := false
+	if err := datastore.Get(ctx, phaseStateID, phaseState); err == nil {
+		foundPhaseState = true
+		options, err = unzipOptions(ctx, phaseState.ZippedOptions)
+		if err != nil {
+			log.Warningf(ctx, "PhaseState %+v has corrupt ZippedOptions for %v: %v", PP(phaseState), member.Nation, err)
+		}
+	}
+
+	// Then create them on the fly.
+
+	if options == nil {
+		state, err := phase.State(ctx, variants.Variants[game.Variant], nil)
+		if err != nil {
+			return err
+		}
+
+		options = state.Phase().Options(state, member.Nation)
+		profile, counts := state.GetProfile()
+		for k, v := range profile {
+			log.Debugf(ctx, "Profiling state: %v => %v, %v", k, v, counts[k])
+		}
+
+		// And save them for the future.
+
+		if foundPhaseState {
+			log.Warningf(ctx, "Found PhaseState without ZippedOptions! Saving the generated options.")
+			zippedOptions, err := zipOptions(ctx, options)
+			if err != nil {
+				return err
+			}
+			phaseState.ZippedOptions = zippedOptions
+			if _, err := datastore.Put(ctx, phaseStateID, phaseState); err != nil {
+				return err
+			}
+		}
 	}
 	w.SetContent(NewItem(options).SetName("options").SetDesc([][]string{
 		[]string{

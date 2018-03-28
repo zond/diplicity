@@ -266,6 +266,32 @@ func TestTimeoutResolution(t *testing.T) {
 				AssertEq(false, "Properties", "ReadyToResolve")
 		})
 
+		t.Run("OptionsAfterPhaseResolution", func(t *testing.T) {
+			prov := ""
+			switch startedGameNats[0] {
+			case "Austria":
+				prov = "rum"
+			case "England":
+				prov = "nth"
+			case "France":
+				prov = "bur"
+			case "Germany":
+				prov = "hol"
+			case "Italy":
+				prov = "ion"
+			case "Turkey":
+				prov = "bul"
+			case "Russia":
+				prov = "bot"
+			}
+			p := startedGames[0].Follow("phases", "Links").Success().
+				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				AssertEq(false, "Properties", "Resolved")
+
+			p.Follow("options", "Links").Success().
+				AssertEq("SrcProvince", "Properties", prov, "Next", "Hold", "Next", prov, "Type")
+		})
+
 		t.Run("TestOldPhase-1", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
 				Find(1, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
