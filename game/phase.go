@@ -55,7 +55,7 @@ func init() {
 	}
 }
 
-func zipOptions(ctx context.Context, options dip.Options) ([]byte, error) {
+func zipOptions(ctx context.Context, options interface{}) ([]byte, error) {
 	zippedOptionsBuffer := &bytes.Buffer{}
 	marshalledOptionsWriter := gzip.NewWriter(zippedOptionsBuffer)
 	if err := json.NewEncoder(marshalledOptionsWriter).Encode(options); err != nil {
@@ -69,13 +69,13 @@ func zipOptions(ctx context.Context, options dip.Options) ([]byte, error) {
 	return zippedOptionsBuffer.Bytes(), nil
 }
 
-func unzipOptions(ctx context.Context, b []byte) (dip.Options, error) {
+func unzipOptions(ctx context.Context, b []byte) (interface{}, error) {
 	zippedReader, err := gzip.NewReader(bytes.NewBuffer(b))
 	if err != nil {
 		log.Errorf(ctx, "While trying to create zipped options reader: %v", err)
 		return nil, err
 	}
-	var opts dip.Options
+	var opts interface{}
 	if err := json.NewDecoder(zippedReader).Decode(&opts); err != nil {
 		log.Errorf(ctx, "While trying to read zipped options: %v", err)
 		return nil, err
@@ -1151,7 +1151,7 @@ func listOptions(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	var options dip.Options
+	var options interface{}
 
 	// First try to load pre-cooked options.
 
