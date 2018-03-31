@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -71,6 +72,20 @@ func init() {
 			},
 		},
 	}
+}
+
+func APILevel(r Request) int {
+	if levelHeader := r.Req().Header.Get("X-Diplicity-API-Level"); levelHeader != "" {
+		if level, err := strconv.Atoi(levelHeader); err == nil {
+			return level
+		}
+	}
+	if levelParam := r.Req().URL.Query().Get("api-level"); levelParam != "" {
+		if level, err := strconv.Atoi(levelParam); err == nil {
+			return level
+		}
+	}
+	return 1
 }
 
 func PP(i interface{}) string {
