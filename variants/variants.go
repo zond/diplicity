@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/variants"
+	"github.com/zond/godip/variants/youngstownredux"
 
 	. "github.com/zond/goaeoas"
 	dip "github.com/zond/godip/common"
@@ -16,6 +18,13 @@ import (
 
 var (
 	router *mux.Router
+	// Maps variant key to Diplicity API level.
+	// Since all clients (including clients created before the API level concept existed)
+	// has at least level 1, the Youngstown Redux entry is just an example.
+	// (And used when testing, by artificially forcing API level 0.)
+	LaunchSchedule = map[string]int{
+		youngstownredux.YoungstownReduxVariant.Name: 1,
+	}
 )
 
 const (
@@ -94,8 +103,16 @@ func (rv *RenderVariant) Item(r Request) *Item {
 }
 
 func listVariants(w ResponseWriter, r Request) error {
+	apiLevel := auth.APILevel(r)
 	renderVariants := RenderVariants{}
 	for k, v := range variants.Variants {
+		// If the scheduled launch level for this variant is less than the API level of the client,
+		// just don't list it.
+		if launchLevel, found := LaunchSchedule[k]; found {
+			if launchLevel > apiLevel {
+				continue
+			}
+		}
 		s, err := v.Start()
 		if err != nil {
 			return err
