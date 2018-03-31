@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/diplicity/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
@@ -218,6 +219,13 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 		q = q.Filter("Members.User.Id=", *userId)
 	}
 
+	apiLevel := auth.APILevel(r)
+	req.detailFilters = append(req.detailFilters, func(g *Game) bool {
+		if launchLevel, found := variants.LaunchSchedule[g.Variant]; found {
+			return apiLevel >= launchLevel
+		}
+		return true
+	})
 	if variantFilter := uq.Get("variant"); variantFilter != "" {
 		req.detailFilters = append(req.detailFilters, func(g *Game) bool {
 			return g.Variant == variantFilter
