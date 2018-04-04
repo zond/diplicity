@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/variants"
+	"github.com/zond/godip/variants/hundred"
 	"github.com/zond/godip/variants/youngstownredux"
 
 	. "github.com/zond/goaeoas"
@@ -23,6 +24,7 @@ var (
 	// has at least level 1, the Youngstown Redux entry is just an example.
 	// (And used when testing, by artificially forcing API level 0.)
 	LaunchSchedule = map[string]int{
+		hundred.HundredVariant.Name:                 2,
 		youngstownredux.YoungstownReduxVariant.Name: 1,
 	}
 )
