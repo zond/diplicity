@@ -791,7 +791,7 @@ func (p *PhaseResolver) Act() error {
 	}
 
 	// Eject probationaries from staging games.
-	log.Infof(p.Context, "*** PROBATIONARIES: %+v", probationaries)
+
 	if len(probationaries) > 0 {
 		if err := ejectProbationariesFunc.EnqueueIn(p.Context, 0, probationaries); err != nil {
 			log.Errorf(p.Context, "Unable to enqueue ejection of probationaries %+v: %v; hope datastore gets fixed", probationaries, err)
