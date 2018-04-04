@@ -101,23 +101,7 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 	return member, nil
 }
 
-func deleteMember(w ResponseWriter, r Request) (*Member, error) {
-	ctx := appengine.NewContext(r.Req())
-
-	user, ok := r.Values()["user"].(*auth.User)
-	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
-	}
-
-	if user.Id != r.Vars()["user_id"] {
-		return nil, HTTPErr{"can only delete yourself", 403}
-	}
-
-	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
-	if err != nil {
-		return nil, err
-	}
-
+func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId string) (*Member, error) {
 	var member *Member
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
@@ -126,7 +110,7 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 		}
 		game.ID = gameID
 		isMember := false
-		member, isMember = game.GetMember(user.Id)
+		member, isMember = game.GetMember(userId)
 		if !isMember {
 			return HTTPErr{"can only leave member games", 404}
 		}
@@ -147,8 +131,27 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
-
 	return member, nil
+}
+
+func deleteMember(w ResponseWriter, r Request) (*Member, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthorized", 401}
+	}
+
+	if user.Id != r.Vars()["user_id"] {
+		return nil, HTTPErr{"can only delete yourself", 403}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return nil, err
+	}
+
+	return deleteMemberHelper(ctx, gameID, user.Id)
 }
 
 func createMember(w ResponseWriter, r Request) (*Member, error) {

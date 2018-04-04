@@ -147,6 +147,16 @@ func TestDIASEnding(t *testing.T) {
 
 func TestTimeoutResolution(t *testing.T) {
 	withStartedGame(func() {
+		gameDesc := String("game-desc")
+		t.Run("CreateStagingGamePlayer0", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute(game.IndexRoute).
+				Success().Follow("create-game", "Links").
+				Body(map[string]interface{}{
+					"Variant":            "Classical",
+					"Desc":               gameDesc,
+					"PhaseLengthMinutes": 60 * 24,
+				}).Success()
+		})
 		t.Run("PreparePhaseStatesWithNotReadyButHasOrders", func(t *testing.T) {
 			for i, nat := range startedGameNats {
 				order := []string{"", "Move", ""}
@@ -232,6 +242,11 @@ func TestTimeoutResolution(t *testing.T) {
 			startedGameEnvs[1].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
 				Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
 				AssertNil("NewestPhaseState", "GameID")
+		})
+
+		t.Run("TestStagingGamePlayer0Present", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute(game.ListOpenGamesRoute).Success().
+				Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 		})
 
 		t.Run("TestNextPhaseNoProbation", func(t *testing.T) {
@@ -409,6 +424,11 @@ func TestTimeoutResolution(t *testing.T) {
 				AssertEq(false, "Properties", "WantsDIAS").
 				AssertEq(false, "Properties", "OnProbation").
 				AssertEq(false, "Properties", "ReadyToResolve")
+		})
+
+		t.Run("TestStagingGamePlayer0Gone", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute(game.ListOpenGamesRoute).Success().
+				AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 		})
 
 		t.Run("TestOldPhase-3", func(t *testing.T) {

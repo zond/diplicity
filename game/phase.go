@@ -33,6 +33,7 @@ var (
 	sendPhaseNotificationsToUsersFunc *DelayFunc
 	sendPhaseNotificationsToFCMFunc   *DelayFunc
 	sendPhaseNotificationsToMailFunc  *DelayFunc
+	ejectProbationariesFunc           *DelayFunc
 	PhaseResource                     *Resource
 )
 
@@ -41,6 +42,7 @@ func init() {
 	sendPhaseNotificationsToUsersFunc = NewDelayFunc("game-sendPhaseNotificationsToUsers", sendPhaseNotificationsToUsers)
 	sendPhaseNotificationsToFCMFunc = NewDelayFunc("game-sendPhaseNotificationsToFCM", sendPhaseNotificationsToFCM)
 	sendPhaseNotificationsToMailFunc = NewDelayFunc("game-sendPhaseNotificationsToMail", sendPhaseNotificationsToMail)
+	ejectProbationariesFunc = NewDelayFunc("game-ejectProbationaries", ejectProbationaries)
 
 	PhaseResource = &Resource{
 		Load:     loadPhase,
@@ -160,6 +162,28 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 	}
 
 	return res, nil
+}
+
+func ejectProbationaries(ctx context.Context, probationaries []string) error {
+	log.Infof(ctx, "ejectProbationaries(..., %+v)", probationaries)
+
+	for _, probationary := range probationaries {
+		ids, err := datastore.NewQuery(gameKind).Filter("Started=", false).Filter("Members.User.Id=", probationary).KeysOnly().GetAll(ctx, nil)
+		if err != nil {
+			log.Infof(ctx, "Unable to load staging games for %q: %v; hope datastore gets fixed", probationary, err)
+			return err
+		}
+		for _, gameID := range ids {
+			if _, err := deleteMemberHelper(ctx, gameID, probationary); err != nil {
+				log.Infof(ctx, "Unable to delete %q from game %v: %v; fix 'deleteMemberHelper' or hope datastore gets fixed", probationary, gameID, err)
+				return err
+			}
+		}
+	}
+
+	log.Infof(ctx, "ejectProbationaries(..., %+v) *** SUCCESS ***", probationaries)
+
+	return nil
 }
 
 func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string) error {
@@ -489,6 +513,7 @@ func (p *PhaseResolver) Act() error {
 	soloWinner := variant.SoloWinner(s) // The nation, if any, reaching solo victory.
 	var soloWinnerUser string
 	quitters := map[dip.Nation]quitter{} // One per nation that wants to quit, with either dias or eliminated.
+	probationaries := []string{}         // One per user that's on probation.
 	newPhaseStates := PhaseStates{}      // The new phase states to save if we want to prepare resolution of a new phase.
 	oldPhaseResult := &PhaseResult{      // A result object for the old phase to simplify collecting user scoped stats.
 		GameID:       p.Phase.GameID,
@@ -497,12 +522,6 @@ func (p *PhaseResolver) Act() error {
 
 	for i := range p.Game.Members {
 		member := &p.Game.Members[i]
-
-		newPhaseState := &PhaseState{
-			GameID:       p.Phase.GameID,
-			PhaseOrdinal: newPhase.PhaseOrdinal,
-			Nation:       member.Nation,
-		}
 
 		// Collect data on each nation.
 		_, hadOrders := orderMap[member.Nation]
@@ -548,6 +567,9 @@ func (p *PhaseResolver) Act() error {
 		// Thus, if the player was on probation last phase, we know they didn't enter orders or update their phase state, and they are safe to put on probation again.
 		// The reason for the `||` is that they can still be ready to resolve, due to not having options!
 		autoProbation := wasOnProbation || (!hadOrders && !wasReady)
+		if autoProbation {
+			probationaries = append(probationaries, member.User.Id)
+		}
 		autoReady := newOptions == 0 || autoProbation
 		autoDIAS := wantedDIAS || autoProbation
 		allReady = allReady && autoReady
@@ -572,25 +594,23 @@ func (p *PhaseResolver) Act() error {
 			}
 		}
 
-		// If the next phase state is non-default, we must save and append it.
-		if autoReady || autoDIAS || newOptions > 0 {
-			zippedOptions, err := zipOptions(p.Context, orderOptions)
-			if err != nil {
-				log.Errorf(p.Context, "Resolved phase %v unable to marshal options for %v: %v; fix this code!", PP(p.Phase), member.Nation, err)
-				return err
-			}
-			newPhaseState = &PhaseState{
-				GameID:         p.Phase.GameID,
-				PhaseOrdinal:   newPhase.PhaseOrdinal,
-				Nation:         member.Nation,
-				ReadyToResolve: autoReady,
-				NoOrders:       newOptions == 0,
-				Eliminated:     wasEliminated,
-				WantsDIAS:      autoDIAS,
-				OnProbation:    autoProbation,
-				ZippedOptions:  zippedOptions,
-				Note:           fmt.Sprintf("Auto generated due to phase change at %v/%v: %s", p.Phase.GameID, p.Phase.PhaseOrdinal, stateString),
-			}
+		zippedOptions, err := zipOptions(p.Context, orderOptions)
+		if err != nil {
+			log.Errorf(p.Context, "Resolved phase %v unable to marshal options for %v: %v; fix this code!", PP(p.Phase), member.Nation, err)
+			return err
+		}
+
+		newPhaseState := &PhaseState{
+			GameID:         p.Phase.GameID,
+			PhaseOrdinal:   newPhase.PhaseOrdinal,
+			Nation:         member.Nation,
+			ReadyToResolve: autoReady,
+			NoOrders:       newOptions == 0,
+			Eliminated:     wasEliminated,
+			WantsDIAS:      autoDIAS,
+			OnProbation:    autoProbation,
+			ZippedOptions:  zippedOptions,
+			Note:           fmt.Sprintf("Auto generated due to phase change at %v/%v: %s", p.Phase.GameID, p.Phase.PhaseOrdinal, stateString),
 		}
 
 		member.NewestPhaseState = *newPhaseState
@@ -766,6 +786,15 @@ func (p *PhaseResolver) Act() error {
 		}
 		if err := UpdateUserStatsASAP(p.Context, uids); err != nil {
 			log.Errorf(p.Context, "Unable to enqueue user stats update tasks: %v; hope datastore gets fixed", err)
+			return err
+		}
+	}
+
+	// Eject probationaries from staging games.
+
+	if len(probationaries) > 0 {
+		if err := ejectProbationariesFunc.EnqueueIn(p.Context, 0, probationaries); err != nil {
+			log.Errorf(p.Context, "Unable to enqueue ejection of probationaries %+v: %v; hope datastore gets fixed", probationaries, err)
 			return err
 		}
 	}
