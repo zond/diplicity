@@ -25,3 +25,5 @@ queue:
   rate: 500/s
 - name: game-sendMsgNotificationsToMail
   rate: 500/s
+- name: game-ejectProbationaries
+  rate: 500/s
