@@ -1,4 +1,3 @@
-[![CircleCI](https://circleci.com/gh/zond/diplicity.svg?style=svg)](https://circleci.com/gh/zond/diplicity)
 
 # diplicity
 
