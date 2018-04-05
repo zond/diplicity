@@ -38,6 +38,14 @@ const (
 	RenderMapRoute      = "RenderMap"
 )
 
+func init() {
+	for _, launchLevel := range LaunchSchedule {
+		if launchLevel > auth.HTMLAPILevel {
+			auth.HTMLAPILevel = launchLevel
+		}
+	}
+}
+
 type RenderPhase struct {
 	Year   int
 	Season godip.Season

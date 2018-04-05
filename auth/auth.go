@@ -27,7 +27,10 @@ import (
 	oauth2service "google.golang.org/api/oauth2/v2"
 )
 
-var TestMode = false
+var (
+	TestMode     = false
+	HTMLAPILevel = 1
+)
 
 const (
 	LoginRoute            = "Login"
@@ -685,6 +688,16 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 
 	} else {
 		log.Infof(ctx, "Unauthenticated request")
+	}
+
+	media, _ := Media(r.Req(), "Accept")
+	if media == "text/html" {
+		r.DecorateLinks(func(l *Link, u *url.URL) error {
+			q := u.Query()
+			q.Set("api-level", fmt.Sprint(HTMLAPILevel))
+			u.RawQuery = q.Encode()
+			return nil
+		})
 	}
 
 	return true, nil
