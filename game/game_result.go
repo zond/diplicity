@@ -4,12 +4,12 @@ import (
 	"time"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 
 type GameScore struct {
 	UserId string
-	Member dip.Nation
+	Member godip.Nation
 	SCs    int
 	Score  float64
 }
@@ -27,13 +27,13 @@ type GameResults []GameResult
 
 type GameResult struct {
 	GameID            *datastore.Key
-	SoloWinnerMember  dip.Nation
+	SoloWinnerMember  godip.Nation
 	SoloWinnerUser    string
-	DIASMembers       []dip.Nation
+	DIASMembers       []godip.Nation
 	DIASUsers         []string
-	NMRMembers        []dip.Nation
+	NMRMembers        []godip.Nation
 	NMRUsers          []string
-	EliminatedMembers []dip.Nation
+	EliminatedMembers []godip.Nation
 	EliminatedUsers   []string
 	AllUsers          []string
 	Scores            []GameScore

@@ -6,45 +6,46 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/zond/godip"
 	"github.com/zond/godip/state"
 	"github.com/zond/godip/variants"
 
-	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 	vrt "github.com/zond/godip/variants/common"
+
+	. "github.com/zond/goaeoas"
 )
 
 type Phase struct {
-	Variant       string                                   `methods:"POST"`
-	Season        dip.Season                               `methods:"POST"`
-	Year          int                                      `methods:"POST"`
-	Type          dip.PhaseType                            `methods:"POST"`
-	Units         map[dip.Province]dip.Unit                `methods:"POST"`
-	Orders        map[dip.Nation]map[dip.Province][]string `methods:"POST"`
-	SupplyCenters map[dip.Province]dip.Nation              `methods:"POST"`
-	Dislodgeds    map[dip.Province]dip.Unit                `methods:"POST"`
-	Dislodgers    map[dip.Province]dip.Province            `methods:"POST"`
-	Bounces       map[dip.Province]map[dip.Province]bool   `methods:"POST"`
-	Resolutions   map[dip.Province]string                  `methods:"POST"`
+	Variant       string                                       `methods:"POST"`
+	Season        godip.Season                                 `methods:"POST"`
+	Year          int                                          `methods:"POST"`
+	Type          godip.PhaseType                              `methods:"POST"`
+	Units         map[godip.Province]godip.Unit                `methods:"POST"`
+	Orders        map[godip.Nation]map[godip.Province][]string `methods:"POST"`
+	SupplyCenters map[godip.Province]godip.Nation              `methods:"POST"`
+	Dislodgeds    map[godip.Province]godip.Unit                `methods:"POST"`
+	Dislodgers    map[godip.Province]godip.Province            `methods:"POST"`
+	Bounces       map[godip.Province]map[godip.Province]bool   `methods:"POST"`
+	Resolutions   map[godip.Province]string                    `methods:"POST"`
 }
 
 func (p *Phase) FromQuery(q url.Values) error {
 	p.Season = ""
 	p.Year = 1901
 	p.Type = ""
-	p.Units = map[dip.Province]dip.Unit{}
-	p.Orders = map[dip.Nation]map[dip.Province][]string{}
-	p.SupplyCenters = map[dip.Province]dip.Nation{}
-	p.Dislodgeds = map[dip.Province]dip.Unit{}
-	p.Dislodgers = map[dip.Province]dip.Province{}
-	p.Bounces = map[dip.Province]map[dip.Province]bool{}
-	p.Resolutions = map[dip.Province]string{}
+	p.Units = map[godip.Province]godip.Unit{}
+	p.Orders = map[godip.Nation]map[godip.Province][]string{}
+	p.SupplyCenters = map[godip.Province]godip.Nation{}
+	p.Dislodgeds = map[godip.Province]godip.Unit{}
+	p.Dislodgers = map[godip.Province]godip.Province{}
+	p.Bounces = map[godip.Province]map[godip.Province]bool{}
+	p.Resolutions = map[godip.Province]string{}
 
 	for key, vals := range q {
 		for _, val := range vals {
 			switch key {
 			case "s":
-				p.Season = dip.Season(val)
+				p.Season = godip.Season(val)
 			case "y":
 				y, err := strconv.ParseInt(val, 10, 64)
 				if err != nil {
@@ -52,32 +53,32 @@ func (p *Phase) FromQuery(q url.Values) error {
 				}
 				p.Year = int(y)
 			case "t":
-				p.Type = dip.PhaseType(q.Get("t"))
+				p.Type = godip.PhaseType(q.Get("t"))
 			default:
 				if strings.HasSuffix(key, "_SC") {
 					parts := strings.Split(key, "_")
 					provs := strings.Split(val, "_")
 					for _, prov := range provs {
-						p.SupplyCenters[dip.Province(prov)] = dip.Nation(parts[0])
+						p.SupplyCenters[godip.Province(prov)] = godip.Nation(parts[0])
 					}
 				} else if strings.Contains(key, "_") {
 					parts := strings.Split(key, "_")
 					provs := strings.Split(val, "_")
 					for _, prov := range provs {
-						p.Units[dip.Province(prov)] = dip.Unit{
-							Type:   dip.UnitType(parts[1]),
-							Nation: dip.Nation(parts[0]),
+						p.Units[godip.Province(prov)] = godip.Unit{
+							Type:   godip.UnitType(parts[1]),
+							Nation: godip.Nation(parts[0]),
 						}
 					}
 				} else if strings.Contains(key, "-") {
 					parts := strings.Split(key, "-")
 					orderParts := strings.Split(val, "_")
-					nationMap, found := p.Orders[dip.Nation(parts[0])]
+					nationMap, found := p.Orders[godip.Nation(parts[0])]
 					if !found {
-						nationMap = map[dip.Province][]string{}
+						nationMap = map[godip.Province][]string{}
 					}
-					nationMap[dip.Province(parts[1])] = orderParts
-					p.Orders[dip.Nation(parts[0])] = nationMap
+					nationMap[godip.Province(parts[1])] = orderParts
+					p.Orders[godip.Nation(parts[0])] = nationMap
 				}
 			}
 		}
@@ -92,7 +93,7 @@ func (p *Phase) ToQuery() url.Values {
 	q.Set("y", fmt.Sprint(p.Year))
 	q.Set("t", string(p.Type))
 
-	scs := map[dip.Nation][]string{}
+	scs := map[godip.Nation][]string{}
 	for prov, nat := range p.SupplyCenters {
 		scs[nat] = append(scs[nat], string(prov))
 	}
@@ -100,11 +101,11 @@ func (p *Phase) ToQuery() url.Values {
 		q.Set(fmt.Sprintf("%s_SC", nat), strings.Join(provs, "_"))
 	}
 
-	units := map[dip.Nation]map[dip.UnitType][]string{}
+	units := map[godip.Nation]map[godip.UnitType][]string{}
 	for prov, unit := range p.Units {
 		natUnits, found := units[unit.Nation]
 		if !found {
-			natUnits = map[dip.UnitType][]string{}
+			natUnits = map[godip.UnitType][]string{}
 		}
 		natUnits[unit.Type] = append(natUnits[unit.Type], string(prov))
 		units[unit.Nation] = natUnits
@@ -138,13 +139,13 @@ func NewPhase(state *state.State, variantName string) *Phase {
 	currentPhase := state.Phase()
 	p := &Phase{
 		Variant:     variantName,
-		Orders:      map[dip.Nation]map[dip.Province][]string{},
-		Resolutions: map[dip.Province]string{},
+		Orders:      map[godip.Nation]map[godip.Province][]string{},
+		Resolutions: map[godip.Province]string{},
 		Season:      currentPhase.Season(),
 		Year:        currentPhase.Year(),
 		Type:        currentPhase.Type(),
 	}
-	var resolutions map[dip.Province]error
+	var resolutions map[godip.Province]error
 	p.Units, p.SupplyCenters, p.Dislodgeds, p.Dislodgers, p.Bounces, resolutions = state.Dump()
 	for prov, err := range resolutions {
 		if err == nil {

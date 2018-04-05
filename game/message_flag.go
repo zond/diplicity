@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 const (
@@ -56,7 +56,7 @@ func (m *MessageFlag) Item(r Request) *Item {
 type FlaggedMessage struct {
 	GameID         *datastore.Key
 	ChannelMembers string
-	Sender         dip.Nation
+	Sender         godip.Nation
 	Body           string
 	CreatedAt      time.Time
 	AuthorId       string
@@ -81,14 +81,14 @@ func (f FlaggedMessagess) Item(r Request, curs *datastore.Cursor, limit int, use
 		fmItems[i] = f[i].Item(r)
 	}
 	fmsItem := NewItem(fmItems).SetName("flagged-messages").
-	SetDesc([][]string{
-		[]string{
-			"Flagged messages",
-			"This lists the messages flagged by users. The intention is to make it easier to browse examples of what others find to be bad behaviour, and ban authors of messages you don't want to see in your own games.",
-			"The ban link here is exactly the same as the one in the regular 'bans' view. To make it simpler to ban from the auto generated UI, and to make it easier to understand the intention of this list, it's provided here as well.",
-		},
-	}).
-	AddLink(r.NewLink(BanResource.Link("create-ban", Create, []string{"user_id", userId})))
+		SetDesc([][]string{
+			[]string{
+				"Flagged messages",
+				"This lists the messages flagged by users. The intention is to make it easier to browse examples of what others find to be bad behaviour, and ban authors of messages you don't want to see in your own games.",
+				"The ban link here is exactly the same as the one in the regular 'bans' view. To make it simpler to ban from the auto generated UI, and to make it easier to understand the intention of this list, it's provided here as well.",
+			},
+		}).
+		AddLink(r.NewLink(BanResource.Link("create-ban", Create, []string{"user_id", userId})))
 	if curs != nil {
 		fmsItem.AddLink(r.NewLink(Link{
 			Rel:   "self",
@@ -138,7 +138,7 @@ func createMessageFlag(w ResponseWriter, r Request) (*MessageFlag, error) {
 	}
 	game.ID = gameID
 
-	userByNation := map[dip.Nation]auth.User{}
+	userByNation := map[godip.Nation]auth.User{}
 	for _, member := range game.Members {
 		userByNation[member.Nation] = member.User
 	}

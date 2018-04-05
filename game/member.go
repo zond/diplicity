@@ -6,13 +6,13 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 var MemberResource = &Resource{
@@ -25,7 +25,7 @@ var MemberResource = &Resource{
 
 type Member struct {
 	User             auth.User
-	Nation           dip.Nation
+	Nation           godip.Nation
 	GameAlias        string `methods:"POST,PUT"`
 	NewestPhaseState PhaseState
 	UnreadMessages   int

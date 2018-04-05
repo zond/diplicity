@@ -16,6 +16,7 @@ import (
 	"github.com/jhillyerd/enmime"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
+	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
@@ -25,7 +26,6 @@ import (
 	"gopkg.in/sendgrid/sendgrid-go.v2"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 func init() {
@@ -398,17 +398,17 @@ func sendMsgNotificationsToUsers(ctx context.Context, host, scheme string, gameI
 	return nil
 }
 
-type Nations []dip.Nation
+type Nations []godip.Nation
 
 func (n *Nations) FromString(s string) {
 	parts := strings.Split(s, ",")
 	*n = make(Nations, len(parts))
 	for i := range parts {
-		(*n)[i] = dip.Nation(parts[i])
+		(*n)[i] = godip.Nation(parts[i])
 	}
 }
 
-func (n Nations) Includes(m dip.Nation) bool {
+func (n Nations) Includes(m godip.Nation) bool {
 	for i := range n {
 		if n[i] == m {
 			return true
@@ -480,11 +480,11 @@ type Channel struct {
 type SeenMarker struct {
 	GameID  *datastore.Key
 	Members Nations
-	Owner   dip.Nation
+	Owner   godip.Nation
 	At      time.Time `methods:"POST"`
 }
 
-func SeenMarkerID(ctx context.Context, channelID *datastore.Key, owner dip.Nation) (*datastore.Key, error) {
+func SeenMarkerID(ctx context.Context, channelID *datastore.Key, owner godip.Nation) (*datastore.Key, error) {
 	if channelID == nil || owner == "" {
 		return nil, fmt.Errorf("seen markers must have channels and owners")
 	}
@@ -563,7 +563,7 @@ type Message struct {
 	ID             *datastore.Key `datastore:"-"`
 	GameID         *datastore.Key
 	ChannelMembers Nations `methods:"POST"`
-	Sender         dip.Nation
+	Sender         godip.Nation
 	Body           string `methods:"POST" datastore:",noindex"`
 	CreatedAt      time.Time
 	Age            time.Duration `datastore:"-" ticker:"true"`
@@ -585,7 +585,7 @@ func (m *Message) NotifyRecipients(ctx context.Context, host, scheme string, cha
 	err := datastore.GetMulti(ctx, stateIDs, states)
 
 	// Populate a list of nations that haven't muted the sender (and aren't the sender).
-	unmutedMembers := []dip.Nation{}
+	unmutedMembers := []godip.Nation{}
 	if err == nil {
 		for _, state := range states {
 			if state.Nation != m.Sender && !state.HasMuted(m.Sender) {
@@ -790,8 +790,8 @@ func listMessages(w ResponseWriter, r Request) error {
 	}
 	game.ID = gameID
 
-	var nation dip.Nation
-	mutedNats := map[dip.Nation]struct{}{}
+	var nation godip.Nation
+	mutedNats := map[godip.Nation]struct{}{}
 	if member, found := game.GetMember(user.Id); found {
 		nation = member.Nation
 		gameStateID, err := GameStateID(ctx, gameID, nation)
@@ -920,7 +920,7 @@ func listMessages(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func loadChannels(ctx context.Context, game *Game, viewer dip.Nation) (Channels, error) {
+func loadChannels(ctx context.Context, game *Game, viewer godip.Nation) (Channels, error) {
 	channels := Channels{}
 	if game.Finished {
 		_, err := datastore.NewQuery(channelKind).Ancestor(game.ID).GetAll(ctx, &channels)
@@ -949,7 +949,7 @@ func loadChannels(ctx context.Context, game *Game, viewer dip.Nation) (Channels,
 	return channels, nil
 }
 
-func countUnreadMessages(ctx context.Context, channels Channels, viewer dip.Nation) error {
+func countUnreadMessages(ctx context.Context, channels Channels, viewer godip.Nation) error {
 	seenMarkerTimes := make([]time.Time, len(channels))
 
 	seenMarkerIDs := make([]*datastore.Key, len(channels))
@@ -1024,7 +1024,7 @@ func listChannels(w ResponseWriter, r Request) error {
 	}
 	game.ID = gameID
 
-	var nation dip.Nation
+	var nation godip.Nation
 
 	member, isMember := game.GetMember(user.Id)
 	if isMember {
@@ -1154,7 +1154,7 @@ func receiveMail(w ResponseWriter, r Request) error {
 	newMessage := &Message{
 		GameID:         message.GameID,
 		ChannelMembers: message.ChannelMembers,
-		Sender:         dip.Nation(fromNation),
+		Sender:         godip.Nation(fromNation),
 		Body:           strings.Join(okLines, "\n"),
 	}
 

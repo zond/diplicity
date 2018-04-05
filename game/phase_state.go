@@ -6,13 +6,13 @@ import (
 	"strconv"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 const (
@@ -73,7 +73,7 @@ func (p PhaseStates) Item(r Request, phase *Phase) *Item {
 type PhaseState struct {
 	GameID         *datastore.Key
 	PhaseOrdinal   int64
-	Nation         dip.Nation
+	Nation         godip.Nation
 	ReadyToResolve bool `methods:"PUT"`
 	WantsDIAS      bool `methods:"PUT"`
 	OnProbation    bool
@@ -83,7 +83,7 @@ type PhaseState struct {
 	Note           string `datastore:",noindex"`
 }
 
-func PhaseStateID(ctx context.Context, phaseID *datastore.Key, nation dip.Nation) (*datastore.Key, error) {
+func PhaseStateID(ctx context.Context, phaseID *datastore.Key, nation godip.Nation) (*datastore.Key, error) {
 	if phaseID == nil || nation == "" {
 		return nil, fmt.Errorf("phase states must have phases and nations")
 	}
@@ -133,7 +133,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		return nil, err
 	}
 
-	nation := dip.Nation(r.Vars()["nation"])
+	nation := godip.Nation(r.Vars()["nation"])
 
 	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
 	if err != nil {
@@ -199,8 +199,8 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 				return err
 			}
 
-			phaseStates := map[dip.Nation]*PhaseState{}
-			readyNations := map[dip.Nation]struct{}{}
+			phaseStates := map[godip.Nation]*PhaseState{}
+			readyNations := map[godip.Nation]struct{}{}
 			for i := range allStates {
 				phaseStates[allStates[i].Nation] = &allStates[i]
 				if allStates[i].ReadyToResolve {

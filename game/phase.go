@@ -13,6 +13,7 @@ import (
 
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
+	"github.com/zond/godip"
 	"github.com/zond/godip/state"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
@@ -23,9 +24,9 @@ import (
 	"gopkg.in/sendgrid/sendgrid-go.v2"
 
 	dvars "github.com/zond/diplicity/variants"
-	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 	vrt "github.com/zond/godip/variants/common"
+
+	. "github.com/zond/goaeoas"
 )
 
 var (
@@ -417,8 +418,8 @@ type PhaseResolver struct {
 	TaskTriggered bool
 }
 
-func (p *PhaseResolver) SCCounts(s *state.State) map[dip.Nation]int {
-	res := map[dip.Nation]int{}
+func (p *PhaseResolver) SCCounts(s *state.State) map[godip.Nation]int {
+	res := map[godip.Nation]int{}
 	for _, nat := range s.SupplyCenters() {
 		if nat != "" {
 			res[nat] = res[nat] + 1
@@ -512,10 +513,10 @@ func (p *PhaseResolver) Act() error {
 	allReady := true                    // All nations are ready to resolve the new phase as well.
 	soloWinner := variant.SoloWinner(s) // The nation, if any, reaching solo victory.
 	var soloWinnerUser string
-	quitters := map[dip.Nation]quitter{} // One per nation that wants to quit, with either dias or eliminated.
-	probationaries := []string{}         // One per user that's on probation.
-	newPhaseStates := PhaseStates{}      // The new phase states to save if we want to prepare resolution of a new phase.
-	oldPhaseResult := &PhaseResult{      // A result object for the old phase to simplify collecting user scoped stats.
+	quitters := map[godip.Nation]quitter{} // One per nation that wants to quit, with either dias or eliminated.
+	probationaries := []string{}           // One per user that's on probation.
+	newPhaseStates := PhaseStates{}        // The new phase states to save if we want to prepare resolution of a new phase.
+	oldPhaseResult := &PhaseResult{        // A result object for the old phase to simplify collecting user scoped stats.
 		GameID:       p.Phase.GameID,
 		PhaseOrdinal: p.Phase.PhaseOrdinal,
 	}
@@ -656,11 +657,11 @@ func (p *PhaseResolver) Act() error {
 		p.Game.FinishedAt = time.Now()
 		p.Game.Closed = true
 
-		diasMembers := []dip.Nation{}
+		diasMembers := []godip.Nation{}
 		diasUsers := []string{}
-		nmrMembers := []dip.Nation{}
+		nmrMembers := []godip.Nation{}
 		nmrUsers := []string{}
-		eliminatedMembers := []dip.Nation{}
+		eliminatedMembers := []godip.Nation{}
 		eliminatedUsers := []string{}
 		scores := []GameScore{}
 
@@ -815,36 +816,36 @@ const (
 )
 
 type UnitWrapper struct {
-	Province dip.Province
-	Unit     dip.Unit
+	Province godip.Province
+	Unit     godip.Unit
 }
 
 type SC struct {
-	Province dip.Province
-	Owner    dip.Nation
+	Province godip.Province
+	Owner    godip.Nation
 }
 
 type Dislodger struct {
-	Province dip.Province
+	Province godip.Province
 	// The name of this is crap.
 	// The Dislodger struct is used so that
 	// Province is the actual dislodger, while
 	// Dislodger is the province that was dislodged.
-	Dislodger dip.Province
+	Dislodger godip.Province
 }
 
 type Dislodged struct {
-	Province  dip.Province
-	Dislodged dip.Unit
+	Province  godip.Province
+	Dislodged godip.Unit
 }
 
 type Bounce struct {
-	Province   dip.Province
+	Province   godip.Province
 	BounceList string
 }
 
 type Resolution struct {
-	Province   dip.Province
+	Province   godip.Province
 	Resolution string
 }
 
@@ -865,9 +866,9 @@ func (p Phases) Item(r Request, gameID *datastore.Key) *Item {
 
 type PhaseMeta struct {
 	PhaseOrdinal   int64
-	Season         dip.Season
+	Season         godip.Season
 	Year           int
-	Type           dip.PhaseType
+	Type           godip.PhaseType
 	Resolved       bool
 	DeadlineAt     time.Time
 	NextDeadlineIn time.Duration `datastore:"-" ticker:"true"`
@@ -908,35 +909,35 @@ type Phase struct {
 	Scheme      string
 }
 
-func (p *Phase) toVariantsPhase(variant string, orderMap map[dip.Nation]map[dip.Province][]string) *dvars.Phase {
-	units := map[dip.Province]dip.Unit{}
+func (p *Phase) toVariantsPhase(variant string, orderMap map[godip.Nation]map[godip.Province][]string) *dvars.Phase {
+	units := map[godip.Province]godip.Unit{}
 	for _, unit := range p.Units {
 		units[unit.Province] = unit.Unit
 	}
-	scs := map[dip.Province]dip.Nation{}
+	scs := map[godip.Province]godip.Nation{}
 	for _, sc := range p.SCs {
 		scs[sc.Province] = sc.Owner
 	}
-	dislodgeds := map[dip.Province]dip.Unit{}
+	dislodgeds := map[godip.Province]godip.Unit{}
 	for _, d := range p.Dislodgeds {
 		dislodgeds[d.Province] = d.Dislodged
 	}
-	dislodgers := map[dip.Province]dip.Province{}
+	dislodgers := map[godip.Province]godip.Province{}
 	for _, d := range p.Dislodgers {
 		dislodgers[d.Province] = d.Dislodger
 	}
-	bounces := map[dip.Province]map[dip.Province]bool{}
+	bounces := map[godip.Province]map[godip.Province]bool{}
 	for _, b := range p.Bounces {
 		provBounces, found := bounces[b.Province]
 		if !found {
-			provBounces = map[dip.Province]bool{}
+			provBounces = map[godip.Province]bool{}
 		}
 		for _, el := range strings.Split(b.BounceList, ",") {
-			provBounces[dip.Province(el)] = true
+			provBounces[godip.Province(el)] = true
 		}
 		bounces[b.Province] = provBounces
 	}
-	resolutions := map[dip.Province]string{}
+	resolutions := map[godip.Province]string{}
 	for _, res := range p.Resolutions {
 		resolutions[res.Province] = res.Resolution
 	}
@@ -1258,7 +1259,7 @@ func listOptions(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func (p *Phase) Orders(ctx context.Context) (map[dip.Nation]map[dip.Province][]string, error) {
+func (p *Phase) Orders(ctx context.Context) (map[godip.Nation]map[godip.Province][]string, error) {
 	phaseID, err := PhaseID(ctx, p.GameID, p.PhaseOrdinal)
 	if err != nil {
 		return nil, err
@@ -1269,50 +1270,50 @@ func (p *Phase) Orders(ctx context.Context) (map[dip.Nation]map[dip.Province][]s
 		return nil, err
 	}
 
-	orderMap := map[dip.Nation]map[dip.Province][]string{}
+	orderMap := map[godip.Nation]map[godip.Province][]string{}
 	for _, order := range orders {
 		nationMap, found := orderMap[order.Nation]
 		if !found {
-			nationMap = map[dip.Province][]string{}
+			nationMap = map[godip.Province][]string{}
 			orderMap[order.Nation] = nationMap
 		}
-		nationMap[dip.Province(order.Parts[0])] = order.Parts[1:]
+		nationMap[godip.Province(order.Parts[0])] = order.Parts[1:]
 	}
 
 	return orderMap, nil
 }
 
-func (p *Phase) State(ctx context.Context, variant vrt.Variant, orderMap map[dip.Nation]map[dip.Province][]string) (*state.State, error) {
+func (p *Phase) State(ctx context.Context, variant vrt.Variant, orderMap map[godip.Nation]map[godip.Province][]string) (*state.State, error) {
 	parsedOrders, err := variant.Parser.ParseAll(orderMap)
 	if err != nil {
 		return nil, err
 	}
 
-	units := map[dip.Province]dip.Unit{}
+	units := map[godip.Province]godip.Unit{}
 	for _, unit := range p.Units {
 		units[unit.Province] = unit.Unit
 	}
 
-	supplyCenters := map[dip.Province]dip.Nation{}
+	supplyCenters := map[godip.Province]godip.Nation{}
 	for _, sc := range p.SCs {
 		supplyCenters[sc.Province] = sc.Owner
 	}
 
-	dislodgeds := map[dip.Province]dip.Unit{}
+	dislodgeds := map[godip.Province]godip.Unit{}
 	for _, dislodged := range p.Dislodgeds {
 		dislodgeds[dislodged.Province] = dislodged.Dislodged
 	}
 
-	dislodgers := map[dip.Province]dip.Province{}
+	dislodgers := map[godip.Province]godip.Province{}
 	for _, dislodger := range p.Dislodgers {
 		dislodgers[dislodger.Province] = dislodger.Dislodger
 	}
 
-	bounces := map[dip.Province]map[dip.Province]bool{}
+	bounces := map[godip.Province]map[godip.Province]bool{}
 	for _, bounce := range p.Bounces {
-		bounceMap := map[dip.Province]bool{}
+		bounceMap := map[godip.Province]bool{}
 		for _, prov := range strings.Split(bounce.BounceList, ",") {
-			bounceMap[dip.Province(prov)] = true
+			bounceMap[godip.Province(prov)] = true
 		}
 		bounces[bounce.Province] = bounceMap
 	}
@@ -1350,7 +1351,7 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 	}
 	game.ID = gameID
 
-	var nation dip.Nation
+	var nation godip.Nation
 
 	if member, found := game.GetMember(user.Id); found {
 		nation = member.Nation
@@ -1361,7 +1362,7 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	ordersToDisplay := map[dip.Nation]map[dip.Province][]string{}
+	ordersToDisplay := map[godip.Nation]map[godip.Province][]string{}
 	for nat, orders := range foundOrders {
 		if nat == nation || phase.Resolved {
 			ordersToDisplay[nat] = orders

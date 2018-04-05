@@ -6,13 +6,13 @@ import (
 
 	"github.com/Kashomon/goglicko"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 const (
@@ -304,7 +304,7 @@ type Glicko struct {
 	GameID          *datastore.Key
 	UserId          string
 	CreatedAt       time.Time
-	Member          dip.Nation
+	Member          godip.Nation
 	Rating          float64
 	PracticalRating float64
 	Deviation       float64

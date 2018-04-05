@@ -14,6 +14,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
@@ -23,7 +24,6 @@ import (
 	"google.golang.org/appengine/taskqueue"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 const (
@@ -370,7 +370,7 @@ type Game struct {
 	FinishedAt time.Time
 }
 
-func (g *Game) abbrMatchesNations(abbr dip.Nation) int {
+func (g *Game) abbrMatchesNations(abbr godip.Nation) int {
 	matches := 0
 	for _, m := range g.Members {
 		if strings.Index(string(m.Nation), string(abbr)) == 0 {
@@ -388,20 +388,20 @@ func (g *Game) AbbrNats(nats Nations) Nations {
 	return result
 }
 
-func (g *Game) AbbrNat(nat dip.Nation) dip.Nation {
+func (g *Game) AbbrNat(nat godip.Nation) godip.Nation {
 	if len(nat) < 2 {
 		return nat
 	}
 	runes := []rune(string(nat))
 	for i := 1; i < len(runes); i++ {
-		if g.abbrMatchesNations(dip.Nation(runes[:i])) == 1 {
-			return dip.Nation(runes[:i])
+		if g.abbrMatchesNations(godip.Nation(runes[:i])) == 1 {
+			return godip.Nation(runes[:i])
 		}
 	}
 	return nat
 }
 
-func (g *Game) DescFor(nat dip.Nation) string {
+func (g *Game) DescFor(nat godip.Nation) string {
 	for _, m := range g.Members {
 		if m.Nation == nat && m.GameAlias != "" {
 			return m.GameAlias

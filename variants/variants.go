@@ -8,13 +8,14 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"github.com/zond/godip/variants/hundred"
 	"github.com/zond/godip/variants/youngstownredux"
 
-	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 	vrt "github.com/zond/godip/variants/common"
+
+	. "github.com/zond/goaeoas"
 )
 
 var (
@@ -39,10 +40,10 @@ const (
 
 type RenderPhase struct {
 	Year   int
-	Season dip.Season
-	Type   dip.PhaseType
-	SCs    map[dip.Province]dip.Nation
-	Units  map[dip.Province]dip.Unit
+	Season godip.Season
+	Type   godip.PhaseType
+	SCs    map[godip.Province]godip.Nation
+	Units  map[godip.Province]godip.Unit
 	Map    string
 }
 
@@ -81,9 +82,9 @@ func (rv RenderVariants) Item(r Request) *Item {
 type RenderVariant struct {
 	vrt.Variant
 	// OrderTypes are the types of orders this variant has.
-	OrderTypes []dip.OrderType
+	OrderTypes []godip.OrderType
 	Start      RenderPhase
-	Graph      dip.Graph
+	Graph      godip.Graph
 }
 
 func (rv *RenderVariant) Item(r Request) *Item {

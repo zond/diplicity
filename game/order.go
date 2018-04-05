@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 const (
@@ -60,11 +60,11 @@ func (o Orders) Item(r Request, gameID *datastore.Key, phase *Phase) *Item {
 type Order struct {
 	GameID       *datastore.Key
 	PhaseOrdinal int64
-	Nation       dip.Nation
+	Nation       godip.Nation
 	Parts        []string `methods:"POST,PUT" separator:" "`
 }
 
-func OrderID(ctx context.Context, phaseID *datastore.Key, srcProvince dip.Province) (*datastore.Key, error) {
+func OrderID(ctx context.Context, phaseID *datastore.Key, srcProvince godip.Province) (*datastore.Key, error) {
 	if phaseID == nil || srcProvince == "" {
 		return nil, fmt.Errorf("orders must have phases and source provinces")
 	}
@@ -76,7 +76,7 @@ func (o *Order) ID(ctx context.Context) (*datastore.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return OrderID(ctx, phaseID, dip.Province(o.Parts[0]))
+	return OrderID(ctx, phaseID, godip.Province(o.Parts[0]))
 }
 
 func (o *Order) Save(ctx context.Context) error {
@@ -121,7 +121,7 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 	}
 
 	srcProvince := strings.Replace(r.Vars()["src_province"], "_", "/", -1)
-	orderID, err := OrderID(ctx, phaseID, dip.Province(srcProvince))
+	orderID, err := OrderID(ctx, phaseID, godip.Province(srcProvince))
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 	}
 
 	srcProvince := strings.Replace(r.Vars()["src_province"], "_", "/", -1)
-	orderID, err := OrderID(ctx, phaseID, dip.Province(srcProvince))
+	orderID, err := OrderID(ctx, phaseID, godip.Province(srcProvince))
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 			return HTTPErr{"can't issue orders for others", 403}
 		}
 
-		if dip.Province(order.Parts[0]).Super() != dip.Province(srcProvince).Super() {
+		if godip.Province(order.Parts[0]).Super() != godip.Province(srcProvince).Super() {
 			return HTTPErr{"unable to change source province for order", 400}
 		}
 
@@ -336,7 +336,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 			return HTTPErr{"can't issue orders for others", 403}
 		}
 
-		orderID, err := OrderID(ctx, phaseID, dip.Province(order.Parts[0]))
+		orderID, err := OrderID(ctx, phaseID, godip.Province(order.Parts[0]))
 		if err != nil {
 			return err
 		}
@@ -383,7 +383,7 @@ func listOrders(w ResponseWriter, r Request) error {
 	}
 	game.ID = gameID
 
-	var nation dip.Nation
+	var nation godip.Nation
 
 	if member, found := game.GetMember(user.Id); found {
 		nation = member.Nation

@@ -5,13 +5,13 @@ import (
 	"io/ioutil"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	. "github.com/zond/goaeoas"
-	dip "github.com/zond/godip/common"
 )
 
 const (
@@ -62,11 +62,11 @@ func (g GameStates) Item(r Request, gameID *datastore.Key) *Item {
 
 type GameState struct {
 	GameID *datastore.Key
-	Nation dip.Nation
-	Muted  []dip.Nation `methods:"PUT"`
+	Nation godip.Nation
+	Muted  []godip.Nation `methods:"PUT"`
 }
 
-func (g *GameState) HasMuted(nat dip.Nation) bool {
+func (g *GameState) HasMuted(nat godip.Nation) bool {
 	for _, mut := range g.Muted {
 		if mut == nat {
 			return true
@@ -75,7 +75,7 @@ func (g *GameState) HasMuted(nat dip.Nation) bool {
 	return false
 }
 
-func GameStateID(ctx context.Context, gameID *datastore.Key, nation dip.Nation) (*datastore.Key, error) {
+func GameStateID(ctx context.Context, gameID *datastore.Key, nation godip.Nation) (*datastore.Key, error) {
 	if gameID == nil || nation == "" {
 		return nil, fmt.Errorf("game states must have games and nations")
 	}
@@ -118,7 +118,7 @@ func updateGameState(w ResponseWriter, r Request) (*GameState, error) {
 		return nil, err
 	}
 
-	nation := dip.Nation(r.Vars()["nation"])
+	nation := godip.Nation(r.Vars()["nation"])
 
 	bodyBytes, err := ioutil.ReadAll(r.Req().Body)
 	if err != nil {
@@ -169,7 +169,7 @@ func loadGameState(w ResponseWriter, r Request) (*GameState, error) {
 		return nil, err
 	}
 
-	nation := dip.Nation(r.Vars()["nation"])
+	nation := godip.Nation(r.Vars()["nation"])
 
 	gameStateID, err := GameStateID(ctx, gameID, nation)
 	if err != nil {
