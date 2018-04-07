@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 
 	. "github.com/zond/goaeoas"
@@ -39,6 +40,7 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
 	for i, nat := range variant.Nations {
 		jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nat, i))
 	}
+	jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrastNeutral;", godip.Neutral))
 	for prov, unit := range phase.Units {
 		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s);", unit.Type, prov, unit.Nation))
 	}
