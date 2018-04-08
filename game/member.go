@@ -51,7 +51,7 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	if user.Id != r.Vars()["user_id"] {
@@ -139,7 +139,7 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	if user.Id != r.Vars()["user_id"] {
@@ -159,7 +159,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

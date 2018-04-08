@@ -2,9 +2,12 @@ package game
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
@@ -12,6 +15,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 )
@@ -58,6 +62,7 @@ const (
 	RenderPhaseMapRoute         = "RenderPhaseMap"
 	ReRateRoute                 = "ReRate"
 	GlobalStatsRoute            = "GlobalStats"
+	FixNewTimestampsRoute       = "FixNewTimestamps"
 )
 
 type userStatsHandler struct {
@@ -72,7 +77,7 @@ func (h *userStatsHandler) handle(w ResponseWriter, r Request) error {
 
 	_, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthorized", 401}
+		return HTTPErr{"unauthenticated", 401}
 	}
 
 	limit, err := strconv.ParseInt(r.Req().URL.Query().Get("limit"), 10, 64)
@@ -194,7 +199,7 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 	req.user = user
 
@@ -330,7 +335,7 @@ func (h gamesHandler) handleOther(w ResponseWriter, r Request) error {
 func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthorized", 401}
+		return HTTPErr{"unauthenticated", 401}
 	}
 
 	req, err := h.prepare(w, r, &user.Id, false)
@@ -354,6 +359,8 @@ var (
 		desc:  []string{"Started games", "Started games, sorted with oldest first."},
 		route: ListStartedGamesRoute,
 	}
+	// The reason we have both openGamesHandler and stagingGamesHandler is because in theory we could have
+	// started games in openGamesHandler - if we had a replacement mechanism.
 	openGamesHandler = gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("-NMembers").Order("CreatedAt"),
 		name:  "open-games",
@@ -435,8 +442,86 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func handleFixNewTimestamps(w ResponseWriter, r Request) error {
+	dryRun := r.Req().URL.Query().Get("dry-run") != "false"
+
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthenticated", 401}
+	}
+
+	superusers, err := auth.GetSuperusers(ctx)
+	if err != nil {
+		return err
+	}
+
+	if !superusers.Includes(user.Id) {
+		return HTTPErr{"unauthorized", 403}
+	}
+
+	gameIDs, err := datastore.NewQuery(gameKind).KeysOnly().GetAll(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	for _, gameID := range gameIDs {
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			game := &Game{}
+			if err := datastore.Get(ctx, gameID, game); err != nil {
+				return err
+			}
+			if game.StartedAt.IsZero() {
+				phases := Phases{}
+				phaseIDs, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
+				if err != nil {
+					return nil
+				}
+				if len(phases) > 0 {
+					keys := []*datastore.Key{gameID}
+					values := []interface{}{game}
+					sort.Sort(phases)
+					for i := range phases {
+						phase := &phases[i]
+						if phase.PhaseOrdinal != int64(i) {
+							return fmt.Errorf("WTF, the phases aren't sorted properly? Phase %v is %+v", i, phase)
+						}
+						if phase.CreatedAt.IsZero() {
+							// If this is the first phase OR DeadlineAt - lastPhase.CreatedAt > phase length.
+							if i == 0 || phase.DeadlineAt.Sub(phases[i-1].CreatedAt) > time.Minute*game.PhaseLengthMinutes {
+								phase.CreatedAt = phase.DeadlineAt.Add(-time.Minute * game.PhaseLengthMinutes)
+								log.Infof(ctx, "Updating phase of game with phase length %v, with DeadlineAt %v and no previous phase within %v to have CreatedAt %v", time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, time.Minute*game.PhaseLengthMinutes, phase.CreatedAt)
+							} else {
+								phase.CreatedAt = phase.DeadlineAt
+								log.Infof(ctx, "Updating phase of game with phase length %v, with DeadlineAt %v and another phase %v before it to have CreatedAt %v", time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, phases[i-1].CreatedAt, phase.CreatedAt)
+							}
+							keys = append(keys, phaseIDs[i])
+							values = append(values, phase)
+						}
+					}
+					game.StartedAt = phases[0].CreatedAt
+					log.Infof(ctx, "Updating game with phase length %v and deadlines between %v and %v to have StartedAt %v", time.Minute*game.PhaseLengthMinutes, phases[0].DeadlineAt, phases[len(phases)-1].DeadlineAt, game.StartedAt)
+
+					if !dryRun {
+						if _, err := datastore.PutMulti(ctx, keys, values); err != nil {
+							return err
+						}
+					}
+				}
+			}
+			return nil
+		}, &datastore.TransactionOptions{XG: false}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func SetupRouter(r *mux.Router) {
 	router = r
+	Handle(r, "/_fix_new_timestamps", []string{"GET"}, FixNewTimestampsRoute, handleFixNewTimestamps)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)

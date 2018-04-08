@@ -115,7 +115,7 @@ func loadBan(w ResponseWriter, r Request) (*Ban, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	if r.Vars()["user_id"] != user.Id {
@@ -140,7 +140,7 @@ func deleteBan(w ResponseWriter, r Request) (*Ban, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	if r.Vars()["user_id"] != user.Id {
@@ -192,7 +192,7 @@ func listBans(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthorized", 401}
+		return HTTPErr{"unauthenticated", 401}
 	}
 
 	if r.Vars()["user_id"] != user.Id {
@@ -215,7 +215,7 @@ func createBan(w ResponseWriter, r Request) (*Ban, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	if r.Vars()["user_id"] != user.Id {

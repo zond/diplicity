@@ -505,7 +505,7 @@ func (p *PhaseResolver) Act() error {
 	if p.Game.PhaseLengthMinutes == 0 {
 		p.Game.PhaseLengthMinutes = MAX_PHASE_DEADLINE
 	}
-	newPhase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
+	newPhase.DeadlineAt = newPhase.CreatedAt.Add(time.Minute * p.Game.PhaseLengthMinutes)
 
 	// Check if we can roll forward again, and potentially create new phase states.
 
@@ -864,12 +864,25 @@ func (p Phases) Item(r Request, gameID *datastore.Key) *Item {
 	return phasesItem
 }
 
+func (p Phases) Len() int {
+	return len(p)
+}
+
+func (p Phases) Less(i, j int) bool {
+	return p[i].PhaseOrdinal < p[j].PhaseOrdinal
+}
+
+func (p Phases) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
 type PhaseMeta struct {
 	PhaseOrdinal   int64
 	Season         godip.Season
 	Year           int
 	Type           godip.PhaseType
 	Resolved       bool
+	CreatedAt      time.Time
 	DeadlineAt     time.Time
 	NextDeadlineIn time.Duration `datastore:"-" ticker:"true"`
 	UnitsJSON      string        `datastore:",noindex"`
@@ -996,7 +1009,7 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -1102,6 +1115,7 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host, s
 			Season:       current.Season(),
 			Year:         current.Year(),
 			Type:         current.Type(),
+			CreatedAt:    time.Now(),
 		},
 		GameID: gameID,
 		Host:   host,
@@ -1146,7 +1160,7 @@ func listOptions(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthorized", 401}
+		return HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -1326,7 +1340,7 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthorized", 401}
+		return HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -1379,7 +1393,7 @@ func listPhases(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthorized", 401}
+		return HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
