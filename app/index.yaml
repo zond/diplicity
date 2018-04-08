@@ -20,14 +20,14 @@ indexes:
 - kind: Game
   properties:
   - name: Finished
-  - name: CreatedAt
+  - name: FinishedAt
     direction: desc
 
 - kind: Game
   properties:
   - name: Finished
   - name: Members.User.Id
-  - name: CreatedAt
+  - name: FinishedAt
     direction: desc
 
 - kind: Game
@@ -35,13 +35,13 @@ indexes:
   - name: Finished
   - name: Members.User.Id
   - name: Started
-  - name: CreatedAt
+  - name: StartedAt
 
 - kind: Game
   properties:
   - name: Finished
   - name: Started
-  - name: CreatedAt
+  - name: StartedAt
 
 - kind: Game
   properties:
