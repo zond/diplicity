@@ -15,6 +15,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 )
@@ -442,6 +443,8 @@ func handleConfigure(w ResponseWriter, r Request) error {
 }
 
 func handleFixNewTimestamps(w ResponseWriter, r Request) error {
+	dryRun := r.Req().URL.Query().Get("dry-run") != "false"
+
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*auth.User)
@@ -488,16 +491,22 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 							// If this is the first phase OR DeadlineAt - lastPhase.CreatedAt > phase length.
 							if i == 0 || phase.DeadlineAt.Sub(phases[i-1].CreatedAt) > time.Minute*game.PhaseLengthMinutes {
 								phase.CreatedAt = phase.DeadlineAt.Add(-time.Minute * game.PhaseLengthMinutes)
+								log.Infof(ctx, "Updating phase of game with phase length %v, with DeadlineAt %v and no previous phase within %v to have CreatedAt %v", time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, time.Minute*game.PhaseLengthMinutes, phase.CreatedAt)
 							} else {
 								phase.CreatedAt = phase.DeadlineAt
+								log.Infof(ctx, "Updating phase of game with phase length %v, with DeadlineAt %v and another phase %v before it to have CreatedAt %v", time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, phases[i-1].CreatedAt, phase.CreatedAt)
 							}
 							keys = append(keys, phaseIDs[i])
 							values = append(values, phase)
 						}
 					}
 					game.StartedAt = phases[0].CreatedAt
-					if _, err := datastore.PutMulti(ctx, keys, values); err != nil {
-						return err
+					log.Infof(ctx, "Updating game with phase length %v and deadlines between %v and %v to have StartedAt %v", time.Minute*game.PhaseLengthMinutes, phases[0].DeadlineAt, phases[len(phases)-1].DeadlineAt, game.StartedAt)
+
+					if !dryRun {
+						if _, err := datastore.PutMulti(ctx, keys, values); err != nil {
+							return err
+						}
 					}
 				}
 			}
