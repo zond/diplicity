@@ -497,8 +497,8 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 								log.Infof(ctx, "Updating phase %v of game with phase length %v, with DeadlineAt %v and another phase %v before it to have CreatedAt %v", phase.PhaseOrdinal, time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, phases[i-1].CreatedAt, phase.CreatedAt)
 							}
 							if i > 0 {
-								phase.ResolvedAt = phases[i-1].CreatedAt
-								log.Infof(ctx, "Updating phase %v of game with previous phase CreatedAt %v to have ResolvedAt %v", phase.PhaseOrdinal, phases[i-1].CreatedAt, phase.ResolvedAt)
+								phases[i-1].ResolvedAt = phase.CreatedAt
+								log.Infof(ctx, "Updating phase %v of game with next phase CreatedAt %v to have ResolvedAt %v", phases[i-1].PhaseOrdinal, phase.CreatedAt, phases[i-1].ResolvedAt)
 							}
 							keys = append(keys, phaseIDs[i])
 							values = append(values, phase)
