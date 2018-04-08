@@ -466,7 +466,11 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 		return err
 	}
 
+	numSeen := 0
 	for _, gameID := range gameIDs {
+		if dryRun && numSeen > 10 {
+			break
+		}
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			game := &Game{}
 			if err := datastore.Get(ctx, gameID, game); err != nil {
@@ -523,6 +527,7 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 		}, &datastore.TransactionOptions{XG: false}); err != nil {
 			return err
 		}
+		numSeen++
 	}
 
 	return nil
