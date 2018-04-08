@@ -466,8 +466,9 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	numSeen := 0
-	for _, gameID := range gameIDs {
+	numProcessed := 0
+	for numSeen, gameID := range gameIDs {
+		log.Infof("Looking at game %v, processed %v", numSeen, numProcessed)
 		if dryRun && numSeen > 10 {
 			break
 		}
@@ -492,7 +493,7 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 							return fmt.Errorf("WTF, the phases aren't sorted properly? Phase %v is %+v", i, phase)
 						}
 						if phase.CreatedAt.IsZero() {
-							// If this is the first phase OR DeadlineAt - lastPhase.CreatedAt > phase length.
+							// If this is the first phase OR DeadlineAt - prevPhase.CreatedAt > phase length.
 							if i == 0 || phase.DeadlineAt.Sub(phases[i-1].CreatedAt) > time.Minute*game.PhaseLengthMinutes {
 								phase.CreatedAt = phase.DeadlineAt.Add(-time.Minute * game.PhaseLengthMinutes)
 								log.Infof(ctx, "Updating phase %v of game with phase length %v, with DeadlineAt %v and no previous phase within %v to have CreatedAt %v", phase.PhaseOrdinal, time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, time.Minute*game.PhaseLengthMinutes, phase.CreatedAt)
@@ -521,13 +522,13 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 							return err
 						}
 					}
+					numProcessed++
 				}
 			}
 			return nil
 		}, &datastore.TransactionOptions{XG: false}); err != nil {
 			return err
 		}
-		numSeen++
 	}
 
 	return nil
