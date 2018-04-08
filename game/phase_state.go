@@ -79,7 +79,7 @@ type PhaseState struct {
 	OnProbation    bool
 	NoOrders       bool
 	Eliminated     bool
-	ZippedOptions  []byte
+	ZippedOptions  []byte `skip:"true"`
 	Note           string `datastore:",noindex"`
 }
 

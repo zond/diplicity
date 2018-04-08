@@ -885,7 +885,9 @@ type PhaseMeta struct {
 	Type           godip.PhaseType
 	Resolved       bool
 	CreatedAt      time.Time
+	CreatedAgo     time.Duration `datastore:"-" ticker:"true"`
 	ResolvedAt     time.Time
+	ResolvedAgo    time.Duration `datastore:"-" ticker:"true"`
 	DeadlineAt     time.Time
 	NextDeadlineIn time.Duration `datastore:"-" ticker:"true"`
 	UnitsJSON      string        `datastore:",noindex"`
@@ -895,6 +897,12 @@ type PhaseMeta struct {
 func (p *PhaseMeta) Refresh() {
 	if !p.DeadlineAt.IsZero() {
 		p.NextDeadlineIn = p.DeadlineAt.Sub(time.Now())
+	}
+	if !p.CreatedAt.IsZero() {
+		p.CreatedAgo = p.CreatedAt.Sub(time.Now())
+	}
+	if !p.ResolvedAt.IsZero() {
+		p.ResolvedAgo = p.ResolvedAt.Sub(time.Now())
 	}
 }
 

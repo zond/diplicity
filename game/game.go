@@ -366,9 +366,24 @@ type Game struct {
 	ActiveBans         []Ban    `datastore:"-"`
 	FailedRequirements []string `datastore:"-"`
 
-	CreatedAt  time.Time
-	StartedAt  time.Time
-	FinishedAt time.Time
+	CreatedAt   time.Time
+	CreatedAgo  time.Duration `datastore:"-" ticker:"true"`
+	StartedAt   time.Time
+	StartedAgo  time.Duration `datastore:"-" ticker:"true"`
+	FinishedAt  time.Time
+	FinishedAgo time.Duration `datastore:"-" ticker:"true"`
+}
+
+func (g *Game) Refresh() {
+	if !g.CreatedAt.IsZero() {
+		g.CreatedAgo = g.CreatedAt.Sub(time.Now())
+	}
+	if !g.StartedAt.IsZero() {
+		g.StartedAgo = g.StartedAt.Sub(time.Now())
+	}
+	if !g.FinishedAt.IsZero() {
+		g.FinishedAgo = g.FinishedAt.Sub(time.Now())
+	}
 }
 
 func (g *Game) abbrMatchesNations(abbr godip.Nation) int {
@@ -631,6 +646,8 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 	}
 
 	game.Redact(user)
+
+	game.Refresh()
 
 	filtered := Games{*game}
 	activeBans, err := filtered.RemoveBanned(ctx, user.Id)
