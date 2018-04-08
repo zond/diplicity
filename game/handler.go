@@ -484,7 +484,7 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 					sort.Sort(phases)
 					for i := range phases {
 						phase := &phases[i]
-						if phase.PhaseOrdinal != int64(i) {
+						if phase.PhaseOrdinal != int64(i+1) {
 							return fmt.Errorf("WTF, the phases aren't sorted properly? Phase %v is %+v", i, phase)
 						}
 						if phase.CreatedAt.IsZero() {
