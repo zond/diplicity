@@ -102,7 +102,7 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -159,7 +159,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -253,7 +253,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -357,7 +357,7 @@ func listOrders(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthorized", 401}
+		return HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

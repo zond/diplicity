@@ -211,7 +211,7 @@ func loadUserStats(w ResponseWriter, r Request) (*UserStats, error) {
 
 	_, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	userStats := &UserStats{}

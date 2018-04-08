@@ -242,7 +242,7 @@ func loadUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
 
 	user, ok := r.Values()["user"].(*User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	config := &UserConfig{}
@@ -261,7 +261,7 @@ func updateUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
 
 	user, ok := r.Values()["user"].(*User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	config := &UserConfig{}

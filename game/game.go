@@ -367,6 +367,7 @@ type Game struct {
 	FailedRequirements []string `datastore:"-"`
 
 	CreatedAt  time.Time
+	StartedAt  time.Time
 	FinishedAt time.Time
 }
 
@@ -486,7 +487,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	game := &Game{}
@@ -552,6 +553,7 @@ func (g *Game) Start(ctx context.Context, r Request) error {
 	}
 
 	g.Started = true
+	g.StartedAt = time.Now()
 	g.Closed = true
 	for memberIndex, nationIndex := range rand.Perm(len(variants.Variants[g.Variant].Nations)) {
 		g.Members[memberIndex].Nation = variants.Variants[g.Variant].Nations[nationIndex]
@@ -566,7 +568,7 @@ func (g *Game) Start(ctx context.Context, r Request) error {
 	if g.PhaseLengthMinutes == 0 {
 		g.PhaseLengthMinutes = MAX_PHASE_DEADLINE
 	}
-	phase.DeadlineAt = time.Now().Add(time.Minute * g.PhaseLengthMinutes)
+	phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.PhaseLengthMinutes)
 	if err := phase.Save(ctx); err != nil {
 		return err
 	}
@@ -601,7 +603,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthorized", 401}
+		return nil, HTTPErr{"unauthenticated", 401}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["id"])

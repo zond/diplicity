@@ -78,7 +78,7 @@ func handleReRate(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthorized", 401}
+		return HTTPErr{"unauthenticated", 401}
 	}
 
 	superusers, err := auth.GetSuperusers(ctx)
