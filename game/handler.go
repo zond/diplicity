@@ -491,14 +491,23 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 							// If this is the first phase OR DeadlineAt - lastPhase.CreatedAt > phase length.
 							if i == 0 || phase.DeadlineAt.Sub(phases[i-1].CreatedAt) > time.Minute*game.PhaseLengthMinutes {
 								phase.CreatedAt = phase.DeadlineAt.Add(-time.Minute * game.PhaseLengthMinutes)
-								log.Infof(ctx, "Updating phase of game with phase length %v, with DeadlineAt %v and no previous phase within %v to have CreatedAt %v", time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, time.Minute*game.PhaseLengthMinutes, phase.CreatedAt)
+								log.Infof(ctx, "Updating phase %v of game with phase length %v, with DeadlineAt %v and no previous phase within %v to have CreatedAt %v", phase.PhaseOrdinal, time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, time.Minute*game.PhaseLengthMinutes, phase.CreatedAt)
 							} else {
 								phase.CreatedAt = phase.DeadlineAt
-								log.Infof(ctx, "Updating phase of game with phase length %v, with DeadlineAt %v and another phase %v before it to have CreatedAt %v", time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, phases[i-1].CreatedAt, phase.CreatedAt)
+								log.Infof(ctx, "Updating phase %v of game with phase length %v, with DeadlineAt %v and another phase %v before it to have CreatedAt %v", phase.PhaseOrdinal, time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, phases[i-1].CreatedAt, phase.CreatedAt)
+							}
+							if i > 0 {
+								phase.ResolvedAt = phases[i-1].CreatedAt
+								log.Infof(ctx, "Updating phase %v of game with previous phase CreatedAt %v to have ResolvedAt %v", phase.PhaseOrdinal, phases[i-1].CreatedAt, phase.ResolvedAt)
 							}
 							keys = append(keys, phaseIDs[i])
 							values = append(values, phase)
 						}
+					}
+					if game.Finished {
+						lastPhase := &phases[len(phases)-1]
+						lastPhase.ResolvedAt = lastPhase.CreatedAt
+						log.Infof(ctx, "Updating phase %v of finished game with CreatedAt %v to have ResolvedAt %v", lastPhase.PhaseOrdinal, lastPhase.CreatedAt, lastPhase.ResolvedAt)
 					}
 					game.StartedAt = phases[0].CreatedAt
 					log.Infof(ctx, "Updating game with phase length %v and deadlines between %v and %v to have StartedAt %v", time.Minute*game.PhaseLengthMinutes, phases[0].DeadlineAt, phases[len(phases)-1].DeadlineAt, game.StartedAt)

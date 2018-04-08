@@ -493,6 +493,7 @@ func (p *PhaseResolver) Act() error {
 	// Finish and save old phase.
 
 	p.Phase.Resolved = true
+	p.Phase.ResolvedAt = time.Now()
 	if err := p.Phase.Save(p.Context); err != nil {
 		log.Errorf(p.Context, "Unable to save old phase %v: %v; hope datastore gets fixed", PP(p.Phase), err)
 		return err
@@ -627,6 +628,7 @@ func (p *PhaseResolver) Act() error {
 		log.Infof(p.Context, "soloWinner: %q, quitters: %v => game needs to end", soloWinner, PP(quitters))
 		// Just to ensure we don't try to resolve it again, even by mistake.
 		newPhase.Resolved = true
+		newPhase.ResolvedAt = time.Now()
 	}
 
 	// Save the old phase result.
@@ -883,6 +885,7 @@ type PhaseMeta struct {
 	Type           godip.PhaseType
 	Resolved       bool
 	CreatedAt      time.Time
+	ResolvedAt     time.Time
 	DeadlineAt     time.Time
 	NextDeadlineIn time.Duration `datastore:"-" ticker:"true"`
 	UnitsJSON      string        `datastore:",noindex"`
