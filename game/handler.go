@@ -468,7 +468,7 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 
 	numProcessed := 0
 	for numSeen, gameID := range gameIDs {
-		log.Infof("Looking at game %v, processed %v", numSeen, numProcessed)
+		log.Infof(ctx, "Looking at game %v, processed %v", numSeen, numProcessed)
 		if dryRun && numSeen > 10 {
 			break
 		}
