@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/diplicity/variants"
+	"github.com/zond/godip"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
@@ -485,25 +486,56 @@ func fixTimestamps(ctx context.Context, dryRun bool, counter int, cursorString s
 					return nil
 				}
 				if len(phases) > 0 {
-					keys := []*datastore.Key{}
-					values := []interface{}{}
 					sort.Sort(phases)
+					toUpdate := map[*datastore.Key]*Phase{}
 					for i := range phases {
 						phase := &phases[i]
 						if phase.PhaseOrdinal != int64(i+1) {
 							return fmt.Errorf("WTF, the phases aren't sorted properly? Phase %v is %+v", i, phase)
 						}
-						if i > 0 && !phase.CreatedAt.Equal(phase.DeadlineAt) {
+						if i == 0 {
+							newCreatedAt := phase.DeadlineAt.Add(-time.Minute * game.PhaseLengthMinutes)
+							if !phase.CreatedAt.Equal(newCreatedAt) {
+								phase.CreatedAt = newCreatedAt
+								toUpdate[phaseIDs[i]] = phase
+								log.Infof(ctx, "Updating %v %v, %v to have normal length since it is the first phase", phase.Season, phase.Year, phase.Type)
+							}
+						} else {
 							interval := phase.DeadlineAt.Sub(phases[i-1].DeadlineAt)
-							if interval < time.Minute && len(phase.Resolutions) == 0 {
-								phase.CreatedAt = phase.DeadlineAt
-								keys = append(keys, phaseIDs[i])
-								values = append(values, phase)
-								log.Infof(ctx, "Updating %v %v, %v to have zero length since it has a deadline %v after previous phase and zero resolutions", phase.Season, phase.Year, phase.Type, interval)
+							gotOrders := false
+							for _, res := range phase.Resolutions {
+								if res.Resolution != "ErrForcedDisband" {
+									gotOrders = true
+									break
+								}
+							}
+							if interval < 0 || (interval < 5*time.Minute && !gotOrders && (phase.Type == godip.Retreat || phase.Type == godip.Adjustment)) {
+								if !phase.CreatedAt.Equal(phase.DeadlineAt) {
+									phase.CreatedAt = phase.DeadlineAt
+									toUpdate[phaseIDs[i]] = phase
+									log.Infof(ctx, "Updating %v %v, %v to have zero length since it has a deadline %v after previous phase and zero resolutions", phase.Season, phase.Year, phase.Type, interval)
+								}
+							} else {
+								newCreatedAt := phase.DeadlineAt.Add(-time.Minute * game.PhaseLengthMinutes)
+								if !phase.CreatedAt.Equal(newCreatedAt) {
+									phase.CreatedAt = newCreatedAt
+									log.Infof(ctx, "Updating %v %v, %v to have normal length since had resolutions, or a deadline later than previous phase", phase.Season, phase.Year, phase.Type)
+								}
+							}
+							if phases[i-1].ResolvedAt != phase.CreatedAt {
+								phases[i-1].ResolvedAt = phase.CreatedAt
+								toUpdate[phaseIDs[i-1]] = &phases[i-1]
+								log.Info(ctx, "Updating %v %v, %v to have resolved at %v", phases[i-1].Season, phases[i-1].Year, phases[i-1].Type, phase.CreatedAt)
 							}
 						}
 					}
-					if !dryRun && len(keys) > 0 {
+					if !dryRun && len(toUpdate) > 0 {
+						keys := make([]*datastore.Key, 0, len(toUpdate))
+						values := make([]interface{}, 0, len(toUpdate))
+						for k, v := range toUpdate {
+							keys = append(keys, k)
+							values = append(values, v)
+						}
 						if _, err := datastore.PutMulti(ctx, keys, values); err != nil {
 							return err
 						}
