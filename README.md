@@ -5,7 +5,7 @@ A dippy API service based on [App Engine](https://cloud.google.com/appengine) an
 
 ## Forum
 
-Discussions about this project happen at [https://groups.google.com/forum/#!forum/diplicity-dev](diplicity-dec).
+Discussions about this project happen at [diplicity-dev](https://groups.google.com/forum/#!forum/diplicity-dev).
 
 ## Public host
 
