@@ -525,7 +525,7 @@ func fixTimestamps(ctx context.Context, dryRun bool, counter int, cursorString s
 							if phases[i-1].ResolvedAt != phase.CreatedAt {
 								phases[i-1].ResolvedAt = phase.CreatedAt
 								toUpdate[phaseIDs[i-1]] = &phases[i-1]
-								log.Info(ctx, "Updating %v %v, %v to have resolved at %v", phases[i-1].Season, phases[i-1].Year, phases[i-1].Type, phase.CreatedAt)
+								log.Infof(ctx, "Updating %v %v, %v to have resolved at %v", phases[i-1].Season, phases[i-1].Year, phases[i-1].Type, phase.CreatedAt)
 							}
 						}
 					}
