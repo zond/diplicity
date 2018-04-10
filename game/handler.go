@@ -15,14 +15,20 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/delay"
 	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 )
 
 var (
-	router = mux.NewRouter()
+	router            = mux.NewRouter()
+	fixTimestampsFunc *delay.Function
 )
+
+func init() {
+	fixTimestampsFunc = delay.Func("fixTimestampsFunc", fixTimestamps)
+}
 
 const (
 	maxLimit = 128
@@ -443,6 +449,86 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func fixTimestamps(ctx context.Context, dryRun bool, counter int, cursorString string) error {
+	log.Infof(ctx, "fixTimestamps(..., %v, %v, %q)", dryRun, counter, cursorString)
+
+	batchSize := 20
+	dryRunSize := 10
+
+	q := datastore.NewQuery(gameKind).KeysOnly()
+	if cursorString != "" {
+		cursor, err := datastore.DecodeCursor(cursorString)
+		if err != nil {
+			return err
+		}
+		q = q.Start(cursor)
+	}
+	iterator := q.Run(ctx)
+
+	processed := 0
+	gameID, err := iterator.Next(nil)
+	for ; err == nil && processed < batchSize; gameID, err = iterator.Next(nil) {
+		if dryRun && counter > dryRunSize {
+			log.Infof(ctx, "Breaking due to dryRun and counter > %v", dryRunSize)
+			return nil
+		}
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			game := &Game{}
+			if err := datastore.Get(ctx, gameID, game); err != nil {
+				return err
+			}
+			log.Infof(ctx, "Looking at https://diplicity-engine.appspot.com/Game/%v, %v, %v, processed %v", gameID.Encode(), game.CreatedAt, counter, processed)
+			if game.Started {
+				phases := Phases{}
+				phaseIDs, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
+				if err != nil {
+					return nil
+				}
+				if len(phases) > 0 {
+					keys := []*datastore.Key{}
+					values := []interface{}{}
+					sort.Sort(phases)
+					for i := range phases {
+						phase := &phases[i]
+						if phase.PhaseOrdinal != int64(i+1) {
+							return fmt.Errorf("WTF, the phases aren't sorted properly? Phase %v is %+v", i, phase)
+						}
+						if i > 0 && !phase.CreatedAt.Equal(phase.DeadlineAt) {
+							interval := phase.DeadlineAt.Sub(phases[i-1].DeadlineAt)
+							if interval < time.Minute && len(phase.Resolutions) == 0 {
+								phase.CreatedAt = phase.DeadlineAt
+								keys = append(keys, phaseIDs[i])
+								values = append(values, phase)
+								log.Infof(ctx, "Updating %v %v, %v to have zero length since it has a deadline %v after previous phase and zero resolutions", phase.Season, phase.Year, phase.Type, interval)
+							}
+						}
+					}
+					if !dryRun && len(keys) > 0 {
+						if _, err := datastore.PutMulti(ctx, keys, values); err != nil {
+							return err
+						}
+					}
+				}
+			}
+			return nil
+		}, &datastore.TransactionOptions{XG: false}); err != nil {
+			return err
+		}
+		processed++
+		counter++
+	}
+
+	if err != datastore.Done {
+		cursor, err := iterator.Cursor()
+		if err != nil {
+			return err
+		}
+		fixTimestampsFunc.Call(ctx, dryRun, counter, cursor.String())
+	}
+
+	return nil
+}
+
 func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 	dryRun := r.Req().URL.Query().Get("dry-run") != "false"
 
@@ -462,75 +548,7 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 		return HTTPErr{"unauthorized", 403}
 	}
 
-	gameIDs, err := datastore.NewQuery(gameKind).KeysOnly().GetAll(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	numProcessed := 0
-	for numSeen, gameID := range gameIDs {
-		log.Infof(ctx, "Looking at game %v, processed %v", numSeen, numProcessed)
-		if dryRun && numSeen > 10 {
-			break
-		}
-		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-			game := &Game{}
-			if err := datastore.Get(ctx, gameID, game); err != nil {
-				return err
-			}
-			if game.StartedAt.IsZero() {
-				phases := Phases{}
-				phaseIDs, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
-				if err != nil {
-					return nil
-				}
-				if len(phases) > 0 {
-					keys := []*datastore.Key{gameID}
-					values := []interface{}{game}
-					sort.Sort(phases)
-					for i := range phases {
-						phase := &phases[i]
-						if phase.PhaseOrdinal != int64(i+1) {
-							return fmt.Errorf("WTF, the phases aren't sorted properly? Phase %v is %+v", i, phase)
-						}
-						if phase.CreatedAt.IsZero() {
-							// If this is the first phase OR DeadlineAt - prevPhase.CreatedAt > phase length.
-							if i == 0 || phase.DeadlineAt.Sub(phases[i-1].CreatedAt) > time.Minute*game.PhaseLengthMinutes {
-								phase.CreatedAt = phase.DeadlineAt.Add(-time.Minute * game.PhaseLengthMinutes)
-								log.Infof(ctx, "Updating phase %v of game with phase length %v, with DeadlineAt %v and no previous phase within %v to have CreatedAt %v", phase.PhaseOrdinal, time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, time.Minute*game.PhaseLengthMinutes, phase.CreatedAt)
-							} else {
-								phase.CreatedAt = phase.DeadlineAt
-								log.Infof(ctx, "Updating phase %v of game with phase length %v, with DeadlineAt %v and another phase %v before it to have CreatedAt %v", phase.PhaseOrdinal, time.Minute*game.PhaseLengthMinutes, phase.DeadlineAt, phases[i-1].CreatedAt, phase.CreatedAt)
-							}
-							if i > 0 {
-								phases[i-1].ResolvedAt = phase.CreatedAt
-								log.Infof(ctx, "Updating phase %v of game with next phase CreatedAt %v to have ResolvedAt %v", phases[i-1].PhaseOrdinal, phase.CreatedAt, phases[i-1].ResolvedAt)
-							}
-							keys = append(keys, phaseIDs[i])
-							values = append(values, phase)
-						}
-					}
-					if game.Finished {
-						lastPhase := &phases[len(phases)-1]
-						lastPhase.ResolvedAt = lastPhase.CreatedAt
-						log.Infof(ctx, "Updating phase %v of finished game with CreatedAt %v to have ResolvedAt %v", lastPhase.PhaseOrdinal, lastPhase.CreatedAt, lastPhase.ResolvedAt)
-					}
-					game.StartedAt = phases[0].CreatedAt
-					log.Infof(ctx, "Updating game with phase length %v and deadlines between %v and %v to have StartedAt %v", time.Minute*game.PhaseLengthMinutes, phases[0].DeadlineAt, phases[len(phases)-1].DeadlineAt, game.StartedAt)
-
-					if !dryRun {
-						if _, err := datastore.PutMulti(ctx, keys, values); err != nil {
-							return err
-						}
-					}
-					numProcessed++
-				}
-			}
-			return nil
-		}, &datastore.TransactionOptions{XG: false}); err != nil {
-			return err
-		}
-	}
+	fixTimestampsFunc.Call(ctx, dryRun, 0, "")
 
 	return nil
 }
