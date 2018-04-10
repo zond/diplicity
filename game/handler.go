@@ -518,12 +518,14 @@ func fixTimestamps(ctx context.Context, dryRun bool, counter int, cursorString s
 		counter++
 	}
 
-	if err != datastore.Done {
+	if err == nil {
 		cursor, err := iterator.Cursor()
 		if err != nil {
 			return err
 		}
 		fixTimestampsFunc.Call(ctx, dryRun, counter, cursor.String())
+	} else if err != datastore.Done {
+		return err
 	}
 
 	return nil
