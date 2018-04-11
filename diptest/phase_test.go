@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kr/pretty"
 	"github.com/zond/diplicity/game"
 )
 
@@ -81,6 +82,9 @@ func TestStartGame(t *testing.T) {
 
 func TestDIASEnding(t *testing.T) {
 	withStartedGame(func() {
+		WaitForEmptyQueue("game-updateUserStats")
+		statsPreviously := startedGameEnvs[0].GetRoute("UserStats.Load").RouteParams("user_id", startedGameEnvs[0].GetUID()).Success().
+			GetValue("Properties").(map[string]interface{})
 		t.Run("PreparePhaseStatesWithWantsDIAS", func(t *testing.T) {
 			for i, nat := range startedGameNats {
 				order := []string{"", "Move", ""}
@@ -140,6 +144,93 @@ func TestDIASEnding(t *testing.T) {
 				res.Find(startedGameNats[i], []string{"Properties", "DIASMembers"}, nil)
 				res.Find(startedGameEnvs[i].GetUID(), []string{"Properties", "DIASUsers"}, nil)
 			}
+		})
+
+		t.Run("VerifyStatsChanged", func(t *testing.T) {
+			WaitForEmptyQueue("game-updateUserStats")
+			statsAfter := startedGameEnvs[0].GetRoute("UserStats.Load").RouteParams("user_id", startedGameEnvs[0].GetUID()).Success().
+				GetValue("Properties").(map[string]interface{})
+			privateStatsPrev := statsPreviously["PrivateStats"]
+			privateStatsAfter := statsAfter["PrivateStats"]
+			delete(statsPreviously, "PrivateStats")
+			delete(statsAfter, "PrivateStats")
+			delete(statsPreviously, "User")
+			delete(statsAfter, "User")
+			if diff := pretty.Diff(privateStatsPrev, privateStatsAfter); len(diff) > 0 {
+				panic(fmt.Errorf("Private stats changed after resolution: %+v", diff))
+			}
+			if diff := pretty.Diff(statsPreviously, statsAfter); len(diff) == 0 {
+				panic(fmt.Errorf("Public stats didn't change after resolution"))
+			}
+
+		})
+
+		t.Run("TestPrivateGames", func(t *testing.T) {
+			gameDesc := String("test-game")
+
+			startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+				Follow("create-game", "Links").Body(map[string]interface{}{
+				"Variant":            "Classical",
+				"Desc":               gameDesc,
+				"Private":            true,
+				"PhaseLengthMinutes": 60,
+			}).Success()
+			gameID := ""
+			t.Run("TestVisibility", func(t *testing.T) {
+				gameID = startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+					Follow("my-staging-games", "Links").Success().
+					Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+					GetValue("Properties", "ID").(string)
+
+				startedGameEnvs[1].GetRoute(game.IndexRoute).Success().
+					Follow("open-games", "Links").Success().
+					AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			})
+			t.Run("TestStatsVisibility", func(t *testing.T) {
+				WaitForEmptyQueue("game-updateUserStats")
+				statsPreviously := startedGameEnvs[0].GetRoute("UserStats.Load").RouteParams("user_id", startedGameEnvs[0].GetUID()).Success().
+					GetValue("Properties").(map[string]interface{})
+				for _, env := range startedGameEnvs[1:] {
+					env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+						Follow("join", "Links").Body(map[string]interface{}{}).Success()
+				}
+				startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+					Follow("my-started-games", "Links").Success().
+					Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+					Follow("phases", "Links").Success().
+					Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+				for _, env := range startedGameEnvs {
+					p := env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+						Follow("phases", "Links").Success().
+						Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+
+					p.Follow("phase-states", "Links").Success().
+						Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+						Follow("update", "Links").Body(map[string]interface{}{
+						"ReadyToResolve": true,
+						"WantsDIAS":      true,
+					}).Success()
+				}
+				g := startedGameEnvs[0].GetRoute(game.ListMyFinishedGamesRoute).Success().
+					Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+				g.Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+					AssertEq(true, "Resolved")
+				WaitForEmptyQueue("game-updateUserStats")
+				statsAfter := startedGameEnvs[0].GetRoute("UserStats.Load").RouteParams("user_id", startedGameEnvs[0].GetUID()).Success().
+					GetValue("Properties").(map[string]interface{})
+				privateStatsPrev := statsPreviously["PrivateStats"]
+				privateStatsAfter := statsAfter["PrivateStats"]
+				delete(statsPreviously, "PrivateStats")
+				delete(statsAfter, "PrivateStats")
+				delete(statsPreviously, "User")
+				delete(statsAfter, "User")
+				if diff := pretty.Diff(statsPreviously, statsAfter); len(diff) > 0 {
+					panic(fmt.Errorf("Public stats changed after resolution: %+v", diff))
+				}
+				if diff := pretty.Diff(privateStatsPrev, privateStatsAfter); len(diff) == 0 {
+					panic(fmt.Errorf("Private stats didn't change after resolution"))
+				}
+			})
 		})
 
 	})
