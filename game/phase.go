@@ -706,6 +706,7 @@ func (p *PhaseResolver) Act() error {
 			Scores:            scores,
 			AllUsers:          oldPhaseResult.AllUsers,
 			Rated:             false,
+			Private:           p.Game.Private,
 			CreatedAt:         time.Now(),
 		}
 		gameResult.AssignScores()

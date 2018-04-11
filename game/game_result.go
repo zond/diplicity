@@ -38,6 +38,7 @@ type GameResult struct {
 	AllUsers          []string
 	Scores            []GameScore
 	Rated             bool
+	Private           bool
 	CreatedAt         time.Time
 }
 

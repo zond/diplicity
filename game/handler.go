@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -19,12 +20,12 @@ import (
 )
 
 var (
-	router          = mux.NewRouter()
-	resaveGamesFunc *delay.Function
+	router     = mux.NewRouter()
+	resaveFunc *delay.Function
 )
 
 func init() {
-	resaveGamesFunc = delay.Func("resaveGamesFunc", resaveGames)
+	resaveFunc = delay.Func("resaveFunc", resave)
 }
 
 const (
@@ -65,7 +66,7 @@ const (
 	RenderPhaseMapRoute         = "RenderPhaseMap"
 	ReRateRoute                 = "ReRate"
 	GlobalStatsRoute            = "GlobalStats"
-	ResaveGamesRoute            = "ResaveGames"
+	ResaveRoute                 = "Resave"
 )
 
 type userStatsHandler struct {
@@ -446,12 +447,22 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func resaveGames(ctx context.Context, counter int, cursorString string) error {
-	log.Infof(ctx, "resaveGames(..., %v, %q)", counter, cursorString)
+func resave(ctx context.Context, kind string, counter int, cursorString string) error {
+	log.Infof(ctx, "resave(..., %q, %v, %q)", kind, counter, cursorString)
+
+	var containerGenerator func() interface{}
+	switch kind {
+	case gameKind:
+		containerGenerator = func() interface{} { return &Game{} }
+	case gameResultKind:
+		containerGenerator = func() interface{} { return &GameResult{} }
+	default:
+		return fmt.Errorf("Kind %q not supported by resave", kind)
+	}
 
 	batchSize := 20
 
-	q := datastore.NewQuery(gameKind).KeysOnly()
+	q := datastore.NewQuery(kind).KeysOnly()
 	if cursorString != "" {
 		cursor, err := datastore.DecodeCursor(cursorString)
 		if err != nil {
@@ -462,14 +473,14 @@ func resaveGames(ctx context.Context, counter int, cursorString string) error {
 	iterator := q.Run(ctx)
 
 	processed := 0
-	gameID, err := iterator.Next(nil)
-	for ; err == nil && processed < batchSize; gameID, err = iterator.Next(nil) {
+	containerID, err := iterator.Next(nil)
+	for ; err == nil && processed < batchSize; containerID, err = iterator.Next(nil) {
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-			game := &Game{}
-			if err := datastore.Get(ctx, gameID, game); err != nil {
+			container := containerGenerator()
+			if err := datastore.Get(ctx, containerID, container); err != nil {
 				return err
 			}
-			if _, err := datastore.Put(ctx, gameID, game); err != nil {
+			if _, err := datastore.Put(ctx, containerID, container); err != nil {
 				return err
 			}
 			return nil
@@ -485,7 +496,7 @@ func resaveGames(ctx context.Context, counter int, cursorString string) error {
 		if err != nil {
 			return err
 		}
-		resaveGamesFunc.Call(ctx, counter, cursor.String())
+		resaveFunc.Call(ctx, kind, counter, cursor.String())
 	} else if err != datastore.Done {
 		return err
 	}
@@ -493,7 +504,7 @@ func resaveGames(ctx context.Context, counter int, cursorString string) error {
 	return nil
 }
 
-func handleResaveGames(w ResponseWriter, r Request) error {
+func handleResave(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*auth.User)
@@ -510,14 +521,14 @@ func handleResaveGames(w ResponseWriter, r Request) error {
 		return HTTPErr{"unauthorized", 403}
 	}
 
-	resaveGamesFunc.Call(ctx, 0, "")
+	resaveFunc.Call(ctx, r.Req().URL.Query().Get("kind"), 0, "")
 
 	return nil
 }
 
 func SetupRouter(r *mux.Router) {
 	router = r
-	Handle(r, "/_re-save-games", []string{"GET"}, ResaveGamesRoute, handleResaveGames)
+	Handle(r, "/_re-save", []string{"GET"}, ResaveRoute, handleResave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
