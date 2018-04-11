@@ -521,12 +521,14 @@ func handleResave(w ResponseWriter, r Request) error {
 		return HTTPErr{"unauthorized", 403}
 	}
 
+	kind := r.Req().URL.Query().Get("kind")
+
 	_, found := containerGenerators[kind]
 	if !found {
 		return fmt.Errorf("Kind %q not supported by resave", kind)
 	}
 
-	resaveFunc.Call(ctx, r.Req().URL.Query().Get("kind"), 0, "")
+	resaveFunc.Call(ctx, kind, 0, "")
 
 	return nil
 }
