@@ -3,6 +3,10 @@
 
 A dippy API service based on [App Engine](https://cloud.google.com/appengine) and [godip](https://github.com/zond/godip).
 
+## Forum
+
+Discussions about this project happen at [https://groups.google.com/forum/#!forum/diplicity-dev](https://groups.google.com/forum/#!forum/diplicity-dev).
+
 ## Public host
 
 A regularly updated service running this code is available at [https://diplicity-engine.appspot.com/](https://diplicity-engine.appspot.com/).
