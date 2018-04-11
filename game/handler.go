@@ -20,8 +20,13 @@ import (
 )
 
 var (
-	router     = mux.NewRouter()
-	resaveFunc *delay.Function
+	router              = mux.NewRouter()
+	resaveFunc          *delay.Function
+	containerGenerators = map[string]func() interface{}{
+		gameKind:        func() interface{} { return &Game{} },
+		gameResultKind:  func() interface{} { return &GameResult{} },
+		phaseResultKind: func() interface{} { return &PhaseResult{} },
+	}
 )
 
 func init() {
@@ -450,13 +455,8 @@ func handleConfigure(w ResponseWriter, r Request) error {
 func resave(ctx context.Context, kind string, counter int, cursorString string) error {
 	log.Infof(ctx, "resave(..., %q, %v, %q)", kind, counter, cursorString)
 
-	var containerGenerator func() interface{}
-	switch kind {
-	case gameKind:
-		containerGenerator = func() interface{} { return &Game{} }
-	case gameResultKind:
-		containerGenerator = func() interface{} { return &GameResult{} }
-	default:
+	containerGenerator, found := containerGenerators[kind]
+	if !found {
 		return fmt.Errorf("Kind %q not supported by resave", kind)
 	}
 
@@ -519,6 +519,11 @@ func handleResave(w ResponseWriter, r Request) error {
 
 	if !superusers.Includes(user.Id) {
 		return HTTPErr{"unauthorized", 403}
+	}
+
+	_, found := containerGenerators[kind]
+	if !found {
+		return fmt.Errorf("Kind %q not supported by resave", kind)
 	}
 
 	resaveFunc.Call(ctx, r.Req().URL.Query().Get("kind"), 0, "")
