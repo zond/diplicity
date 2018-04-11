@@ -215,7 +215,7 @@ func updateGlickos(ctx context.Context) error {
 	log.Infof(ctx, "updateGlickos(...)")
 
 	unratedGameResults := GameResults{}
-	_, err := datastore.NewQuery(gameResultKind).Filter("Rated=", false).Order("CreatedAt").Limit(2).GetAll(ctx, &unratedGameResults)
+	_, err := datastore.NewQuery(gameResultKind).Filter("Rated=", false).Filter("Private=", false).Order("CreatedAt").Limit(2).GetAll(ctx, &unratedGameResults)
 	if err != nil {
 		log.Errorf(ctx, "Unable to load unrated game results: %v; hope datastore gets fixed", err)
 		return err
@@ -244,7 +244,7 @@ func updateGlickos(ctx context.Context) error {
 func reRateGlickos(ctx context.Context, cursor string) error {
 	log.Infof(ctx, "reRateGlickos(..., %q)", cursor)
 
-	query := datastore.NewQuery(gameResultKind).Order("CreatedAt")
+	query := datastore.NewQuery(gameResultKind).Filter("Private=", false).Order("CreatedAt")
 	if cursor != "" {
 		decoded, err := datastore.DecodeCursor(cursor)
 		if err != nil {

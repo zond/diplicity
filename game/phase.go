@@ -777,9 +777,11 @@ func (p *PhaseResolver) Act() error {
 	if p.Game.Finished {
 		// Enqueue updating of ratings, which will in turn update user stats.
 
-		if err := UpdateGlickosASAP(p.Context); err != nil {
-			log.Errorf(p.Context, "Unable to enqueue updating of ratings: %v; hope datastore gets fixed", err)
-			return err
+		if !p.Game.Private {
+			if err := UpdateGlickosASAP(p.Context); err != nil {
+				log.Errorf(p.Context, "Unable to enqueue updating of ratings: %v; hope datastore gets fixed", err)
+				return err
+			}
 		}
 
 	} else {

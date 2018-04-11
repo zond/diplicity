@@ -56,6 +56,7 @@ indexes:
 
 - kind: GameResult
   properties:
+  - name: Private
   - name: Rated
   - name: CreatedAt
 
