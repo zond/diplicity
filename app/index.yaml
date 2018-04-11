@@ -13,15 +13,10 @@ indexes:
 - kind: Game
   properties:
   - name: Closed
+  - name: Private
   - name: NMembers
     direction: desc
   - name: CreatedAt
-
-- kind: Game
-  properties:
-  - name: Finished
-  - name: FinishedAt
-    direction: desc
 
 - kind: Game
   properties:
@@ -40,6 +35,14 @@ indexes:
 - kind: Game
   properties:
   - name: Finished
+  - name: Private
+  - name: FinishedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Private
   - name: Started
   - name: StartedAt
 

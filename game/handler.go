@@ -144,16 +144,16 @@ type gamesHandler struct {
 }
 
 type gamesReq struct {
-	ctx           context.Context
-	w             ResponseWriter
-	r             Request
-	user          *auth.User
-	userStats     *UserStats
-	iter          *datastore.Iterator
-	limit         int
-	h             *gamesHandler
-	detailFilters []func(g *Game) bool
-	viewerFilter  bool
+	ctx               context.Context
+	w                 ResponseWriter
+	r                 Request
+	user              *auth.User
+	userStats         *UserStats
+	iter              *datastore.Iterator
+	limit             int
+	h                 *gamesHandler
+	detailFilters     []func(g *Game) bool
+	viewerStatsFilter bool
 }
 
 func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
@@ -197,13 +197,13 @@ func (req *gamesReq) intervalFilter(fieldName, paramName string) func(*Game) boo
 	}
 }
 
-func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, viewerFilter bool) (*gamesReq, error) {
+func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, viewerStatsFilter bool) (*gamesReq, error) {
 	req := &gamesReq{
-		ctx:          appengine.NewContext(r.Req()),
-		w:            w,
-		r:            r,
-		h:            h,
-		viewerFilter: viewerFilter,
+		ctx:               appengine.NewContext(r.Req()),
+		w:                 w,
+		r:                 r,
+		h:                 h,
+		viewerStatsFilter: viewerStatsFilter,
 	}
 
 	user, ok := r.Values()["user"].(*auth.User)
@@ -229,7 +229,9 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 	req.limit = int(limit)
 
 	q := h.query
-	if userId != nil {
+	if userId == nil {
+		q = q.Filter("Private=", false)
+	} else {
 		q = q.Filter("Members.User.Id=", *userId)
 	}
 
@@ -302,7 +304,7 @@ func (req *gamesReq) handle() error {
 		var nextBatch Games
 		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
 		nextBatch.RemoveCustomFiltered(req.detailFilters)
-		if req.viewerFilter {
+		if req.viewerStatsFilter {
 			nextBatch.RemoveFiltered(req.userStats)
 			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
 				return filtErr
@@ -320,9 +322,9 @@ func (req *gamesReq) handle() error {
 	return nil
 }
 
-func (h *gamesHandler) handlePublic(viewerFilter bool) func(w ResponseWriter, r Request) error {
+func (h *gamesHandler) handlePublic(viewerStatsFilter bool) func(w ResponseWriter, r Request) error {
 	return func(w ResponseWriter, r Request) error {
-		req, err := h.prepare(w, r, nil, viewerFilter)
+		req, err := h.prepare(w, r, nil, viewerStatsFilter)
 		if err != nil {
 			return err
 		}

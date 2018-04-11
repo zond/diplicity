@@ -84,8 +84,12 @@ func updateUserStat(ctx context.Context, userId string) error {
 	userStats := &UserStats{
 		UserId: userId,
 	}
-	if err := userStats.Recalculate(ctx); err != nil {
-		log.Errorf(ctx, "Unable to recalculate user stats %v: %v; fix UserStats#Recalculate", PP(userStats), err)
+	if err := userStats.UserStatsNumbers.Recalculate(ctx, false, userId); err != nil {
+		log.Errorf(ctx, "Unable to recalculate public user stats %v: %v; fix UserStatsNumbers#Recalculate", PP(userStats), err)
+		return err
+	}
+	if err := userStats.PrivateStats.Recalculate(ctx, true, userId); err != nil {
+		log.Errorf(ctx, "Unable to recalculate private user stats %v: %v; fix UserStatsNumbers#Recalculate", PP(userStats), err)
 		return err
 	}
 	latestGlicko, err := GetGlicko(ctx, userId)
@@ -252,44 +256,44 @@ func (u *UserStats) Item(r Request) *Item {
 		}))
 }
 
-func (u *UserStats) Recalculate(ctx context.Context) error {
+func (u *UserStatsNumbers) Recalculate(ctx context.Context, private bool, userId string) error {
 	var err error
-	if u.StartedGames, err = datastore.NewQuery(gameKind).Filter("Members.User.Id=", u.UserId).Filter("Started=", true).Count(ctx); err != nil {
+	if u.StartedGames, err = datastore.NewQuery(gameKind).Filter("Members.User.Id=", userId).Filter("Started=", true).Filter("Private=", private).Count(ctx); err != nil {
 		return err
 	}
-	if u.FinishedGames, err = datastore.NewQuery(gameKind).Filter("Members.User.Id=", u.UserId).Filter("Finished=", true).Count(ctx); err != nil {
-		return err
-	}
-
-	if u.SoloGames, err = datastore.NewQuery(gameResultKind).Filter("SoloWinnerUser=", u.UserId).Count(ctx); err != nil {
-		return err
-	}
-	if u.DIASGames, err = datastore.NewQuery(gameResultKind).Filter("DIASUsers=", u.UserId).Count(ctx); err != nil {
-		return err
-	}
-	if u.EliminatedGames, err = datastore.NewQuery(gameResultKind).Filter("EliminatedUsers=", u.UserId).Count(ctx); err != nil {
-		return err
-	}
-	if u.DroppedGames, err = datastore.NewQuery(gameResultKind).Filter("NMRUsers=", u.UserId).Count(ctx); err != nil {
+	if u.FinishedGames, err = datastore.NewQuery(gameKind).Filter("Members.User.Id=", userId).Filter("Finished=", true).Filter("Private=", private).Count(ctx); err != nil {
 		return err
 	}
 
-	if u.NMRPhases, err = datastore.NewQuery(phaseResultKind).Filter("NMRUsers=", u.UserId).Count(ctx); err != nil {
+	if u.SoloGames, err = datastore.NewQuery(gameResultKind).Filter("SoloWinnerUser=", userId).Filter("Private=", private).Count(ctx); err != nil {
 		return err
 	}
-	if u.ActivePhases, err = datastore.NewQuery(phaseResultKind).Filter("ActiveUsers=", u.UserId).Count(ctx); err != nil {
+	if u.DIASGames, err = datastore.NewQuery(gameResultKind).Filter("DIASUsers=", userId).Filter("Private=", private).Count(ctx); err != nil {
 		return err
 	}
-	if u.ReadyPhases, err = datastore.NewQuery(phaseResultKind).Filter("ReadyUsers=", u.UserId).Count(ctx); err != nil {
+	if u.EliminatedGames, err = datastore.NewQuery(gameResultKind).Filter("EliminatedUsers=", userId).Filter("Private=", private).Count(ctx); err != nil {
+		return err
+	}
+	if u.DroppedGames, err = datastore.NewQuery(gameResultKind).Filter("NMRUsers=", userId).Filter("Private=", private).Count(ctx); err != nil {
+		return err
+	}
+
+	if u.NMRPhases, err = datastore.NewQuery(phaseResultKind).Filter("NMRUsers=", userId).Filter("Private=", private).Count(ctx); err != nil {
+		return err
+	}
+	if u.ActivePhases, err = datastore.NewQuery(phaseResultKind).Filter("ActiveUsers=", userId).Filter("Private=", private).Count(ctx); err != nil {
+		return err
+	}
+	if u.ReadyPhases, err = datastore.NewQuery(phaseResultKind).Filter("ReadyUsers=", userId).Filter("Private=", private).Count(ctx); err != nil {
 		return err
 	}
 	u.Reliability = float64(u.ReadyPhases+u.ActivePhases) / float64(u.NMRPhases+1)
 	u.Quickness = float64(u.ReadyPhases) / float64(u.ActivePhases+u.NMRPhases+1)
 
-	if u.OwnedBans, err = datastore.NewQuery(banKind).Filter("OwnerIds=", u.UserId).Count(ctx); err != nil {
+	if u.OwnedBans, err = datastore.NewQuery(banKind).Filter("OwnerIds=", userId).Count(ctx); err != nil {
 		return err
 	}
-	if u.SharedBans, err = datastore.NewQuery(banKind).Filter("UserIds=", u.UserId).Count(ctx); err != nil {
+	if u.SharedBans, err = datastore.NewQuery(banKind).Filter("UserIds=", userId).Count(ctx); err != nil {
 		return err
 	}
 	u.Hater = float64(u.OwnedBans) / float64(u.StartedGames+1)
