@@ -8,6 +8,26 @@ import (
 	"github.com/zond/diplicity/game"
 )
 
+func TestPrivateGameVisibility(t *testing.T) {
+	gameDesc := String("test-game")
+	env := NewEnv().SetUID(String("fake"))
+	env.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").Body(map[string]interface{}{
+		"Variant":            "Classical",
+		"Desc":               gameDesc,
+		"Private":            true,
+		"PhaseLengthMinutes": 60,
+	}).Success()
+	env.GetRoute(game.IndexRoute).Success().
+		Follow("my-staging-games", "Links").Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	env2 := NewEnv().SetUID(String("fake2"))
+	env2.GetRoute(game.IndexRoute).Success().
+		Follow("open-games", "Links").Success().
+		AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+}
+
 func TestCreateLeaveGame(t *testing.T) {
 	gameDesc := String("test-game")
 	env := NewEnv().SetUID(String("fake"))
@@ -41,14 +61,15 @@ func TestGameListFilters(t *testing.T) {
 	env := NewEnv().SetUID(String("fake"))
 	env.GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").Body(map[string]interface{}{
-		"Variant":        "Classical",
-		"Desc":           gameDesc,
-		"MaxHated":       10,
-		"MaxHater":       10,
-		"MinReliability": 10,
-		"MinQuickness":   10,
-		"MinRating":      10,
-		"MaxRating":      100,
+		"Variant":            "Classical",
+		"Desc":               gameDesc,
+		"MaxHated":           10,
+		"MaxHater":           10,
+		"MinReliability":     10,
+		"MinQuickness":       10,
+		"MinRating":          10,
+		"MaxRating":          100,
+		"PhaseLengthMinutes": 60,
 	}).Failure()
 	env.PutRoute(game.DevUserStatsUpdateRoute).RouteParams("user_id", env.GetUID()).Body(map[string]interface{}{
 		"UserId":      env.GetUID(),
