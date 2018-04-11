@@ -357,6 +357,7 @@ type Game struct {
 	MaxRating          float64       `methods:"POST"`
 	MinReliability     float64       `methods:"POST"`
 	MinQuickness       float64       `methods:"POST"`
+	Private            bool          `methods:"POST"`
 
 	NMembers int
 	Members  []Member

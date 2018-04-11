@@ -161,9 +161,7 @@ func (u UserStatsSlice) Item(r Request, cursor *datastore.Cursor, limit int64, n
 	return statsItem
 }
 
-type UserStats struct {
-	UserId string
-
+type UserStatsNumbers struct {
 	StartedGames  int
 	FinishedGames int
 
@@ -182,6 +180,14 @@ type UserStats struct {
 	SharedBans int
 	Hated      float64
 	Hater      float64
+}
+
+type UserStats struct {
+	UserId string
+
+	UserStatsNumbers
+
+	PrivateStats UserStatsNumbers
 
 	Glicko Glicko
 	User   auth.User

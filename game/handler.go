@@ -2,17 +2,13 @@ package game
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/diplicity/variants"
-	"github.com/zond/godip"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
@@ -23,12 +19,12 @@ import (
 )
 
 var (
-	router            = mux.NewRouter()
-	fixTimestampsFunc *delay.Function
+	router          = mux.NewRouter()
+	resaveGamesFunc *delay.Function
 )
 
 func init() {
-	fixTimestampsFunc = delay.Func("fixTimestampsFunc", fixTimestamps)
+	resaveGamesFunc = delay.Func("resaveGamesFunc", resaveGames)
 }
 
 const (
@@ -69,7 +65,7 @@ const (
 	RenderPhaseMapRoute         = "RenderPhaseMap"
 	ReRateRoute                 = "ReRate"
 	GlobalStatsRoute            = "GlobalStats"
-	FixNewTimestampsRoute       = "FixNewTimestamps"
+	ResaveGamesRoute            = "ResaveGames"
 )
 
 type userStatsHandler struct {
@@ -450,11 +446,10 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func fixTimestamps(ctx context.Context, dryRun bool, counter int, cursorString string) error {
-	log.Infof(ctx, "fixTimestamps(..., %v, %v, %q)", dryRun, counter, cursorString)
+func resaveGames(ctx context.Context, counter int, cursorString string) error {
+	log.Infof(ctx, "resaveGames(..., %v, %q)", counter, cursorString)
 
 	batchSize := 20
-	dryRunSize := 10
 
 	q := datastore.NewQuery(gameKind).KeysOnly()
 	if cursorString != "" {
@@ -469,78 +464,13 @@ func fixTimestamps(ctx context.Context, dryRun bool, counter int, cursorString s
 	processed := 0
 	gameID, err := iterator.Next(nil)
 	for ; err == nil && processed < batchSize; gameID, err = iterator.Next(nil) {
-		if dryRun && counter > dryRunSize {
-			log.Infof(ctx, "Breaking due to dryRun and counter > %v", dryRunSize)
-			return nil
-		}
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			game := &Game{}
 			if err := datastore.Get(ctx, gameID, game); err != nil {
 				return err
 			}
-			log.Infof(ctx, "Looking at https://diplicity-engine.appspot.com/Game/%v, %v, %v, processed %v", gameID.Encode(), game.CreatedAt, counter, processed)
-			if game.Started {
-				phases := Phases{}
-				phaseIDs, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
-				if err != nil {
-					return nil
-				}
-				if len(phases) > 0 {
-					sort.Sort(phases)
-					toUpdate := map[*datastore.Key]*Phase{}
-					for i := range phases {
-						phase := &phases[i]
-						if phase.PhaseOrdinal != int64(i+1) {
-							return fmt.Errorf("WTF, the phases aren't sorted properly? Phase %v is %+v", i, phase)
-						}
-						if i == 0 {
-							newCreatedAt := phase.DeadlineAt.Add(-time.Minute * game.PhaseLengthMinutes)
-							if !phase.CreatedAt.Equal(newCreatedAt) {
-								phase.CreatedAt = newCreatedAt
-								toUpdate[phaseIDs[i]] = phase
-								log.Infof(ctx, "Updating %v %v, %v to have normal length since it is the first phase", phase.Season, phase.Year, phase.Type)
-							}
-						} else {
-							interval := phase.DeadlineAt.Sub(phases[i-1].DeadlineAt)
-							gotOrders := false
-							for _, res := range phase.Resolutions {
-								if res.Resolution != "ErrForcedDisband" {
-									gotOrders = true
-									break
-								}
-							}
-							if interval < 0 || (interval < 5*time.Minute && !gotOrders && (phase.Type == godip.Retreat || phase.Type == godip.Adjustment)) {
-								if !phase.CreatedAt.Equal(phase.DeadlineAt) {
-									phase.CreatedAt = phase.DeadlineAt
-									toUpdate[phaseIDs[i]] = phase
-									log.Infof(ctx, "Updating %v %v, %v to have zero length since it has a deadline %v after previous phase and zero resolutions", phase.Season, phase.Year, phase.Type, interval)
-								}
-							} else {
-								newCreatedAt := phase.DeadlineAt.Add(-time.Minute * game.PhaseLengthMinutes)
-								if !phase.CreatedAt.Equal(newCreatedAt) {
-									phase.CreatedAt = newCreatedAt
-									log.Infof(ctx, "Updating %v %v, %v to have normal length since had resolutions, or a deadline later than previous phase", phase.Season, phase.Year, phase.Type)
-								}
-							}
-							if phases[i-1].ResolvedAt != phase.CreatedAt {
-								phases[i-1].ResolvedAt = phase.CreatedAt
-								toUpdate[phaseIDs[i-1]] = &phases[i-1]
-								log.Infof(ctx, "Updating %v %v, %v to have resolved at %v", phases[i-1].Season, phases[i-1].Year, phases[i-1].Type, phase.CreatedAt)
-							}
-						}
-					}
-					if !dryRun && len(toUpdate) > 0 {
-						keys := make([]*datastore.Key, 0, len(toUpdate))
-						values := make([]interface{}, 0, len(toUpdate))
-						for k, v := range toUpdate {
-							keys = append(keys, k)
-							values = append(values, v)
-						}
-						if _, err := datastore.PutMulti(ctx, keys, values); err != nil {
-							return err
-						}
-					}
-				}
+			if _, err := datastore.Put(ctx, gameID, game); err != nil {
+				return err
 			}
 			return nil
 		}, &datastore.TransactionOptions{XG: false}); err != nil {
@@ -555,7 +485,7 @@ func fixTimestamps(ctx context.Context, dryRun bool, counter int, cursorString s
 		if err != nil {
 			return err
 		}
-		fixTimestampsFunc.Call(ctx, dryRun, counter, cursor.String())
+		resaveGamesFunc.Call(ctx, counter, cursor.String())
 	} else if err != datastore.Done {
 		return err
 	}
@@ -563,9 +493,7 @@ func fixTimestamps(ctx context.Context, dryRun bool, counter int, cursorString s
 	return nil
 }
 
-func handleFixNewTimestamps(w ResponseWriter, r Request) error {
-	dryRun := r.Req().URL.Query().Get("dry-run") != "false"
-
+func handleResaveGames(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*auth.User)
@@ -582,14 +510,14 @@ func handleFixNewTimestamps(w ResponseWriter, r Request) error {
 		return HTTPErr{"unauthorized", 403}
 	}
 
-	fixTimestampsFunc.Call(ctx, dryRun, 0, "")
+	resaveGamesFunc.Call(ctx, 0, "")
 
 	return nil
 }
 
 func SetupRouter(r *mux.Router) {
 	router = r
-	Handle(r, "/_fix_new_timestamps", []string{"GET"}, FixNewTimestampsRoute, handleFixNewTimestamps)
+	Handle(r, "/_re-save-games", []string{"GET"}, ResaveGamesRoute, handleResaveGames)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
