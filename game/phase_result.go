@@ -23,6 +23,7 @@ type PhaseResult struct {
 	ActiveUsers  []string
 	ReadyUsers   []string
 	AllUsers     []string
+	Private      bool
 }
 
 var PhaseResultResource = &Resource{

@@ -520,6 +520,7 @@ func (p *PhaseResolver) Act() error {
 	oldPhaseResult := &PhaseResult{        // A result object for the old phase to simplify collecting user scoped stats.
 		GameID:       p.Phase.GameID,
 		PhaseOrdinal: p.Phase.PhaseOrdinal,
+		Private:      p.Game.Private,
 	}
 
 	for i := range p.Game.Members {
