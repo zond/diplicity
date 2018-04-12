@@ -2,12 +2,43 @@ package diptest
 
 import (
 	"net/url"
+	"sort"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/zond/diplicity/game"
 )
+
+func TestGameSorting(t *testing.T) {
+	g := game.Games{
+		{
+			Desc:      "a",
+			NMembers:  4,
+			CreatedAt: time.Now().Add(-time.Minute),
+		},
+		{
+			Desc:      "b",
+			NMembers:  4,
+			CreatedAt: time.Now().Add(-time.Hour),
+		},
+		{
+			Desc:      "c",
+			NMembers:  5,
+			CreatedAt: time.Now(),
+		},
+	}
+	sort.Sort(g)
+	if g[0].Desc != "c" {
+		t.Errorf("got %q, wanted 'c'", g[0].Desc)
+	}
+	if g[1].Desc != "b" {
+		t.Errorf("got %q, wanted 'b'", g[1].Desc)
+	}
+	if g[2].Desc != "a" {
+		t.Errorf("got %q, wanted 'a'", g[2].Desc)
+	}
+}
 
 var (
 	uniqueMaxHated uint64 = uint64(time.Now().UnixNano() / 1000000000)

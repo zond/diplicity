@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -196,6 +197,24 @@ func (d *DelayFunc) EnqueueIn(ctx context.Context, taskDelay time.Duration, args
 }
 
 type Games []Game
+
+func (g Games) Len() int {
+	return len(g)
+}
+
+func (g Games) Less(i, j int) bool {
+	if g[i].NMembers > g[j].NMembers {
+		return true
+	}
+	if g[i].CreatedAt.Before(g[j].CreatedAt) {
+		return true
+	}
+	return false
+}
+
+func (g Games) Swap(i, j int) {
+	g[i], g[j] = g[j], g[i]
+}
 
 func (g *Games) RemoveCustomFiltered(filters []func(g *Game) bool) {
 	newGames := make(Games, 0, len(*g))
@@ -551,9 +570,18 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 	games := Games{}
 	gameIDs, err := datastore.NewQuery(gameKind).
 		Filter("Started=", false).
+		Filter("Closed=", false).
+		Filter("Finished=", false).
 		Filter("Private=", false).
-		Order("-NMembers").
-		Order("CreatedAt").
+		Filter("NoMerge=", false).
+		Filter("Variant=", game.Variant).
+		Filter("PhaseLengthMinutes=", game.PhaseLengthMinutes).
+		Filter("MaxHated=", game.MaxHated).
+		Filter("MaxHater=", game.MaxHater).
+		Filter("MinRating=", game.MinRating).
+		Filter("MaxRating=", game.MaxRating).
+		Filter("MinReliability=", game.MinReliability).
+		Filter("MinQuickness=", game.MinQuickness).
 		GetAll(ctx, &games)
 	if err != nil {
 		return nil, err
@@ -561,6 +589,7 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 	for idx, id := range gameIDs {
 		games[idx].ID = id
 	}
+	sort.Sort(games)
 
 	games.RemoveBanned(ctx, user.Id)
 
