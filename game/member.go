@@ -154,36 +154,14 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 	return deleteMemberHelper(ctx, gameID, user.Id)
 }
 
-func createMember(w ResponseWriter, r Request) (*Member, error) {
-	ctx := appengine.NewContext(r.Req())
-
-	user, ok := r.Values()["user"].(*auth.User)
-	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
-	}
-
-	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
-	if err != nil {
-		return nil, err
-	}
-
-	game := &Game{}
-	if err := datastore.Get(ctx, gameID, game); err != nil {
-		return nil, err
-	}
-	filterList := Games{*game}
-	if _, err := filterList.RemoveBanned(ctx, user.Id); err != nil {
-		return nil, err
-	}
-	if len(filterList) == 0 {
-		return nil, HTTPErr{"banned from this game", 403}
-	}
-
-	member := &Member{}
-	if err := Copy(member, r, "POST"); err != nil {
-		return nil, err
-	}
-
+func createMemberHelper(
+	ctx context.Context,
+	r Request,
+	gameID *datastore.Key,
+	game *Game,
+	user *auth.User,
+	member *Member,
+) (*Member, error) {
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
@@ -214,4 +192,37 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 	}
 
 	return member, nil
+}
+
+func createMember(w ResponseWriter, r Request) (*Member, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthenticated", 401}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return nil, err
+	}
+
+	game := &Game{}
+	if err := datastore.Get(ctx, gameID, game); err != nil {
+		return nil, err
+	}
+	filterList := Games{*game}
+	if _, err := filterList.RemoveBanned(ctx, user.Id); err != nil {
+		return nil, err
+	}
+	if len(filterList) == 0 {
+		return nil, HTTPErr{"banned from this game", 403}
+	}
+
+	member := &Member{}
+	if err := Copy(member, r, "POST"); err != nil {
+		return nil, err
+	}
+
+	return createMemberHelper(ctx, r, gameID, game, user, member)
 }
