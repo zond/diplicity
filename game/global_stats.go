@@ -88,6 +88,7 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 			"Variant":            newHist("Variant of active games"),
 			"CreatedAtDaysAgo":   newHist("Days ago active games were created"),
 			"StartedAtDaysAgo":   newHist("Days ago active games were started"),
+			"Private":            newHist("Distribution of private vs public games"),
 		},
 		ActiveGameMemberUserStatsHistograms: newUserStatsHistograms("members of active games"),
 		ActiveMemberUserStatsHistograms:     newUserStatsHistograms("active members of active games"),
@@ -114,6 +115,11 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 		bumpNamedHistogram("Variant", game.Variant, globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("CreatedAtDaysAgo", int(time.Now().Sub(game.CreatedAt)/(time.Hour*24)), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("StartedAtDaysAgo", int(time.Now().Sub(game.StartedAt)/(time.Hour*24)), globalStats.ActiveGameHistograms)
+		private := 0
+		if game.Private {
+			private = 1
+		}
+		bumpNamedHistogram("Private", private, globalStats.ActiveGameHistograms)
 		for _, member := range game.Members {
 			activeGameMemberUserIds[member.User.Id] = struct{}{}
 			if !member.NewestPhaseState.OnProbation && !member.NewestPhaseState.Eliminated {
