@@ -536,15 +536,13 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		if err := game.Save(ctx); err != nil {
 			return err
 		}
-		member := Member{
-			User: *user,
-		}
-		game.Members = []Member{member}
-		if err := game.Save(ctx); err != nil {
-			return err
-		}
-		game.Members[0].NewestPhaseState = PhaseState{
-			GameID: game.ID,
+		game.Members = []Member{
+			{
+				User: *user,
+				NewestPhaseState: PhaseState{
+					GameID: game.ID,
+				},
+			},
 		}
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
