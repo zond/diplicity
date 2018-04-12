@@ -75,6 +75,7 @@ func main() {
 				Follow("create-game", "Links").Body(map[string]interface{}{
 				"Desc":    *gameDesc,
 				"Variant": "Classical",
+				"NoMerge": true,
 			}).Success()
 			fmt.Println("Success")
 		},

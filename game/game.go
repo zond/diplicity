@@ -358,6 +358,7 @@ type Game struct {
 	MinReliability     float64       `methods:"POST"`
 	MinQuickness       float64       `methods:"POST"`
 	Private            bool          `methods:"POST"`
+	NoMerge            bool          `methods:"POST"`
 
 	NMembers int
 	Members  []Member
@@ -373,6 +374,54 @@ type Game struct {
 	StartedAgo  time.Duration `datastore:"-" ticker:"true"`
 	FinishedAt  time.Time
 	FinishedAgo time.Duration `datastore:"-" ticker:"true"`
+}
+
+func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
+	if g.NoMerge || o.NoMerge {
+		return false
+	}
+	if g.Started || o.Started {
+		return false
+	}
+	if g.Closed || o.Closed {
+		return false
+	}
+	if g.Finished || o.Finished {
+		return false
+	}
+	if g.Variant != o.Variant {
+		return false
+	}
+	if g.PhaseLengthMinutes != o.PhaseLengthMinutes {
+		return false
+	}
+	if g.MaxHated != o.MaxHated {
+		return false
+	}
+	if g.MaxHater != o.MaxHater {
+		return false
+	}
+	if g.MinRating != o.MinRating {
+		return false
+	}
+	if g.MaxRating != o.MaxRating {
+		return false
+	}
+	if g.MinReliability != o.MinReliability {
+		return false
+	}
+	if g.MinQuickness != o.MinQuickness {
+		return false
+	}
+	if g.NMembers+o.NMembers > len(variants.Variants[g.Variant].Nations) {
+		return false
+	}
+	for _, member := range o.Members {
+		if member.User.Id == avoid.Id {
+			return false
+		}
+	}
+	return true
 }
 
 func (g *Game) Refresh() {
@@ -498,6 +547,36 @@ func (g *Game) Save(ctx context.Context) error {
 	return err
 }
 
+func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, error) {
+	games := Games{}
+	gameIDs, err := datastore.NewQuery(gameKind).
+		Filter("Started=", false).
+		Filter("Private=", false).
+		Order("-NMembers").
+		Order("CreatedAt").
+		GetAll(ctx, &games)
+	if err != nil {
+		return nil, err
+	}
+	for idx, id := range gameIDs {
+		games[idx].ID = id
+	}
+
+	games.RemoveBanned(ctx, user.Id)
+
+	for _, otherGame := range games {
+		if game.canMergeInto(&otherGame, user) {
+			member := &Member{}
+			if joinedGame, _, err := createMemberHelper(ctx, r, otherGame.ID, user, member); err != nil {
+				return nil, err
+			} else {
+				return joinedGame, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
 func createGame(w ResponseWriter, r Request) (*Game, error) {
 	ctx := appengine.NewContext(r.Req())
 
@@ -521,6 +600,16 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		return nil, HTTPErr{"no games with more than 30 day deadlines allowed", 400}
 	}
 	game.CreatedAt = time.Now()
+
+	if !game.NoMerge {
+		mergedWith, err := merge(ctx, r, game, user)
+		if err != nil {
+			return nil, err
+		}
+		if mergedWith != nil {
+			return mergedWith, nil
+		}
+	}
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		userStats := &UserStats{}

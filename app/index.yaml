@@ -54,6 +54,14 @@ indexes:
     direction: desc
   - name: CreatedAt
 
+- kind: Game
+  properties:
+  - name: Private
+  - name: Started
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
 - kind: GameResult
   properties:
   - name: Private

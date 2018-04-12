@@ -26,6 +26,7 @@ func TestVariantVisibility(t *testing.T) {
 	e.GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").Body(map[string]interface{}{
 		"Variant":            youngstownredux.YoungstownReduxVariant.Name,
+		"NoMerge":            true,
 		"Desc":               gameDesc,
 		"MaxHated":           0,
 		"MaxHater":           0,

@@ -34,6 +34,7 @@ func withStartedGame(f func()) {
 		Follow("create-game", "Links").
 		Body(map[string]interface{}{
 			"Variant":            "Classical",
+			"NoMerge":            true,
 			"Desc":               gameDesc,
 			"PhaseLengthMinutes": 60 * 24,
 		}).Success().
@@ -171,6 +172,7 @@ func TestDIASEnding(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 				Follow("create-game", "Links").Body(map[string]interface{}{
 				"Variant":            "Classical",
+				"NoMerge":            true,
 				"Desc":               gameDesc,
 				"Private":            true,
 				"PhaseLengthMinutes": 60,
@@ -244,6 +246,7 @@ func TestTimeoutResolution(t *testing.T) {
 				Success().Follow("create-game", "Links").
 				Body(map[string]interface{}{
 					"Variant":            "Classical",
+					"NoMerge":            true,
 					"Desc":               gameDesc,
 					"PhaseLengthMinutes": 60 * 24,
 				}).Success()

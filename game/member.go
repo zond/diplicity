@@ -158,12 +158,12 @@ func createMemberHelper(
 	ctx context.Context,
 	r Request,
 	gameID *datastore.Key,
-	game *Game,
 	user *auth.User,
 	member *Member,
-) (*Member, error) {
+) (*Game, *Member, error) {
+	var game *Game
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		game := &Game{}
+		game = &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return HTTPErr{"non existing game", 412}
 		}
@@ -188,10 +188,10 @@ func createMemberHelper(
 		}
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return member, nil
+	return game, member, nil
 }
 
 func createMember(w ResponseWriter, r Request) (*Member, error) {
@@ -224,5 +224,10 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		return nil, err
 	}
 
-	return createMemberHelper(ctx, r, gameID, game, user, member)
+	_, member, err = createMemberHelper(ctx, r, gameID, user, member)
+	if err != nil {
+		return nil, err
+	}
+
+	return member, err
 }
