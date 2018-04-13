@@ -638,7 +638,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 		if mergedWith != nil {
 			w.WriteHeader(http.StatusTeapot)
-			return mergedWith, nil
+			return nil, nil
 		}
 	}
 

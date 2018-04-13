@@ -1,6 +1,7 @@
 package diptest
 
 import (
+	"net/http"
 	"net/url"
 	"sort"
 	"sync/atomic"
@@ -121,10 +122,31 @@ func TestGameMerging(t *testing.T) {
 				"Desc":               gameDesc5,
 				"MaxHated":           float64(maxHated),
 				"PhaseLengthMinutes": time.Duration(60),
-			}).Success().
-			AssertEq(gameDesc, "Properties", "Desc")
+			}).Status(http.StatusTeapot)
 		env4.GetRoute(game.ListMyStagingGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	})
+
+	t.Run("VerifyBannedGameNoMerge", func(t *testing.T) {
+		env5 := NewEnv().SetUID(String("fake"))
+		env5.GetRoute(game.IndexRoute).Success().
+			Follow("bans", "Links").Success().
+			Follow("create", "Links").Body(map[string]interface{}{
+			"UserIds": []string{env5.GetUID(), env.GetUID()},
+		}).Success()
+
+		gameDesc6 := String("test-game")
+		env5.GetRoute(game.IndexRoute).Success().
+			Follow("create-game", "Links").
+			Body(map[string]interface{}{
+				"Variant":            "Classical",
+				"Desc":               gameDesc6,
+				"MaxHated":           float64(maxHated),
+				"PhaseLengthMinutes": time.Duration(60),
+			}).Success().
+			AssertEq(gameDesc6, "Properties", "Desc")
+		env5.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc6, []string{"Properties"}, []string{"Properties", "Desc"})
 	})
 }
 
