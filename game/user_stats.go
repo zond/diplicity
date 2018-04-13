@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
@@ -236,7 +235,6 @@ func loadUserStats(w ResponseWriter, r Request) (*UserStats, error) {
 
 func (u *UserStats) Item(r Request) *Item {
 	u.User.Email = ""
-	log.Infof(appengine.NewContext(r.Req()), "*** %v", spew.Sdump(u))
 	return NewItem(u).SetName("user-stats").
 		AddLink(r.NewLink(UserStatsResource.Link("self", Load, []string{"user_id", u.UserId}))).
 		AddLink(r.NewLink(Link{
