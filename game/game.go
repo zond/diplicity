@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -636,6 +637,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 			return nil, err
 		}
 		if mergedWith != nil {
+			w.WriteHeader(http.StatusTeapot)
 			return mergedWith, nil
 		}
 	}
@@ -649,7 +651,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 		filtered := Games{*game}
 		if failedRequirements := filtered.RemoveFiltered(userStats); len(failedRequirements[0]) > 0 {
-			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), 412}
+			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), http.StatusPreconditionFailed}
 		}
 		if err := game.Save(ctx); err != nil {
 			return err
