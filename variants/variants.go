@@ -150,7 +150,7 @@ func variantMap(w ResponseWriter, r Request) error {
 	variantName := r.Vars()["name"]
 	variant, found := variants.Variants[variantName]
 	if !found {
-		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), 404}
+		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), http.StatusNotFound}
 	}
 
 	b, err := variant.SVGMap()

@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"io/ioutil"
+	"net/http"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
@@ -51,11 +52,11 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	if user.Id != r.Vars()["user_id"] {
-		return nil, HTTPErr{"can only delete yourself", 403}
+		return nil, HTTPErr{"can only delete yourself", http.StatusForbidden}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -71,13 +72,13 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
-			return HTTPErr{"non existing game", 412}
+			return HTTPErr{"non existing game", http.StatusPreconditionFailed}
 		}
 		game.ID = gameID
 		isMember := false
 		member, isMember = game.GetMember(user.Id)
 		if !isMember {
-			return HTTPErr{"non existing member", 404}
+			return HTTPErr{"non existing member", http.StatusNotFound}
 		}
 		if err := CopyBytes(member, r, bodyBytes, "PUT"); err != nil {
 			return err
@@ -106,16 +107,16 @@ func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId strin
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
-			return HTTPErr{"non existing game", 412}
+			return HTTPErr{"non existing game", http.StatusPreconditionFailed}
 		}
 		game.ID = gameID
 		isMember := false
 		member, isMember = game.GetMember(userId)
 		if !isMember {
-			return HTTPErr{"can only leave member games", 404}
+			return HTTPErr{"can only leave member games", http.StatusNotFound}
 		}
 		if !game.Leavable() {
-			return HTTPErr{"game not leavable", 412}
+			return HTTPErr{"game not leavable", http.StatusPreconditionFailed}
 		}
 		newMembers := []Member{}
 		for _, oldMember := range game.Members {
@@ -139,11 +140,11 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	if user.Id != r.Vars()["user_id"] {
-		return nil, HTTPErr{"can only delete yourself", 403}
+		return nil, HTTPErr{"can only delete yourself", http.StatusForbidden}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -165,16 +166,16 @@ func createMemberHelper(
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game = &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
-			return HTTPErr{"non existing game", 412}
+			return HTTPErr{"non existing game", http.StatusPreconditionFailed}
 		}
 		game.ID = gameID
 		isMember := false
 		_, isMember = game.GetMember(user.Id)
 		if isMember {
-			return HTTPErr{"user already member", 400}
+			return HTTPErr{"user already member", http.StatusBadRequest}
 		}
 		if !game.Joinable() {
-			return HTTPErr{"game not joinable", 412}
+			return HTTPErr{"game not joinable", http.StatusPreconditionFailed}
 		}
 		member.User = *user
 		member.NewestPhaseState = PhaseState{
@@ -199,7 +200,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -216,7 +217,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		return nil, err
 	}
 	if len(filterList) == 0 {
-		return nil, HTTPErr{"banned from this game", 403}
+		return nil, HTTPErr{"banned from this game", http.StatusForbidden}
 	}
 
 	member := &Member{}

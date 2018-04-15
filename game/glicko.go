@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/Kashomon/goglicko"
@@ -78,7 +79,7 @@ func handleReRate(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	superusers, err := auth.GetSuperusers(ctx)
@@ -87,7 +88,7 @@ func handleReRate(w ResponseWriter, r Request) error {
 	}
 
 	if !superusers.Includes(user.Id) {
-		return HTTPErr{"unauthorized", 403}
+		return HTTPErr{"unauthorized", http.StatusForbidden}
 	}
 
 	ids, err := datastore.NewQuery(glickoKind).KeysOnly().GetAll(ctx, nil)

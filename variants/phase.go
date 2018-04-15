@@ -2,6 +2,7 @@ package variants
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -180,7 +181,7 @@ func resolveVariant(w ResponseWriter, r Request) error {
 	variantName := r.Vars()["name"]
 	variant, found := variants.Variants[variantName]
 	if !found {
-		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), 404}
+		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), http.StatusNotFound}
 	}
 	p := &Phase{
 		Variant: variantName,
@@ -203,7 +204,7 @@ func startVariant(w ResponseWriter, r Request) error {
 	variantName := r.Vars()["name"]
 	variant, found := variants.Variants[variantName]
 	if !found {
-		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), 404}
+		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), http.StatusNotFound}
 	}
 	state, err := variant.Start()
 	if err != nil {

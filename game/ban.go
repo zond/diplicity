@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -115,11 +116,11 @@ func loadBan(w ResponseWriter, r Request) (*Ban, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	if r.Vars()["user_id"] != user.Id {
-		return nil, HTTPErr{"can only delete owned bans", 403}
+		return nil, HTTPErr{"can only delete owned bans", http.StatusForbidden}
 	}
 
 	banID, err := BanID(ctx, []string{user.Id, r.Vars()["banned_id"]})
@@ -140,11 +141,11 @@ func deleteBan(w ResponseWriter, r Request) (*Ban, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	if r.Vars()["user_id"] != user.Id {
-		return nil, HTTPErr{"can only delete owned bans", 403}
+		return nil, HTTPErr{"can only delete owned bans", http.StatusForbidden}
 	}
 
 	banID, err := BanID(ctx, []string{user.Id, r.Vars()["banned_id"]})
@@ -168,7 +169,7 @@ func deleteBan(w ResponseWriter, r Request) (*Ban, error) {
 			}
 		}
 		if !wasOwner {
-			return HTTPErr{"can only delete owned bans", 403}
+			return HTTPErr{"can only delete owned bans", http.StatusForbidden}
 		}
 		ban.OwnerIds = newOwners
 
@@ -192,11 +193,11 @@ func listBans(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	if r.Vars()["user_id"] != user.Id {
-		return HTTPErr{"can only list bans containing you", 403}
+		return HTTPErr{"can only list bans containing you", http.StatusForbidden}
 	}
 
 	bans := Bans{}
@@ -215,11 +216,11 @@ func createBan(w ResponseWriter, r Request) (*Ban, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	if r.Vars()["user_id"] != user.Id {
-		return nil, HTTPErr{"can only create your own bans", 403}
+		return nil, HTTPErr{"can only create your own bans", http.StatusForbidden}
 	}
 
 	ban := &Ban{}
@@ -233,7 +234,7 @@ func createBan(w ResponseWriter, r Request) (*Ban, error) {
 		}
 	}
 	if !wasInBan {
-		return nil, HTTPErr{"can only create bans containing yourself", 400}
+		return nil, HTTPErr{"can only create bans containing yourself", http.StatusBadRequest}
 	}
 	userIds := ban.UserIds
 

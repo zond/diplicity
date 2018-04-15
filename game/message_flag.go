@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -107,7 +108,7 @@ func createMessageFlag(w ResponseWriter, r Request) (*MessageFlag, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -124,7 +125,7 @@ func createMessageFlag(w ResponseWriter, r Request) (*MessageFlag, error) {
 	existingFlag := &FlaggedMessages{}
 	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, flaggedMessagesID}, []interface{}{game, existingFlag})
 	if err == nil {
-		return nil, HTTPErr{"can only flag messages once per game", 403}
+		return nil, HTTPErr{"can only flag messages once per game", http.StatusForbidden}
 	}
 	merr, ok := err.(appengine.MultiError)
 	if !ok {
@@ -145,7 +146,7 @@ func createMessageFlag(w ResponseWriter, r Request) (*MessageFlag, error) {
 
 	_, isMember := game.GetMember(user.Id)
 	if !isMember {
-		return nil, HTTPErr{"can only flag messages in member games", 403}
+		return nil, HTTPErr{"can only flag messages in member games", http.StatusForbidden}
 	}
 
 	channelMembers := Nations{}
@@ -167,7 +168,7 @@ func createMessageFlag(w ResponseWriter, r Request) (*MessageFlag, error) {
 	}
 
 	if len(messages) == 0 {
-		return nil, HTTPErr{"timestamps matched no messages", 400}
+		return nil, HTTPErr{"timestamps matched no messages", http.StatusBadRequest}
 	}
 
 	flaggedMessagess := make([]FlaggedMessage, len(messages))
@@ -208,7 +209,7 @@ func listFlaggedMessages(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	limit := maxLimit

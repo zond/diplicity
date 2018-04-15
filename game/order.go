@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -102,7 +103,7 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -136,14 +137,14 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 		game.ID = gameID
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
-			return HTTPErr{"can only delete orders in member games", 404}
+			return HTTPErr{"can only delete orders in member games", http.StatusNotFound}
 		}
 		if phase.Resolved {
-			return HTTPErr{"can only delete orders for unresolved phases", 412}
+			return HTTPErr{"can only delete orders for unresolved phases", http.StatusPreconditionFailed}
 		}
 
 		if order.Nation != member.Nation {
-			return HTTPErr{"can only delete your own orders", 403}
+			return HTTPErr{"can only delete your own orders", http.StatusForbidden}
 		}
 
 		return datastore.Delete(ctx, orderID)
@@ -159,7 +160,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -196,15 +197,15 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 		}
 		game.ID = gameID
 		if phase.Resolved {
-			return HTTPErr{"can only update orders for unresolved phases", 412}
+			return HTTPErr{"can only update orders for unresolved phases", http.StatusPreconditionFailed}
 		}
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
-			return HTTPErr{"can only update orders in member games", 404}
+			return HTTPErr{"can only update orders in member games", http.StatusNotFound}
 		}
 
 		if order.Nation != member.Nation {
-			return HTTPErr{"can only update your own orders", 403}
+			return HTTPErr{"can only update your own orders", http.StatusForbidden}
 		}
 
 		err = CopyBytes(order, r, bodyBytes, "POST")
@@ -233,11 +234,11 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 			return err
 		}
 		if validNation != member.Nation {
-			return HTTPErr{"can't issue orders for others", 403}
+			return HTTPErr{"can't issue orders for others", http.StatusForbidden}
 		}
 
 		if godip.Province(order.Parts[0]).Super() != godip.Province(srcProvince).Super() {
-			return HTTPErr{"unable to change source province for order", 400}
+			return HTTPErr{"unable to change source province for order", http.StatusBadRequest}
 		}
 
 		return order.Save(ctx)
@@ -253,7 +254,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -284,11 +285,11 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 		}
 		game.ID = gameID
 		if phase.Resolved {
-			return HTTPErr{"can only create orders for unresolved phases", 412}
+			return HTTPErr{"can only create orders for unresolved phases", http.StatusPreconditionFailed}
 		}
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
-			return HTTPErr{"can only create orders for member games", 404}
+			return HTTPErr{"can only create orders for member games", http.StatusNotFound}
 		}
 
 		keysToSave := []*datastore.Key{}
@@ -333,7 +334,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 			return err
 		}
 		if validNation != member.Nation {
-			return HTTPErr{"can't issue orders for others", 403}
+			return HTTPErr{"can't issue orders for others", http.StatusForbidden}
 		}
 
 		orderID, err := OrderID(ctx, phaseID, godip.Province(order.Parts[0]))
@@ -357,7 +358,7 @@ func listOrders(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

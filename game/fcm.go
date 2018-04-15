@@ -5,6 +5,7 @@ import (
 	"compress/zlib"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -48,7 +49,7 @@ func SetFCMConf(ctx context.Context, fcmConf *FCMConf) error {
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		currentFCMConf := &FCMConf{}
 		if err := datastore.Get(ctx, getFCMConfKey(ctx), currentFCMConf); err == nil {
-			return HTTPErr{"FCMConf already configured", 400}
+			return HTTPErr{"FCMConf already configured", http.StatusBadRequest}
 		}
 		if _, err := datastore.Put(ctx, getFCMConfKey(ctx), fcmConf); err != nil {
 			return err

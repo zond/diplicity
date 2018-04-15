@@ -126,7 +126,7 @@ func SetSendGrid(ctx context.Context, sendGrid *SendGrid) error {
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		currentSendGrid := &SendGrid{}
 		if err := datastore.Get(ctx, getSendGridKey(ctx), currentSendGrid); err == nil {
-			return HTTPErr{"SendGrid already configured", 400}
+			return HTTPErr{"SendGrid already configured", http.StatusBadRequest}
 		}
 		if _, err := datastore.Put(ctx, getSendGridKey(ctx), sendGrid); err != nil {
 			return err
@@ -612,7 +612,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	game := &Game{}
@@ -621,13 +621,13 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		return nil, err
 	}
 	if _, found := variants.Variants[game.Variant]; !found {
-		return nil, HTTPErr{"unknown variant", 400}
+		return nil, HTTPErr{"unknown variant", http.StatusBadRequest}
 	}
 	if game.PhaseLengthMinutes < 1 {
-		return nil, HTTPErr{"no games with zero or negative phase deadline allowed", 400}
+		return nil, HTTPErr{"no games with zero or negative phase deadline allowed", http.StatusBadRequest}
 	}
 	if game.PhaseLengthMinutes > MAX_PHASE_DEADLINE {
-		return nil, HTTPErr{"no games with more than 30 day deadlines allowed", 400}
+		return nil, HTTPErr{"no games with more than 30 day deadlines allowed", http.StatusBadRequest}
 	}
 	game.CreatedAt = time.Now()
 
@@ -737,7 +737,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["id"])
