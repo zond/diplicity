@@ -39,6 +39,25 @@ func TestGameSorting(t *testing.T) {
 	if g[2].Desc != "a" {
 		t.Errorf("got %q, wanted 'a'", g[2].Desc)
 	}
+	g = game.Games{
+		{
+			Desc:      "a",
+			NMembers:  3,
+			CreatedAt: time.Now().Add(42 * time.Second),
+		},
+		{
+			Desc:      "b",
+			NMembers:  1,
+			CreatedAt: time.Now().Add(33 * time.Second),
+		},
+	}
+	sort.Sort(g)
+	if g[0].Desc != "a" {
+		t.Errorf("got %q, wanted 'a'", g[0].Desc)
+	}
+	if g[1].Desc != "b" {
+		t.Errorf("got %q, wanted 'b'", g[1].Desc)
+	}
 }
 
 var (

@@ -204,13 +204,13 @@ func (g Games) Len() int {
 }
 
 func (g Games) Less(i, j int) bool {
-	if g[i].NMembers > g[j].NMembers {
-		return true
+	if g[i].NMembers != g[j].NMembers {
+		if g[i].NMembers > g[j].NMembers {
+			return true
+		}
+		return false
 	}
-	if g[i].CreatedAt.Before(g[j].CreatedAt) {
-		return true
-	}
-	return false
+	return g[i].CreatedAt.Before(g[j].CreatedAt)
 }
 
 func (g Games) Swap(i, j int) {
