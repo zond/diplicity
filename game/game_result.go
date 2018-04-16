@@ -1,6 +1,7 @@
 package game
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/zond/diplicity/auth"
@@ -82,7 +83,7 @@ func loadGameResult(w ResponseWriter, r Request) (*GameResult, error) {
 
 	_, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

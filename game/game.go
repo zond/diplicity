@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -124,7 +126,7 @@ func SetSendGrid(ctx context.Context, sendGrid *SendGrid) error {
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		currentSendGrid := &SendGrid{}
 		if err := datastore.Get(ctx, getSendGridKey(ctx), currentSendGrid); err == nil {
-			return HTTPErr{"SendGrid already configured", 400}
+			return HTTPErr{"SendGrid already configured", http.StatusBadRequest}
 		}
 		if _, err := datastore.Put(ctx, getSendGridKey(ctx), sendGrid); err != nil {
 			return err
@@ -196,6 +198,24 @@ func (d *DelayFunc) EnqueueIn(ctx context.Context, taskDelay time.Duration, args
 }
 
 type Games []Game
+
+func (g Games) Len() int {
+	return len(g)
+}
+
+func (g Games) Less(i, j int) bool {
+	if g[i].NMembers > g[j].NMembers {
+		return true
+	}
+	if g[i].CreatedAt.Before(g[j].CreatedAt) {
+		return true
+	}
+	return false
+}
+
+func (g Games) Swap(i, j int) {
+	g[i], g[j] = g[j], g[i]
+}
 
 func (g *Games) RemoveCustomFiltered(filters []func(g *Game) bool) {
 	newGames := make(Games, 0, len(*g))
@@ -358,6 +378,7 @@ type Game struct {
 	MinReliability     float64       `methods:"POST"`
 	MinQuickness       float64       `methods:"POST"`
 	Private            bool          `methods:"POST"`
+	NoMerge            bool          `methods:"POST"`
 
 	NMembers int
 	Members  []Member
@@ -373,6 +394,54 @@ type Game struct {
 	StartedAgo  time.Duration `datastore:"-" ticker:"true"`
 	FinishedAt  time.Time
 	FinishedAgo time.Duration `datastore:"-" ticker:"true"`
+}
+
+func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
+	if g.NoMerge || o.NoMerge {
+		return false
+	}
+	if g.Started || o.Started {
+		return false
+	}
+	if g.Closed || o.Closed {
+		return false
+	}
+	if g.Finished || o.Finished {
+		return false
+	}
+	if g.Variant != o.Variant {
+		return false
+	}
+	if g.PhaseLengthMinutes != o.PhaseLengthMinutes {
+		return false
+	}
+	if g.MaxHated != o.MaxHated {
+		return false
+	}
+	if g.MaxHater != o.MaxHater {
+		return false
+	}
+	if g.MinRating != o.MinRating {
+		return false
+	}
+	if g.MaxRating != o.MaxRating {
+		return false
+	}
+	if g.MinReliability != o.MinReliability {
+		return false
+	}
+	if g.MinQuickness != o.MinQuickness {
+		return false
+	}
+	if g.NMembers+o.NMembers > len(variants.Variants[g.Variant].Nations) {
+		return false
+	}
+	for _, member := range o.Members {
+		if member.User.Id == avoid.Id {
+			return false
+		}
+	}
+	return true
 }
 
 func (g *Game) Refresh() {
@@ -498,12 +567,52 @@ func (g *Game) Save(ctx context.Context) error {
 	return err
 }
 
+func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, error) {
+	games := Games{}
+	gameIDs, err := datastore.NewQuery(gameKind).
+		Filter("Started=", false).
+		Filter("Closed=", false).
+		Filter("Finished=", false).
+		Filter("Private=", false).
+		Filter("NoMerge=", false).
+		Filter("Variant=", game.Variant).
+		Filter("PhaseLengthMinutes=", game.PhaseLengthMinutes).
+		Filter("MaxHated=", game.MaxHated).
+		Filter("MaxHater=", game.MaxHater).
+		Filter("MinRating=", game.MinRating).
+		Filter("MaxRating=", game.MaxRating).
+		Filter("MinReliability=", game.MinReliability).
+		Filter("MinQuickness=", game.MinQuickness).
+		GetAll(ctx, &games)
+	if err != nil {
+		return nil, err
+	}
+	for idx, id := range gameIDs {
+		games[idx].ID = id
+	}
+	sort.Sort(games)
+
+	games.RemoveBanned(ctx, user.Id)
+
+	for _, otherGame := range games {
+		if game.canMergeInto(&otherGame, user) {
+			member := &Member{}
+			if joinedGame, _, err := createMemberHelper(ctx, r, otherGame.ID, user, member); err != nil {
+				return nil, err
+			} else {
+				return joinedGame, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
 func createGame(w ResponseWriter, r Request) (*Game, error) {
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	game := &Game{}
@@ -512,15 +621,26 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		return nil, err
 	}
 	if _, found := variants.Variants[game.Variant]; !found {
-		return nil, HTTPErr{"unknown variant", 400}
+		return nil, HTTPErr{"unknown variant", http.StatusBadRequest}
 	}
 	if game.PhaseLengthMinutes < 1 {
-		return nil, HTTPErr{"no games with zero or negative phase deadline allowed", 400}
+		return nil, HTTPErr{"no games with zero or negative phase deadline allowed", http.StatusBadRequest}
 	}
 	if game.PhaseLengthMinutes > MAX_PHASE_DEADLINE {
-		return nil, HTTPErr{"no games with more than 30 day deadlines allowed", 400}
+		return nil, HTTPErr{"no games with more than 30 day deadlines allowed", http.StatusBadRequest}
 	}
 	game.CreatedAt = time.Now()
+
+	if !game.NoMerge {
+		mergedWith, err := merge(ctx, r, game, user)
+		if err != nil {
+			return nil, err
+		}
+		if mergedWith != nil {
+			w.WriteHeader(http.StatusTeapot)
+			return nil, nil
+		}
+	}
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		userStats := &UserStats{}
@@ -531,7 +651,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 		filtered := Games{*game}
 		if failedRequirements := filtered.RemoveFiltered(userStats); len(failedRequirements[0]) > 0 {
-			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), 412}
+			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), http.StatusPreconditionFailed}
 		}
 		if err := game.Save(ctx); err != nil {
 			return err
@@ -617,7 +737,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["id"])

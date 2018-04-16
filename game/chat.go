@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/mail"
 	"net/url"
 	"sort"
@@ -687,7 +688,7 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -704,7 +705,7 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 
 	member, found := game.GetMember(user.Id)
 	if !found {
-		return nil, HTTPErr{"can only create messages in member games", 404}
+		return nil, HTTPErr{"can only create messages in member games", http.StatusNotFound}
 	}
 
 	message := &Message{}
@@ -713,12 +714,12 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 	}
 
 	if !message.ChannelMembers.Includes(member.Nation) {
-		return nil, HTTPErr{"can only send messages to member channels", 403}
+		return nil, HTTPErr{"can only send messages to member channels", http.StatusForbidden}
 	}
 
 	for _, channelMember := range message.ChannelMembers {
 		if !Nations(variants.Variants[game.Variant].Nations).Includes(channelMember) {
-			return nil, HTTPErr{"unknown channel member", 400}
+			return nil, HTTPErr{"unknown channel member", http.StatusBadRequest}
 		}
 	}
 
@@ -763,7 +764,7 @@ func listMessages(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -809,7 +810,7 @@ func listMessages(w ResponseWriter, r Request) error {
 	}
 
 	if !game.Finished && !channelMembers.Includes(nation) && !isPublic(game.Variant, channelMembers) {
-		return HTTPErr{"can only list member channels", 403}
+		return HTTPErr{"can only list member channels", http.StatusForbidden}
 	}
 
 	channelID, err := ChannelID(ctx, gameID, channelMembers)
@@ -1009,7 +1010,7 @@ func listChannels(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

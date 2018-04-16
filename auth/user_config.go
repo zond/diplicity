@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"net/http"
+
 	"github.com/aymerick/raymond"
 	"github.com/zond/go-fcm"
 	"golang.org/x/net/context"
@@ -242,7 +244,7 @@ func loadUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
 
 	user, ok := r.Values()["user"].(*User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	config := &UserConfig{}
@@ -261,7 +263,7 @@ func updateUserConfig(w ResponseWriter, r Request) (*UserConfig, error) {
 
 	user, ok := r.Values()["user"].(*User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	config := &UserConfig{}

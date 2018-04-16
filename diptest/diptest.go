@@ -422,6 +422,14 @@ func (r *Req) Success() *Result {
 	return res
 }
 
+func (r *Req) Status(i int) *Result {
+	res := r.do()
+	if res.Status != i {
+		panic(fmt.Errorf("fetching %q:%v", res.URL.String(), res.Status))
+	}
+	return res
+}
+
 func (r *Req) Failure() *Result {
 	res := r.do()
 	if res.Status > 199 && res.Status < 300 {

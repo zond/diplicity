@@ -3,6 +3,7 @@ package game
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -86,7 +87,7 @@ func (h *userStatsHandler) handle(w ResponseWriter, r Request) error {
 
 	_, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	limit, err := strconv.ParseInt(r.Req().URL.Query().Get("limit"), 10, 64)
@@ -208,7 +209,7 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 	req.user = user
 
@@ -347,7 +348,7 @@ func (h gamesHandler) handleOther(w ResponseWriter, r Request) error {
 func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	req, err := h.prepare(w, r, &user.Id, false)
@@ -511,7 +512,7 @@ func handleResave(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	superusers, err := auth.GetSuperusers(ctx)
@@ -520,7 +521,7 @@ func handleResave(w ResponseWriter, r Request) error {
 	}
 
 	if !superusers.Includes(user.Id) {
-		return HTTPErr{"unauthorized", 403}
+		return HTTPErr{"unauthorized", http.StatusForbidden}
 	}
 
 	kind := r.Req().URL.Query().Get("kind")

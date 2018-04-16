@@ -140,7 +140,7 @@ func deleteRedirectURL(w ResponseWriter, r Request) (*RedirectURL, error) {
 
 	user, ok := r.Values()["user"].(*User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	redirectURLID, err := datastore.DecodeKey(r.Vars()["id"])
@@ -154,7 +154,7 @@ func deleteRedirectURL(w ResponseWriter, r Request) (*RedirectURL, error) {
 			return err
 		}
 		if redirectURL.UserId != user.Id {
-			return HTTPErr{"can only delete your own redirect URLs", 403}
+			return HTTPErr{"can only delete your own redirect URLs", http.StatusForbidden}
 		}
 
 		return datastore.Delete(ctx, redirectURLID)
@@ -184,11 +184,11 @@ func listRedirectURLs(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	if user.Id != r.Vars()["user_id"] {
-		return HTTPErr{"can only list your own redirect URLs", 403}
+		return HTTPErr{"can only list your own redirect URLs", http.StatusForbidden}
 	}
 
 	redirectURLs := RedirectURLs{}
@@ -266,7 +266,7 @@ func SetSuperusers(ctx context.Context, superusers *Superusers) error {
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		currentSuperusers := &Superusers{}
 		if err := datastore.Get(ctx, getSuperusersKey(ctx), currentSuperusers); err == nil {
-			return HTTPErr{"Superusers already configured", 400}
+			return HTTPErr{"Superusers already configured", http.StatusBadRequest}
 		}
 		if _, err := datastore.Put(ctx, getSuperusersKey(ctx), superusers); err != nil {
 			return err
@@ -353,7 +353,7 @@ func SetOAuth(ctx context.Context, oAuth *OAuth) error {
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		currentOAuth := &OAuth{}
 		if err := datastore.Get(ctx, getOAuthKey(ctx), currentOAuth); err == nil {
-			return HTTPErr{"OAuth already configured", 400}
+			return HTTPErr{"OAuth already configured", http.StatusBadRequest}
 		}
 		if _, err := datastore.Put(ctx, getOAuthKey(ctx), oAuth); err != nil {
 			return err
@@ -419,7 +419,7 @@ func handleLogin(w ResponseWriter, r Request) error {
 
 	loginURL := conf.AuthCodeURL(r.Req().URL.Query().Get("redirect-to"))
 
-	http.Redirect(w, r.Req(), loginURL, 307)
+	http.Redirect(w, r.Req(), loginURL, http.StatusTemporaryRedirect)
 	return nil
 }
 
@@ -470,7 +470,7 @@ func DecodeBytes(ctx context.Context, b []byte) ([]byte, error) {
 
 	plain, ok := secretbox.Open([]byte{}, b[24:], &nonceAry, &secretAry)
 	if !ok {
-		return nil, HTTPErr{"badly encrypted token", 401}
+		return nil, HTTPErr{"badly encrypted token", http.StatusUnauthorized}
 	}
 	return plain, nil
 }
@@ -573,18 +573,18 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	query.Set("token", userToken)
 	redirectURL.RawQuery = query.Encode()
 
-	http.Redirect(w, r, redirectURL.String(), 307)
+	http.Redirect(w, r, redirectURL.String(), http.StatusTemporaryRedirect)
 }
 
 func handleLogout(w ResponseWriter, r Request) error {
-	http.Redirect(w, r.Req(), r.Req().URL.Query().Get("redirect-to"), 307)
+	http.Redirect(w, r.Req(), r.Req().URL.Query().Get("redirect-to"), http.StatusTemporaryRedirect)
 	return nil
 }
 
 func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 	ctx := appengine.NewContext(r.Req())
 
-	if fakeID := r.Req().URL.Query().Get("fake-id"); (TestMode || appengine.IsDevAppServer()) && fakeID != "" {
+	if fakeID := r.Req().URL.Query().Get("fake-id"); appengine.IsDevAppServer() && fakeID != "" {
 		fakeEmail := "fake@fake.fake"
 		if providedFake := r.Req().URL.Query().Get("fake-email"); providedFake != "" {
 			fakeEmail = providedFake
@@ -634,10 +634,10 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 		if authHeader := r.Req().Header.Get("Authorization"); authHeader != "" {
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 {
-				return false, HTTPErr{"Authorization header not two parts joined by space", 400}
+				return false, HTTPErr{"Authorization header not two parts joined by space", http.StatusBadRequest}
 			}
 			if strings.ToLower(parts[0]) != "bearer" {
-				return false, HTTPErr{"Authorization header part 1 not 'bearer'", 400}
+				return false, HTTPErr{"Authorization header part 1 not 'bearer'", http.StatusBadRequest}
 			}
 			token = parts[1]
 		}
@@ -654,7 +654,7 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 			return false, err
 		}
 		if user.ValidUntil.Before(time.Now()) {
-			return false, HTTPErr{"token timed out", 401}
+			return false, HTTPErr{"token timed out", http.StatusUnauthorized}
 		}
 
 		log.Infof(ctx, "Request by %+v", user)
@@ -666,7 +666,7 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 			}
 
 			if !superusers.Includes(user.Id) {
-				return false, HTTPErr{"unauthorized", 403}
+				return false, HTTPErr{"unauthorized", http.StatusForbidden}
 			}
 
 			log.Infof(ctx, "Faking user Id %q", fakeID)
@@ -690,6 +690,10 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 		log.Infof(ctx, "Unauthenticated request")
 	}
 
+	return true, nil
+}
+
+func decorateAPILevel(w ResponseWriter, r Request) (bool, error) {
 	media, _ := Media(r.Req(), "Accept")
 	if media == "text/html" {
 		r.DecorateLinks(func(l *Link, u *url.URL) error {
@@ -711,7 +715,7 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 		return true, errI
 	}
 
-	if herr, ok := errI.(HTTPErr); ok && herr.Status == 401 {
+	if herr, ok := errI.(HTTPErr); ok && herr.Status == http.StatusUnauthorized {
 		redirectURL := r.Req().URL
 		if r.Req().TLS == nil {
 			redirectURL.Scheme = "http"
@@ -728,7 +732,7 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 		queryParams.Set("redirect-to", redirectURL.String())
 		loginURL.RawQuery = queryParams.Encode()
 
-		http.Redirect(w, r.Req(), loginURL.String(), 307)
+		http.Redirect(w, r.Req(), loginURL.String(), http.StatusTemporaryRedirect)
 		return false, nil
 	}
 
@@ -773,7 +777,7 @@ func handleApproveRedirect(w ResponseWriter, r Request) error {
 	q.Set("redirect-to", toApproveURL.String())
 	loginURL.RawQuery = q.Encode()
 
-	http.Redirect(w, r.Req(), loginURL.String(), 307)
+	http.Redirect(w, r.Req(), loginURL.String(), http.StatusTemporaryRedirect)
 
 	return nil
 }
@@ -848,7 +852,7 @@ func unsubscribe(w ResponseWriter, r Request) error {
 	}
 
 	if decodedUserId != r.Vars()["user_id"] {
-		return HTTPErr{"can only unsubscribe yourself", 403}
+		return HTTPErr{"can only unsubscribe yourself", http.StatusForbidden}
 	}
 
 	userID := UserID(ctx, r.Vars()["user_id"])
@@ -879,7 +883,7 @@ func unsubscribe(w ResponseWriter, r Request) error {
 		if err != nil {
 			return err
 		}
-		http.Redirect(w, r.Req(), redirURL, 307)
+		http.Redirect(w, r.Req(), redirURL, http.StatusTemporaryRedirect)
 		return nil
 	}
 
@@ -912,7 +916,7 @@ func replaceFCM(w ResponseWriter, r Request) error {
 
 	replaceToken := r.Vars()["replace_token"]
 	if replaceToken == "" {
-		return HTTPErr{"no such FCM token found", 404}
+		return HTTPErr{"no such FCM token found", http.StatusNotFound}
 	}
 
 	fcmValue := &FCMValue{}
@@ -926,10 +930,10 @@ func replaceFCM(w ResponseWriter, r Request) error {
 		return err
 	}
 	if len(userConfigs) == 0 {
-		return HTTPErr{"no such FCM token found", 404}
+		return HTTPErr{"no such FCM token found", http.StatusNotFound}
 	}
 	if len(userConfigs) > 1 {
-		return HTTPErr{"too many FCM tokens found?", 500}
+		return HTTPErr{"too many FCM tokens found?", http.StatusInternalServerError}
 	}
 	for i := range userConfigs[0].FCMTokens {
 		if userConfigs[0].FCMTokens[i].ReplaceToken == replaceToken {
@@ -945,6 +949,31 @@ func replaceFCM(w ResponseWriter, r Request) error {
 	return err
 }
 
+func logHeaders(w ResponseWriter, r Request) (bool, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	log.Infof(ctx, "APILevel:%v", APILevel(r))
+
+	version := 0
+	if versionHeader := r.Req().Header.Get("X-Diplicity-Client-Version"); versionHeader != "" {
+		headerValue, err := strconv.Atoi(versionHeader)
+		if err != nil {
+			version = -1
+		} else {
+			version = headerValue
+		}
+	}
+	log.Infof(ctx, "ClientVersion:%v", version)
+
+	name := "unknown"
+	if nameHeader := r.Req().Header.Get("X-Diplicity-Client-Name"); nameHeader != "" {
+		name = nameHeader
+	}
+	log.Infof(ctx, "ClientName:%v", name)
+
+	return true, nil
+}
+
 func SetupRouter(r *mux.Router) {
 	router = r
 	HandleResource(router, UserConfigResource)
@@ -956,6 +985,8 @@ func SetupRouter(r *mux.Router) {
 	Handle(router, "/Auth/ApproveRedirect", []string{"GET"}, ApproveRedirectRoute, handleApproveRedirect)
 	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
 	Handle(router, "/User/{user_id}/FCMToken/{replace_token}/Replace", []string{"PUT"}, ReplaceFCMRoute, replaceFCM)
+	AddFilter(decorateAPILevel)
 	AddFilter(tokenFilter)
+	AddFilter(logHeaders)
 	AddPostProc(loginRedirect)
 }

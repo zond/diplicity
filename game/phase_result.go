@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"golang.org/x/net/context"
@@ -36,7 +37,7 @@ func loadPhaseResult(w ResponseWriter, r Request) (*PhaseResult, error) {
 
 	_, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

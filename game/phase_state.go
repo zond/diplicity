@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"strconv"
 
 	"github.com/zond/diplicity/auth"
@@ -120,7 +121,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -154,15 +155,15 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		game.ID = gameID
 		member, isMember := game.GetMember(user.Id)
 		if !isMember {
-			return HTTPErr{"can only update phase state of member games", 404}
+			return HTTPErr{"can only update phase state of member games", http.StatusNotFound}
 		}
 
 		if member.Nation != nation {
-			return HTTPErr{"can only update own phase state", 403}
+			return HTTPErr{"can only update own phase state", http.StatusForbidden}
 		}
 
 		if phase.Resolved {
-			return HTTPErr{"can only update phase states of unresolved phases", 412}
+			return HTTPErr{"can only update phase states of unresolved phases", http.StatusPreconditionFailed}
 		}
 
 		phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
@@ -243,7 +244,7 @@ func listPhaseStates(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])

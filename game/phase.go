@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/mail"
 	"net/url"
 	"strconv"
@@ -1024,7 +1025,7 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", 401}
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -1175,7 +1176,7 @@ func listOptions(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -1202,7 +1203,7 @@ func listOptions(w ResponseWriter, r Request) error {
 
 	member, isMember := game.GetMember(user.Id)
 	if !isMember {
-		return HTTPErr{"can only load options for member games", 404}
+		return HTTPErr{"can only load options for member games", http.StatusNotFound}
 	}
 
 	phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
@@ -1355,7 +1356,7 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
@@ -1408,7 +1409,7 @@ func listPhases(w ResponseWriter, r Request) error {
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return HTTPErr{"unauthenticated", 401}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
