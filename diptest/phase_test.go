@@ -18,6 +18,11 @@ var (
 
 // Not concurrency safe
 func withStartedGame(f func()) {
+	withStartedGameOpts(nil, f)
+}
+
+// Not concurrency safe
+func withStartedGameOpts(conf func(m map[string]interface{}), f func()) {
 	gameDesc := String("test-game")
 
 	envs := []*Env{
@@ -30,14 +35,18 @@ func withStartedGame(f func()) {
 		NewEnv().SetUID(String("fake")),
 	}
 
+	opts := map[string]interface{}{
+		"Variant":            "Classical",
+		"NoMerge":            true,
+		"Desc":               gameDesc,
+		"PhaseLengthMinutes": 60 * 24,
+	}
+	if conf != nil {
+		conf(opts)
+	}
 	envs[0].GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").
-		Body(map[string]interface{}{
-			"Variant":            "Classical",
-			"NoMerge":            true,
-			"Desc":               gameDesc,
-			"PhaseLengthMinutes": 60 * 24,
-		}).Success().
+		Body(opts).Success().
 		AssertEq(gameDesc, "Properties", "Desc")
 
 	for _, env := range envs[1:] {

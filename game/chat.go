@@ -667,6 +667,18 @@ func createMessageHelper(ctx context.Context, r Request, message *Message) error
 			}
 		}
 		game.ID = message.GameID
+		if !game.Started {
+			return HTTPErr{"game not yet started", http.StatusBadRequest}
+		}
+		if game.DisablePrivateChat && len(message.ChannelMembers) == 2 {
+			return HTTPErr{"private chat disabled", http.StatusBadRequest}
+		}
+		if game.DisableGroupChat && len(message.ChannelMembers) > 2 && len(message.ChannelMembers) < len(variants.Variants[game.Variant].Nations) {
+			return HTTPErr{"group chat disabled", http.StatusBadRequest}
+		}
+		if game.DisableConferenceChat && len(message.ChannelMembers) == len(variants.Variants[game.Variant].Nations) {
+			return HTTPErr{"conference chat disabled", http.StatusBadRequest}
+		}
 		if message.ID, err = datastore.Put(ctx, datastore.NewIncompleteKey(ctx, messageKind, channelID), message); err != nil {
 			return err
 		}
@@ -790,6 +802,10 @@ func listMessages(w ResponseWriter, r Request) error {
 		return err
 	}
 	game.ID = gameID
+	if !game.Started {
+		w.SetContent((Messages{}).Item(r, gameID, channelMembers))
+		return nil
+	}
 
 	var nation godip.Nation
 	mutedNats := map[godip.Nation]struct{}{}
@@ -928,7 +944,7 @@ func loadChannels(ctx context.Context, game *Game, viewer godip.Nation) (Channel
 		if err != nil {
 			return nil, err
 		}
-	} else {
+	} else if game.Started {
 		if viewer == "" {
 			channelID, err := ChannelID(ctx, game.ID, publicChannel(game.Variant))
 			if err != nil {

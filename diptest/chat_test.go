@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/zond/diplicity/game"
+	"github.com/zond/godip/variants/classical"
 )
 
 func testChat(t *testing.T) {
@@ -154,6 +155,83 @@ func testChat(t *testing.T) {
 			Find(chanName, []string{"Properties"}, []string{"Name"}).
 			AssertEq(2.0, "Properties", "NMessages").
 			AssertEq(0.0, "Properties", "NMessagesSince", "NMessages")
+	})
+}
+
+func TestDisabledChats(t *testing.T) {
+	t.Run("ConferenceChat", func(t *testing.T) {
+		t.Run("Enabled", func(t *testing.T) {
+			withStartedGame(func() {
+				startedGames[1].Follow("channels", "Links").Success().
+					Follow("message", "Links").Body(map[string]interface{}{
+					"Body":           String("body"),
+					"ChannelMembers": classical.Nations,
+				}).Success()
+			})
+		})
+		t.Run("Disabled", func(t *testing.T) {
+			withStartedGameOpts(func(opts map[string]interface{}) {
+				opts["DisableConferenceChat"] = true
+			}, func() {
+				startedGames[1].Follow("channels", "Links").Success().
+					Follow("message", "Links").Body(map[string]interface{}{
+					"Body":           String("body"),
+					"ChannelMembers": classical.Nations,
+				}).Failure()
+			})
+		})
+	})
+	t.Run("GroupChat", func(t *testing.T) {
+		t.Run("Enabled", func(t *testing.T) {
+			withStartedGame(func() {
+				members := sort.StringSlice{startedGameNats[0], startedGameNats[1], startedGameNats[2]}
+				sort.Sort(members)
+				startedGames[1].Follow("channels", "Links").Success().
+					Follow("message", "Links").Body(map[string]interface{}{
+					"Body":           String("body"),
+					"ChannelMembers": members,
+				}).Success()
+			})
+		})
+		t.Run("Disabled", func(t *testing.T) {
+			withStartedGameOpts(func(opts map[string]interface{}) {
+				opts["DisableGroupChat"] = true
+			}, func() {
+				members := sort.StringSlice{startedGameNats[0], startedGameNats[1], startedGameNats[2]}
+				sort.Sort(members)
+				startedGames[1].Follow("channels", "Links").Success().
+					Follow("message", "Links").Body(map[string]interface{}{
+					"Body":           String("body"),
+					"ChannelMembers": members,
+				}).Failure()
+			})
+		})
+	})
+	t.Run("PrivateChat", func(t *testing.T) {
+		t.Run("Enabled", func(t *testing.T) {
+			withStartedGame(func() {
+				members := sort.StringSlice{startedGameNats[0], startedGameNats[1]}
+				sort.Sort(members)
+				startedGames[1].Follow("channels", "Links").Success().
+					Follow("message", "Links").Body(map[string]interface{}{
+					"Body":           String("body"),
+					"ChannelMembers": members,
+				}).Success()
+			})
+		})
+		t.Run("Disabled", func(t *testing.T) {
+			withStartedGameOpts(func(opts map[string]interface{}) {
+				opts["DisablePrivateChat"] = true
+			}, func() {
+				members := sort.StringSlice{startedGameNats[0], startedGameNats[1]}
+				sort.Sort(members)
+				startedGames[1].Follow("channels", "Links").Success().
+					Follow("message", "Links").Body(map[string]interface{}{
+					"Body":           String("body"),
+					"ChannelMembers": members,
+				}).Failure()
+			})
+		})
 	})
 }
 

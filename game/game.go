@@ -368,17 +368,20 @@ type Game struct {
 	Closed   bool // Game is no longer joinable..
 	Finished bool // Game has reached its end.
 
-	Desc               string        `methods:"POST" datastore:",noindex"`
-	Variant            string        `methods:"POST"`
-	PhaseLengthMinutes time.Duration `methods:"POST"`
-	MaxHated           float64       `methods:"POST"`
-	MaxHater           float64       `methods:"POST"`
-	MinRating          float64       `methods:"POST"`
-	MaxRating          float64       `methods:"POST"`
-	MinReliability     float64       `methods:"POST"`
-	MinQuickness       float64       `methods:"POST"`
-	Private            bool          `methods:"POST"`
-	NoMerge            bool          `methods:"POST"`
+	Desc                  string        `methods:"POST" datastore:",noindex"`
+	Variant               string        `methods:"POST"`
+	PhaseLengthMinutes    time.Duration `methods:"POST"`
+	MaxHated              float64       `methods:"POST"`
+	MaxHater              float64       `methods:"POST"`
+	MinRating             float64       `methods:"POST"`
+	MaxRating             float64       `methods:"POST"`
+	MinReliability        float64       `methods:"POST"`
+	MinQuickness          float64       `methods:"POST"`
+	Private               bool          `methods:"POST"`
+	NoMerge               bool          `methods:"POST"`
+	DisableConferenceChat bool          `methods:"POST"`
+	DisableGroupChat      bool          `methods:"POST"`
+	DisablePrivateChat    bool          `methods:"POST"`
 
 	NMembers int
 	Members  []Member
@@ -431,6 +434,15 @@ func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
 		return false
 	}
 	if g.MinQuickness != o.MinQuickness {
+		return false
+	}
+	if g.DisableConferenceChat != o.DisableConferenceChat {
+		return false
+	}
+	if g.DisableGroupChat != o.DisableGroupChat {
+		return false
+	}
+	if g.DisablePrivateChat != o.DisablePrivateChat {
 		return false
 	}
 	if g.NMembers+o.NMembers > len(variants.Variants[g.Variant].Nations) {
@@ -583,6 +595,9 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 		Filter("MaxRating=", game.MaxRating).
 		Filter("MinReliability=", game.MinReliability).
 		Filter("MinQuickness=", game.MinQuickness).
+		Filter("DisableConferenceChat=", game.DisableConferenceChat).
+		Filter("DisableGroupChat=", game.DisableGroupChat).
+		Filter("DisablePrivateChat=", game.DisablePrivateChat).
 		GetAll(ctx, &games)
 	if err != nil {
 		return nil, err
