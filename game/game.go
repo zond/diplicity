@@ -412,6 +412,9 @@ func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
 	if g.Finished || o.Finished {
 		return false
 	}
+	if g.Private || o.Private {
+		return false
+	}
 	if g.Variant != o.Variant {
 		return false
 	}
@@ -646,7 +649,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	}
 	game.CreatedAt = time.Now()
 
-	if !game.NoMerge {
+	if !game.NoMerge && !game.Private {
 		mergedWith, err := merge(ctx, r, game, user)
 		if err != nil {
 			return nil, err

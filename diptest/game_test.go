@@ -131,6 +131,22 @@ func TestGameMerging(t *testing.T) {
 			Find(gameDesc4, []string{"Properties"}, []string{"Properties", "Desc"})
 	})
 
+	t.Run("VerifyPrivateGameNoMerge", func(t *testing.T) {
+		env6 := NewEnv().SetUID(String("fake"))
+		gameDesc6 := String("test-game")
+		env6.GetRoute(game.IndexRoute).Success().
+			Follow("create-game", "Links").
+			Body(map[string]interface{}{
+				"Variant":            "Classical",
+				"Desc":               gameDesc6,
+				"MaxHated":           float64(maxHated),
+				"Private":            true,
+				"PhaseLengthMinutes": time.Duration(60),
+			}).Success()
+		env6.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc6, []string{"Properties"}, []string{"Properties", "Desc"})
+	})
+
 	t.Run("VerifyEqualGameMerge", func(t *testing.T) {
 		env4 := NewEnv().SetUID(String("fake"))
 		gameDesc5 := String("test-game")
