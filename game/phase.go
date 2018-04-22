@@ -458,6 +458,23 @@ func (p *PhaseResolver) Act() error {
 		return nil
 	}
 
+	// Clean up old phase states.
+
+	phaseStateIDs := make([]*datastore.Key, len(p.PhaseStates))
+	for i := range p.PhaseStates {
+		p.PhaseStates[i].ZippedOptions = nil
+		phaseStateID, err := p.PhaseStates[i].ID(p.Context)
+		if err != nil {
+			log.Errorf(p.Context, "Unable to create ID for %v: %v; hope datastore gets fixed", PP(p.PhaseStates[i]), err)
+			return err
+		}
+		phaseStateIDs[i] = phaseStateID
+	}
+	if _, err := datastore.PutMulti(p.Context, phaseStateIDs, p.PhaseStates); err != nil {
+		log.Errorf(p.Context, "Unable to save old phase states %v: %v; hope datastore will get fixed", PP(p.PhaseStates), err)
+		return err
+	}
+
 	// Roll forward the game state.
 
 	log.Infof(p.Context, "PhaseStates at resolve time: %v", PP(p.PhaseStates))
@@ -776,6 +793,13 @@ func (p *PhaseResolver) Act() error {
 	}
 
 	if p.Game.Finished {
+
+		// Clean up last order options from what's cached in the game.
+
+		for i := range p.Game.Members {
+			p.Game.Members[i].NewestPhaseState.ZippedOptions = nil
+		}
+
 		// Enqueue updating of ratings, which will in turn update user stats.
 
 		if !p.Game.Private {
@@ -785,7 +809,10 @@ func (p *PhaseResolver) Act() error {
 			}
 		}
 
-	} else {
+	}
+
+	if !p.Game.Finished || p.Game.Private {
+
 		// Enqueue updating of user stats (for NMR/NonNMR purposes).
 
 		uids := make([]string, len(p.Game.Members))
@@ -796,6 +823,7 @@ func (p *PhaseResolver) Act() error {
 			log.Errorf(p.Context, "Unable to enqueue user stats update tasks: %v; hope datastore gets fixed", err)
 			return err
 		}
+
 	}
 
 	// Eject probationaries from staging games.
