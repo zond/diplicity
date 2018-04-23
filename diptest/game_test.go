@@ -185,6 +185,25 @@ func TestGameMerging(t *testing.T) {
 	})
 }
 
+func TestCreateGameWithAlias(t *testing.T) {
+	gameDesc := String("test-game")
+	gameAlias := String("alias")
+	env := NewEnv().SetUID(String("fake"))
+	env.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").
+		Body(map[string]interface{}{
+			"Variant": "Classical",
+			"NoMerge": true,
+			"FirstMember": game.Member{
+				GameAlias: gameAlias,
+			},
+			"Desc":               gameDesc,
+			"PhaseLengthMinutes": time.Duration(60),
+		}).Success().
+		AssertEq(gameDesc, "Properties", "Desc").
+		Find(gameAlias, []string{"Properties", "Members"}, []string{"GameAlias"})
+}
+
 func TestCreateLeaveGame(t *testing.T) {
 	gameDesc := String("test-game")
 	env := NewEnv().SetUID(String("fake"))

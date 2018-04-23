@@ -27,7 +27,7 @@ var MemberResource = &Resource{
 type Member struct {
 	User             auth.User
 	Nation           godip.Nation
-	GameAlias        string `methods:"POST,PUT"`
+	GameAlias        string `methods:"POST,PUT" datastore:",noindex"`
 	NewestPhaseState PhaseState
 	UnreadMessages   int
 }

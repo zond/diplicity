@@ -390,6 +390,7 @@ type Game struct {
 
 	ActiveBans         []Ban    `datastore:"-"`
 	FailedRequirements []string `datastore:"-"`
+	FirstMember        Member   `datastore:"-" json:",omitempty" methods:"POST"`
 
 	CreatedAt   time.Time
 	CreatedAgo  time.Duration `datastore:"-" ticker:"true"`
@@ -614,7 +615,7 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 
 	for _, otherGame := range games {
 		if game.canMergeInto(&otherGame, user) {
-			member := &Member{}
+			member := &game.FirstMember
 			if joinedGame, _, err := createMemberHelper(ctx, r, otherGame.ID, user, member); err != nil {
 				return nil, err
 			} else {
@@ -676,7 +677,8 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 		game.Members = []Member{
 			{
-				User: *user,
+				User:      *user,
+				GameAlias: game.FirstMember.GameAlias,
 				NewestPhaseState: PhaseState{
 					GameID: game.ID,
 				},
