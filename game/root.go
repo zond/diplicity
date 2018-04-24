@@ -38,6 +38,14 @@ func handleIndex(w ResponseWriter, r Request) error {
 				"The source code for this service can be found at https://github.com/zond/diplicity.",
 				"Patches are welcome!",
 			},
+			[]string{
+				"Creating games",
+				"Most fields when creating games are self explanatory, but some of them require a bit of extra help.",
+				"FirstMember.GameAlias is the alias that will be saved for the user that created the game. This is the same GameAlias as when updating a game membership.",
+				"FirstMember.NationPreferences is the nations the game creator wants to play, in order of preference. This is the same NationPreferences as when updating a game membership.",
+				"NoMerge should be set to true if the game should _not_ be merged with another open public game with the same settings.",
+				"Private should be set to true if the game should _not_ show up in any game lists other than 'My ...'.",
+			},
 		}).AddLink(r.NewLink(Link{
 		Rel:   "self",
 		Route: IndexRoute,
@@ -47,7 +55,7 @@ func handleIndex(w ResponseWriter, r Request) error {
 	})).AddLink(r.NewLink(Link{
 		Rel:   "global-stats",
 		Route: GlobalStatsRoute,
-	}))
+	})).AddLink(r.NewLink(AllocationResource.Link("test-allocation", Create, nil)))
 
 	if user == nil {
 		redirectURL := r.Req().URL

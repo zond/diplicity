@@ -1,6 +1,7 @@
 package diptest
 
 import (
+	"math/rand"
 	"net/http"
 	"net/url"
 	"sort"
@@ -9,7 +10,177 @@ import (
 	"time"
 
 	"github.com/zond/diplicity/game"
+	"github.com/zond/godip"
+	"github.com/zond/godip/variants"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+func permutations(arr godip.Nations) []godip.Nations {
+	var helper func(godip.Nations, int)
+	res := []godip.Nations{}
+
+	helper = func(arr godip.Nations, n int) {
+		if n == 1 {
+			tmp := make(godip.Nations, len(arr))
+			copy(tmp, arr)
+			res = append(res, tmp)
+		} else {
+			for i := 0; i < n; i++ {
+				helper(arr, n-1)
+				if n%2 == 1 {
+					tmp := arr[i]
+					arr[i] = arr[n-1]
+					arr[n-1] = tmp
+				} else {
+					tmp := arr[0]
+					arr[0] = arr[n-1]
+					arr[n-1] = tmp
+				}
+			}
+		}
+	}
+	helper(arr, len(arr))
+	return res
+}
+
+func TestPreferenceAllocation(t *testing.T) {
+	members := game.AllocationMembers{
+		{
+			Prefs: godip.Nations{
+				godip.England,
+				godip.France,
+				godip.Germany,
+			},
+		},
+		{
+			Prefs: godip.Nations{
+				godip.France,
+				godip.England,
+				godip.Germany,
+			},
+		},
+		{
+			Prefs: godip.Nations{
+				godip.Germany,
+				godip.France,
+				godip.England,
+			},
+		},
+		{
+			Prefs: godip.Nations{
+				godip.Russia,
+				godip.Turkey,
+				godip.Italy,
+				godip.Austria,
+				godip.Germany,
+				godip.France,
+				godip.England,
+			},
+		},
+		{
+			Prefs: godip.Nations{
+				godip.Russia,
+				godip.Turkey,
+				godip.Italy,
+				godip.Austria,
+				godip.Germany,
+				godip.France,
+				godip.England,
+			},
+		},
+		{
+			Prefs: godip.Nations{
+				godip.Russia,
+				godip.Turkey,
+				godip.Italy,
+				godip.Austria,
+				godip.Germany,
+				godip.France,
+				godip.England,
+			},
+		},
+		{
+			Prefs: godip.Nations{
+				godip.Russia,
+				godip.Turkey,
+				godip.Italy,
+				godip.Austria,
+				godip.Germany,
+				godip.France,
+				godip.England,
+			},
+		},
+	}
+	alloc, err := game.Allocate(members, variants.Variants["Classical"].Nations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alloc[0] != godip.England {
+		t.Errorf("Wanted England, got %v", alloc[0])
+	}
+	if alloc[1] != godip.France {
+		t.Errorf("Wanted France, got %v", alloc[1])
+	}
+	if alloc[2] != godip.Germany {
+		t.Errorf("Wanted Germany, got %v", alloc[2])
+	}
+	members[1].Prefs = godip.Nations{
+		godip.England,
+		godip.Germany,
+		godip.France,
+	}
+	va := variants.Variants["Classical"]
+	alloc, err = game.Allocate(members, va.Nations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alloc[0] != godip.France {
+		t.Errorf("Wanted France, got %v", alloc[0])
+	}
+	if alloc[1] != godip.England {
+		t.Errorf("Wanted England, got %v", alloc[1])
+	}
+	if alloc[2] != godip.Germany {
+		t.Errorf("Wanted Germany, got %v", alloc[2])
+	}
+	for i := range members {
+		prefs := rand.Perm(len(va.Nations))
+		members[i].Prefs = make(godip.Nations, len(va.Nations))
+		for j, pref := range prefs {
+			members[i].Prefs[j] = va.Nations[pref]
+		}
+	}
+	alloc, err = game.Allocate(members, va.Nations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scorer := func(p godip.Nations) int {
+		result := 0
+		for memberIdx, nat := range p {
+			member := members[memberIdx]
+			for score, pref := range member.Prefs {
+				if pref == nat {
+					result += score
+					break
+				}
+			}
+		}
+		return result
+	}
+	foundScore := scorer(alloc)
+	bestScore := -1
+	for _, perm := range permutations(va.Nations) {
+		if thisScore := scorer(perm); bestScore == -1 || thisScore < bestScore {
+			bestScore = thisScore
+		}
+	}
+	if bestScore != foundScore {
+		t.Errorf("Got %v, but best score was %v", foundScore, bestScore)
+	}
+}
 
 func TestGameSorting(t *testing.T) {
 	g := game.Games{
@@ -202,6 +373,48 @@ func TestCreateGameWithAlias(t *testing.T) {
 		}).Success().
 		AssertEq(gameDesc, "Properties", "Desc").
 		Find(gameAlias, []string{"Properties", "Members"}, []string{"GameAlias"})
+}
+
+func TestCreateGameWithPrefs(t *testing.T) {
+	envs := []*Env{
+		NewEnv().SetUID(String("fake")),
+		NewEnv().SetUID(String("fake")),
+		NewEnv().SetUID(String("fake")),
+		NewEnv().SetUID(String("fake")),
+		NewEnv().SetUID(String("fake")),
+		NewEnv().SetUID(String("fake")),
+		NewEnv().SetUID(String("fake")),
+	}
+
+	gameDesc := String("test-game")
+	envs[0].GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").
+		Body(map[string]interface{}{
+			"Variant": "Classical",
+			"NoMerge": true,
+			"FirstMember": game.Member{
+				NationPreferences: string(godip.Austria),
+			},
+			"Desc":               gameDesc,
+			"PhaseLengthMinutes": time.Duration(60),
+		}).Success().
+		AssertEq(gameDesc, "Properties", "Desc")
+
+	for i := 1; i < len(envs); i++ {
+		envs[i].GetRoute(game.IndexRoute).Success().
+			Follow("open-games", "Links").Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			Follow("join", "Links").Body(map[string]interface{}{
+			"NationPreferences": string(variants.Variants["Classical"].Nations[i]),
+		}).Success()
+	}
+
+	for i, env := range envs {
+		env.GetRoute(game.IndexRoute).Success().
+			Follow("my-started-games", "Links").Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			Find(variants.Variants["Classical"].Nations[i], []string{"Properties", "Members"}, []string{"Nation"})
+	}
 }
 
 func TestCreateLeaveGame(t *testing.T) {

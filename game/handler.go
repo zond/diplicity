@@ -11,11 +11,14 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/diplicity/variants"
+	"github.com/zond/godip"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/delay"
 	"google.golang.org/appengine/log"
+
+	dipVariants "github.com/zond/godip/variants"
 
 	. "github.com/zond/goaeoas"
 )
@@ -28,10 +31,16 @@ var (
 		gameResultKind:  func() interface{} { return &GameResult{} },
 		phaseResultKind: func() interface{} { return &PhaseResult{} },
 	}
+
+	AllocationResource *Resource
 )
 
 func init() {
 	resaveFunc = delay.Func("resaveFunc", resave)
+	AllocationResource = &Resource{
+		Create:      createAllocation,
+		RenderLinks: true,
+	}
 }
 
 const (
@@ -73,6 +82,7 @@ const (
 	ReRateRoute                 = "ReRate"
 	GlobalStatsRoute            = "GlobalStats"
 	ResaveRoute                 = "Resave"
+	AllocateNationsRoute        = "AllocateNations"
 )
 
 type userStatsHandler struct {
@@ -418,6 +428,64 @@ var (
 	}
 )
 
+type AllocationMember struct {
+	Prefs  godip.Nations `methods:"POST"`
+	Result godip.Nation
+}
+
+func (a AllocationMember) Preferences() godip.Nations {
+	result := godip.Nations{}
+	for _, preference := range a.Prefs {
+		result = append(result, godip.Nation(preference))
+	}
+	return result
+}
+
+type AllocationMembers []AllocationMember
+
+func (a AllocationMembers) Len() int {
+	return len(a)
+}
+
+func (a AllocationMembers) Each(f func(int, Preferer)) {
+	for idx, member := range a {
+		f(idx, member)
+	}
+}
+
+type Allocation struct {
+	Members AllocationMembers `methods:"POST"`
+	Variant string            `methods:"POST"`
+}
+
+func (a *Allocation) Item(r Request) *Item {
+	allocationItem := NewItem(a).SetName("Allocation")
+	return allocationItem
+}
+
+func createAllocation(w ResponseWriter, r Request) (*Allocation, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	a := &Allocation{}
+	err := Copy(a, r, "POST")
+	if err != nil {
+		return nil, err
+	}
+	variant, found := dipVariants.Variants[a.Variant]
+	if !found {
+		return nil, HTTPErr{fmt.Sprintf("variant %q not found", a.Variant), http.StatusNotFound}
+	}
+	log.Infof(ctx, "Allocating for %+v, %+v", a, variant.Nations)
+	alloc, err := Allocate(a.Members, variant.Nations)
+	if err != nil {
+		return nil, err
+	}
+	for memberIdx := range a.Members {
+		a.Members[memberIdx].Result = alloc[memberIdx]
+	}
+	return a, nil
+}
+
 type configuration struct {
 	OAuth      *auth.OAuth
 	FCMConf    *FCMConf
@@ -550,6 +618,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Map", []string{"GET"}, RenderPhaseMapRoute, renderPhaseMap)
 	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
 	HandleResource(r, GameResource)
+	HandleResource(r, AllocationResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)
 	HandleResource(r, OrderResource)

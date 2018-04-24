@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/oddg/hungarian-algorithm"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
@@ -32,6 +33,11 @@ const (
 	gameKind           = "Game"
 	sendGridKind       = "SendGrid"
 	MAX_PHASE_DEADLINE = 30 * 24 * 60
+)
+
+const (
+	RandomAllocation AllocationMethod = iota
+	PreferenceAllocation
 )
 
 func init() {
@@ -113,6 +119,8 @@ func init() {
 		},
 	}
 }
+
+type AllocationMethod int
 
 type SendGrid struct {
 	APIKey string
@@ -368,23 +376,24 @@ type Game struct {
 	Closed   bool // Game is no longer joinable..
 	Finished bool // Game has reached its end.
 
-	Desc                  string        `methods:"POST" datastore:",noindex"`
-	Variant               string        `methods:"POST"`
-	PhaseLengthMinutes    time.Duration `methods:"POST"`
-	MaxHated              float64       `methods:"POST"`
-	MaxHater              float64       `methods:"POST"`
-	MinRating             float64       `methods:"POST"`
-	MaxRating             float64       `methods:"POST"`
-	MinReliability        float64       `methods:"POST"`
-	MinQuickness          float64       `methods:"POST"`
-	Private               bool          `methods:"POST"`
-	NoMerge               bool          `methods:"POST"`
-	DisableConferenceChat bool          `methods:"POST"`
-	DisableGroupChat      bool          `methods:"POST"`
-	DisablePrivateChat    bool          `methods:"POST"`
+	Desc                  string           `methods:"POST" datastore:",noindex"`
+	Variant               string           `methods:"POST"`
+	PhaseLengthMinutes    time.Duration    `methods:"POST"`
+	MaxHated              float64          `methods:"POST"`
+	MaxHater              float64          `methods:"POST"`
+	MinRating             float64          `methods:"POST"`
+	MaxRating             float64          `methods:"POST"`
+	MinReliability        float64          `methods:"POST"`
+	MinQuickness          float64          `methods:"POST"`
+	Private               bool             `methods:"POST"`
+	NoMerge               bool             `methods:"POST"`
+	DisableConferenceChat bool             `methods:"POST"`
+	DisableGroupChat      bool             `methods:"POST"`
+	DisablePrivateChat    bool             `methods:"POST"`
+	NationAllocation      AllocationMethod `methods:"POST"`
 
 	NMembers int
-	Members  []Member
+	Members  Members
 
 	NewestPhaseMeta []PhaseMeta
 
@@ -677,8 +686,9 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 		game.Members = []Member{
 			{
-				User:      *user,
-				GameAlias: game.FirstMember.GameAlias,
+				User:              *user,
+				GameAlias:         game.FirstMember.GameAlias,
+				NationPreferences: game.FirstMember.NationPreferences,
 				NewestPhaseState: PhaseState{
 					GameID: game.ID,
 				},
@@ -699,6 +709,54 @@ func (g *Game) Redact(viewer *auth.User) {
 	}
 }
 
+type Preferer interface {
+	Preferences() godip.Nations
+}
+
+type Preferers interface {
+	Each(func(int, Preferer))
+	Len() int
+}
+
+func Allocate(preferers Preferers, nations godip.Nations) ([]godip.Nation, error) {
+	validNation := map[godip.Nation]bool{}
+	for _, nation := range nations {
+		validNation[nation] = true
+	}
+	costs := make([][]int, preferers.Len())
+	preferers.Each(func(memberIdx int, preferer Preferer) {
+		// For each player, create a cost map.
+		costMap := map[godip.Nation]int{}
+		for _, nation := range preferer.Preferences() {
+			// For each valid nation preference, give it a cost of the current size of the cost map.
+			if validNation[nation] {
+				costMap[nation] = len(costMap)
+			}
+		}
+		// Create a cost array for the player.
+		memberCosts := make([]int, len(nations))
+		for _, nationIdx := range rand.Perm(len(nations)) {
+			nation := nations[nationIdx]
+			// For each nation, add a new cost if we don't already have one.
+			if _, found := costMap[nation]; !found {
+				costMap[nation] = len(costMap)
+			}
+			// Add that cost to the cost array.
+			memberCosts[nationIdx] = costMap[nation]
+		}
+		costs[memberIdx] = memberCosts
+	})
+	solution, err := hungarianAlgorithm.Solve(costs)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]godip.Nation, len(nations))
+	for memberIdx := range result {
+		result[memberIdx] = nations[solution[memberIdx]]
+	}
+	return result, nil
+}
+
 func (g *Game) Start(ctx context.Context, r Request) error {
 	variant := variants.Variants[g.Variant]
 	s, err := variant.Start()
@@ -709,8 +767,20 @@ func (g *Game) Start(ctx context.Context, r Request) error {
 	g.Started = true
 	g.StartedAt = time.Now()
 	g.Closed = true
-	for memberIndex, nationIndex := range rand.Perm(len(variants.Variants[g.Variant].Nations)) {
-		g.Members[memberIndex].Nation = variants.Variants[g.Variant].Nations[nationIndex]
+	if g.NationAllocation == RandomAllocation {
+		for memberIndex, nationIndex := range rand.Perm(len(variant.Nations)) {
+			g.Members[memberIndex].Nation = variant.Nations[nationIndex]
+		}
+	} else if g.NationAllocation == PreferenceAllocation {
+		alloc, err := Allocate(g.Members, variant.Nations)
+		if err != nil {
+			return err
+		}
+		for memberIdx := range g.Members {
+			g.Members[memberIdx].Nation = alloc[memberIdx]
+		}
+	} else {
+		return HTTPErr{fmt.Sprintf("unknown allocation method %v, pick %v or %v", g.NationAllocation, RandomAllocation, PreferenceAllocation), http.StatusBadRequest}
 	}
 
 	scheme := "http"

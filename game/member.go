@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
@@ -25,11 +26,32 @@ var MemberResource = &Resource{
 }
 
 type Member struct {
-	User             auth.User
-	Nation           godip.Nation
-	GameAlias        string `methods:"POST,PUT" datastore:",noindex"`
-	NewestPhaseState PhaseState
-	UnreadMessages   int
+	User              auth.User
+	Nation            godip.Nation
+	GameAlias         string `methods:"POST,PUT" datastore:",noindex"`
+	NationPreferences string `methods:"POST,PUT" datastore:",noindex"`
+	NewestPhaseState  PhaseState
+	UnreadMessages    int
+}
+
+type Members []Member
+
+func (m Members) Len() int {
+	return len(m)
+}
+
+func (m Members) Each(f func(int, Preferer)) {
+	for idx, member := range m {
+		f(idx, member)
+	}
+}
+
+func (m Member) Preferences() godip.Nations {
+	result := godip.Nations{}
+	for _, preference := range strings.Split(m.NationPreferences, ",") {
+		result = append(result, godip.Nation(strings.TrimSpace(preference)))
+	}
+	return result
 }
 
 func (m *Member) Item(r Request) *Item {
@@ -44,6 +66,7 @@ func (m *Member) Redact(viewer *auth.User, isMember bool) {
 		m.GameAlias = ""
 		m.NewestPhaseState = PhaseState{}
 		m.UnreadMessages = 0
+		m.NationPreferences = ""
 	}
 }
 
@@ -80,8 +103,14 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 		if !isMember {
 			return HTTPErr{"non existing member", http.StatusNotFound}
 		}
+		previousPreferences := member.NationPreferences
 		if err := CopyBytes(member, r, bodyBytes, "PUT"); err != nil {
 			return err
+		}
+		if game.Started {
+			if previousPreferences != member.NationPreferences {
+				return HTTPErr{"cannot change nation preferences after game started", http.StatusPreconditionFailed}
+			}
 		}
 		updated := false
 		for i := range game.Members {
