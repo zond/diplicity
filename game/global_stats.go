@@ -89,6 +89,9 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 			"CreatedAtDaysAgo":   newHist("Days ago active games were created"),
 			"StartedAtDaysAgo":   newHist("Days ago active games were started"),
 			"Private":            newHist("Distribution of private vs public games"),
+			"ConferenceChat":     newHist("Distribution of games with vs without conference chat"),
+			"GroupChat":          newHist("Distribution of games with vs without group chat"),
+			"PrivateChat":        newHist("Distribution of games with vs without private chat"),
 		},
 		ActiveGameMemberUserStatsHistograms: newUserStatsHistograms("members of active games"),
 		ActiveMemberUserStatsHistograms:     newUserStatsHistograms("active members of active games"),
@@ -115,11 +118,10 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 		bumpNamedHistogram("Variant", game.Variant, globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("CreatedAtDaysAgo", int(time.Now().Sub(game.CreatedAt)/(time.Hour*24)), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("StartedAtDaysAgo", int(time.Now().Sub(game.StartedAt)/(time.Hour*24)), globalStats.ActiveGameHistograms)
-		private := 0
-		if game.Private {
-			private = 1
-		}
-		bumpNamedHistogram("Private", private, globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("Private", fmt.Sprint(game.Private), globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("ConferenceChat", fmt.Sprint(!game.DisableConferenceChat), globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("GroupChat", fmt.Sprint(!game.DisableGroupChat), globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("PrivateChat", fmt.Sprint(!game.DisablePrivateChat), globalStats.ActiveGameHistograms)
 		for _, member := range game.Members {
 			activeGameMemberUserIds[member.User.Id] = struct{}{}
 			if !member.NewestPhaseState.OnProbation && !member.NewestPhaseState.Eliminated {
