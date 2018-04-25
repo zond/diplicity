@@ -92,6 +92,7 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 			"ConferenceChat":     newHist("Distribution of games with vs without conference chat"),
 			"GroupChat":          newHist("Distribution of games with vs without group chat"),
 			"PrivateChat":        newHist("Distribution of games with vs without private chat"),
+			"NationAllocation":   newHist("Distribution of games with different methods of nation allocation"),
 		},
 		ActiveGameMemberUserStatsHistograms: newUserStatsHistograms("members of active games"),
 		ActiveMemberUserStatsHistograms:     newUserStatsHistograms("active members of active games"),
@@ -128,6 +129,11 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 				activeMemberUserIds[member.User.Id] = struct{}{}
 			}
 		}
+		allocation := "Random"
+		if game.NationAllocation == 1 {
+			allocation = "Preferences"
+		}
+		bumpNamedHistogram("NationAllocation", allocation, globalStats.ActiveGameHistograms)
 	}
 
 	activeUserStatsIDs := make([]*datastore.Key, 0, len(activeGameMemberUserIds))
