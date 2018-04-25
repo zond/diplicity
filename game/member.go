@@ -58,7 +58,7 @@ func (m *Member) Item(r Request) *Item {
 	return NewItem(m).SetName(m.User.Name)
 }
 
-func (m *Member) Redact(viewer *auth.User, isMember bool) {
+func (m *Member) Redact(viewer *auth.User, isMember bool, started bool) {
 	if !isMember {
 		m.User.Email = ""
 	}
@@ -66,6 +66,8 @@ func (m *Member) Redact(viewer *auth.User, isMember bool) {
 		m.GameAlias = ""
 		m.NewestPhaseState = PhaseState{}
 		m.UnreadMessages = 0
+	}
+	if !started && viewer.Id != m.User.Id {
 		m.NationPreferences = ""
 	}
 }

@@ -705,7 +705,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 func (g *Game) Redact(viewer *auth.User) {
 	_, isMember := g.GetMember(viewer.Id)
 	for index := range g.Members {
-		g.Members[index].Redact(viewer, isMember)
+		g.Members[index].Redact(viewer, isMember, g.Started)
 	}
 }
 
