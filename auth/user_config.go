@@ -175,6 +175,7 @@ type UserConfig struct {
 	UserId     string
 	FCMTokens  []FCMToken `methods:"PUT"`
 	MailConfig MailConfig `methods:"PUT"`
+	Colors     []string   `methods:"PUT"`
 }
 
 var UserConfigResource = &Resource{

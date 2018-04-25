@@ -1402,10 +1402,25 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 		return err
 	}
 
+	userConfigID := auth.UserConfigID(ctx, auth.UserID(ctx, user.Id))
+
 	game := &Game{}
 	phase := &Phase{}
-	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
-		return err
+	userConfig := &auth.UserConfig{}
+	err = datastore.GetMulti(
+		ctx,
+		[]*datastore.Key{gameID, phaseID, userConfigID},
+		[]interface{}{game, phase, userConfig},
+	)
+	if err != nil {
+		if merr, ok := err.(appengine.MultiError); ok {
+			if merr[0] != nil || merr[1] != nil || (merr[2] != nil && merr[2] != datastore.ErrNoSuchEntity) {
+				return merr
+			}
+			err = nil
+		} else {
+			return err
+		}
 	}
 	game.ID = gameID
 
@@ -1429,7 +1444,7 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 
 	vPhase := phase.toVariantsPhase(game.Variant, ordersToDisplay)
 
-	return dvars.RenderPhaseMap(w, r, vPhase)
+	return dvars.RenderPhaseMap(w, r, vPhase, userConfig.Colors)
 }
 
 func listPhases(w ResponseWriter, r Request) error {

@@ -43,6 +43,9 @@ func (p *Phase) FromQuery(q url.Values) error {
 	p.Resolutions = map[godip.Province]string{}
 
 	for key, vals := range q {
+		if key == "fake-id" || key == "api-level" || key == "fake-email" {
+			continue
+		}
 		for _, val := range vals {
 			switch key {
 			case "s":

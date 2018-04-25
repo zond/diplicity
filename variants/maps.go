@@ -4,12 +4,29 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+
+	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip/variants"
 
 	. "github.com/zond/goaeoas"
 )
 
 func handleRenderMap(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	colors := []string{}
+	user, ok := r.Values()["user"].(*auth.User)
+	if ok {
+		userConfigID := auth.UserConfigID(ctx, auth.UserID(ctx, user.Id))
+		userConfig := &auth.UserConfig{}
+		if err := datastore.Get(ctx, userConfigID, userConfig); err != nil && err != datastore.ErrNoSuchEntity {
+			return err
+		}
+		colors = userConfig.Colors
+	}
+
 	phase := &Phase{
 		Variant: r.Vars()["name"],
 	}
@@ -17,10 +34,10 @@ func handleRenderMap(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	return RenderPhaseMap(w, r, phase)
+	return RenderPhaseMap(w, r, phase, colors)
 }
 
-func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
+func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) error {
 	variant := variants.Variants[phase.Variant]
 
 	mapURL, err := router.Get(VariantMapRoute).URL("name", phase.Variant)
@@ -37,7 +54,11 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase) error {
 
 	jsBuf := []string{}
 	for i, nat := range variant.Nations {
-		jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nat, i))
+		if i < len(colors) {
+			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nat, colors[i]))
+		} else {
+			jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nat, i))
+		}
 	}
 	for prov, unit := range phase.Units {
 		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s);", unit.Type, prov, unit.Nation))
