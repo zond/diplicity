@@ -458,6 +458,9 @@ func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
 	if g.DisablePrivateChat != o.DisablePrivateChat {
 		return false
 	}
+	if g.NationAllocation != o.NationAllocation {
+		return false
+	}
 	if g.NMembers+o.NMembers > len(variants.Variants[g.Variant].Nations) {
 		return false
 	}
@@ -611,6 +614,7 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 		Filter("DisableConferenceChat=", game.DisableConferenceChat).
 		Filter("DisableGroupChat=", game.DisableGroupChat).
 		Filter("DisablePrivateChat=", game.DisablePrivateChat).
+		Filter("NationAllocation=", game.NationAllocation).
 		GetAll(ctx, &games)
 	if err != nil {
 		return nil, err
