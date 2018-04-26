@@ -2,16 +2,48 @@ package variants
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 
 	. "github.com/zond/goaeoas"
 )
+
+var (
+	overrideColorReg = regexp.MustCompile("^#([a-fA-F0-9]{6,6}|[a-fA-F0-9]{8,8})$")
+	nationColorReg   = regexp.MustCompile("^(\\w+)/(#([a-fA-F0-9]{6,6}|[a-fA-F0-9]{8,8}))$")
+	variantColorReg  = regexp.MustCompile("^(\\w+)/(\\w+)/(#([a-fA-F0-9]{6,6}|[a-fA-F0-9]{8,8}))$")
+)
+
+func ParseColors(colors []string) (
+	overrides []string,
+	nations map[godip.Nation]string,
+	variants map[string]map[godip.Nation]string,
+) {
+	nations = map[godip.Nation]string{}
+	variants = map[string]map[godip.Nation]string{}
+	for _, color := range colors {
+		if match := variantColorReg.FindStringSubmatch(color); match != nil {
+			nationMap, found := variants[match[1]]
+			if !found {
+				nationMap = map[godip.Nation]string{}
+			}
+			nationMap[godip.Nation(match[2])] = match[3]
+			variants[match[1]] = nationMap
+		} else if match = nationColorReg.FindStringSubmatch(color); match != nil {
+			nations[godip.Nation(match[1])] = match[2]
+		} else if overrideColorReg.MatchString(color) {
+			overrides = append(overrides, color)
+		}
+	}
+	return
+}
 
 func handleRenderMap(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
@@ -52,13 +84,27 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) 
 		staticJSBuf = append(staticJSBuf, fmt.Sprintf("var col%s;", nat))
 	}
 
+	overrides, nations, variants := ParseColors(colors)
+
 	jsBuf := []string{}
 	for i, nat := range variant.Nations {
-		if i < len(colors) {
-			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nat, colors[i]))
-		} else {
-			jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nat, i))
+		if nationMap, found := variants[phase.Variant]; found {
+			if color, found := nationMap[nat]; found {
+				jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nat, color))
+				continue
+			}
 		}
+		if color, found := nations[nat]; found {
+			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nat, color))
+			continue
+		}
+		if len(overrides) > 0 {
+			color := overrides[0]
+			overrides = overrides[1:]
+			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nat, color))
+			continue
+		}
+		jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nat, i))
 	}
 	for prov, unit := range phase.Units {
 		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s);", unit.Type, prov, unit.Nation))
