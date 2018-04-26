@@ -670,14 +670,16 @@ func createMessageHelper(ctx context.Context, r Request, message *Message) error
 		if !game.Started {
 			return HTTPErr{"game not yet started", http.StatusBadRequest}
 		}
-		if game.DisablePrivateChat && len(message.ChannelMembers) == 2 {
-			return HTTPErr{"private chat disabled", http.StatusBadRequest}
-		}
-		if game.DisableGroupChat && len(message.ChannelMembers) > 2 && len(message.ChannelMembers) < len(variants.Variants[game.Variant].Nations) {
-			return HTTPErr{"group chat disabled", http.StatusBadRequest}
-		}
-		if game.DisableConferenceChat && len(message.ChannelMembers) == len(variants.Variants[game.Variant].Nations) {
-			return HTTPErr{"conference chat disabled", http.StatusBadRequest}
+		if !game.Finished {
+			if game.DisablePrivateChat && len(message.ChannelMembers) == 2 {
+				return HTTPErr{"private chat disabled", http.StatusBadRequest}
+			}
+			if game.DisableGroupChat && len(message.ChannelMembers) > 2 && len(message.ChannelMembers) < len(variants.Variants[game.Variant].Nations) {
+				return HTTPErr{"group chat disabled", http.StatusBadRequest}
+			}
+			if game.DisableConferenceChat && len(message.ChannelMembers) == len(variants.Variants[game.Variant].Nations) {
+				return HTTPErr{"conference chat disabled", http.StatusBadRequest}
+			}
 		}
 		if message.ID, err = datastore.Put(ctx, datastore.NewIncompleteKey(ctx, messageKind, channelID), message); err != nil {
 			return err
