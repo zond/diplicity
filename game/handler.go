@@ -266,7 +266,7 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 			})
 		}
 	}
-	if privateFilter := uq.Get("private"); privateFilter == "true" {
+	if privateFilter := uq.Get("only-private"); privateFilter == "true" {
 		req.detailFilters = append(req.detailFilters, func(g *Game) bool {
 			return g.Private
 		})

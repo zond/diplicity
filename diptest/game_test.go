@@ -528,7 +528,7 @@ func TestGameListFilters(t *testing.T) {
 			false,
 		},
 		{
-			"private",
+			"only-private",
 			"true",
 			false,
 		},
