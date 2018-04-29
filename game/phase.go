@@ -648,6 +648,9 @@ func (p *PhaseResolver) Act() error {
 		// Just to ensure we don't try to resolve it again, even by mistake.
 		newPhase.Resolved = true
 		newPhase.ResolvedAt = time.Now()
+		p.Game.Finished = true
+		p.Game.FinishedAt = time.Now()
+		p.Game.Closed = true
 	}
 
 	// Save the old phase result.
@@ -669,14 +672,9 @@ func (p *PhaseResolver) Act() error {
 	}
 	p.Game.NewestPhaseMeta = []PhaseMeta{newPhase.PhaseMeta}
 
-	if newPhase.Resolved {
+	if p.Game.Finished {
 
-		// Finish the game and store a game result if the new phase is already resolved.
-
-		log.Infof(p.Context, "New phase is already resolved, marking game as finished and stopping early")
-		p.Game.Finished = true
-		p.Game.FinishedAt = time.Now()
-		p.Game.Closed = true
+		// Store a game result if it is finished.
 
 		diasMembers := []godip.Nation{}
 		diasUsers := []string{}
