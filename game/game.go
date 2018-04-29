@@ -58,6 +58,8 @@ var (
 
 func init() {
 	gameListerParams := []string{
+		"cursor",
+		"limit",
 		"variant",
 		"min-reliability",
 		"min-quickness",
@@ -68,8 +70,6 @@ func init() {
 		"only-private",
 		"nation-allocation",
 		"phase-length-minutes",
-		"limit",
-		"cursor",
 	}
 	GameResource = &Resource{
 		Load:   loadGame,
