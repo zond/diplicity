@@ -65,11 +65,11 @@ func init() {
 		"max-hated",
 		"min-rating",
 		"max-rating",
-		"limit",
-		"cursor",
 		"only-private",
 		"nation-allocation",
 		"phase-length-minutes",
+		"limit",
+		"cursor",
 	}
 	GameResource = &Resource{
 		Load:   loadGame,
