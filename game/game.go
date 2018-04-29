@@ -57,7 +57,7 @@ var (
 )
 
 func init() {
-	gameListerParams := []string{"variant", "min-reliability", "min-quickness", "max-hater", "max-hated", "min-rating", "max-rating", "limit", "cursor"}
+	gameListerParams := []string{"variant", "min-reliability", "min-quickness", "max-hater", "max-hated", "min-rating", "max-rating", "limit", "cursor", "private", "nation-allocation"}
 	GameResource = &Resource{
 		Load:   loadGame,
 		Create: createGame,
