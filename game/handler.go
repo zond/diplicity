@@ -258,6 +258,19 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 			return g.Variant == variantFilter
 		})
 	}
+	if allocFilter := uq.Get("nation-allocation"); allocFilter != "" {
+		wantedAlloc, err := strconv.Atoi(allocFilter)
+		if err == nil {
+			req.detailFilters = append(req.detailFilters, func(g *Game) bool {
+				return g.NationAllocation == AllocationMethod(wantedAlloc)
+			})
+		}
+	}
+	if privateFilter := uq.Get("private"); privateFilter == "true" {
+		req.detailFilters = append(req.detailFilters, func(g *Game) bool {
+			return g.Private
+		})
+	}
 	if f := req.intervalFilter("MinReliability", "min-reliability"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}

@@ -523,6 +523,16 @@ func TestGameListFilters(t *testing.T) {
 
 	for _, f := range []filter{
 		{
+			"nation-allocation",
+			"1",
+			false,
+		},
+		{
+			"private",
+			"true",
+			false,
+		},
+		{
 			"variant",
 			"Classical",
 			true,
