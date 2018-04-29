@@ -203,8 +203,14 @@ func (req *gamesReq) intervalFilter(fieldName, paramName string) func(*Game) boo
 	}
 
 	return func(g *Game) bool {
-		cmp := reflect.ValueOf(g).Elem().FieldByName(fieldName).Float()
-		return cmp >= min && cmp <= max
+		cmpField := reflect.ValueOf(g).Elem().FieldByName(fieldName)
+		if cmpField.Kind() == reflect.Float32 || cmpField.Kind() == reflect.Float64 {
+			cmp := cmpField.Float()
+			return cmp >= min && cmp <= max
+		} else {
+			cmp := cmpField.Int()
+			return cmp >= int64(min) && cmp <= int64(max)
+		}
 	}
 }
 
@@ -270,6 +276,9 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 		req.detailFilters = append(req.detailFilters, func(g *Game) bool {
 			return g.Private
 		})
+	}
+	if f := req.intervalFilter("PhaseLengthMinutes", "phase-length-minutes"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
 	}
 	if f := req.intervalFilter("MinReliability", "min-reliability"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)

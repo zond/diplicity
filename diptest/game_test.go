@@ -523,6 +523,21 @@ func TestGameListFilters(t *testing.T) {
 
 	for _, f := range []filter{
 		{
+			"phase-length-minutes",
+			"60:60",
+			true,
+		},
+		{
+			"phase-length-minutes",
+			"61:1000",
+			false,
+		},
+		{
+			"phase-length-minutes",
+			"0:59",
+			false,
+		},
+		{
 			"nation-allocation",
 			"1",
 			false,
