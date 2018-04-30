@@ -523,6 +523,36 @@ func TestGameListFilters(t *testing.T) {
 
 	for _, f := range []filter{
 		{
+			"conference-chat-disabled",
+			"false",
+			true,
+		},
+		{
+			"conference-chat-disabled",
+			"true",
+			false,
+		},
+		{
+			"group-chat-disabled",
+			"false",
+			true,
+		},
+		{
+			"group-chat-disabled",
+			"true",
+			false,
+		},
+		{
+			"private-chat-disabled",
+			"false",
+			true,
+		},
+		{
+			"private-chat-disabled",
+			"true",
+			false,
+		},
+		{
 			"phase-length-minutes",
 			"60:60",
 			true,

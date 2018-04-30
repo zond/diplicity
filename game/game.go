@@ -70,6 +70,9 @@ func init() {
 		"only-private",
 		"nation-allocation",
 		"phase-length-minutes",
+		"conference-chat-disabled",
+		"group-chat-disabled",
+		"private-chat-disabled",
 	}
 	GameResource = &Resource{
 		Load:   loadGame,

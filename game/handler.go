@@ -181,6 +181,21 @@ func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
 	return nil, err
 }
 
+func (req *gamesReq) boolFilter(fieldName, paramName string) func(*Game) bool {
+	parm := req.r.Req().URL.Query().Get(paramName)
+	if parm == "" {
+		return nil
+	}
+
+	return func(g *Game) bool {
+		cmp := reflect.ValueOf(g).Elem().FieldByName(fieldName).Bool()
+		if parm == "true" {
+			return cmp
+		}
+		return !cmp
+	}
+}
+
 func (req *gamesReq) intervalFilter(fieldName, paramName string) func(*Game) bool {
 	parm := req.r.Req().URL.Query().Get(paramName)
 	if parm == "" {
@@ -272,10 +287,17 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 			})
 		}
 	}
-	if privateFilter := uq.Get("only-private"); privateFilter == "true" {
-		req.detailFilters = append(req.detailFilters, func(g *Game) bool {
-			return g.Private
-		})
+	if f := req.boolFilter("DisableConferenceChat", "conference-chat-disabled"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
+	}
+	if f := req.boolFilter("DisableGroupChat", "group-chat-disabled"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
+	}
+	if f := req.boolFilter("DisablePrivateChat", "private-chat-disabled"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
+	}
+	if f := req.boolFilter("Private", "only-private"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
 	}
 	if f := req.intervalFilter("PhaseLengthMinutes", "phase-length-minutes"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
