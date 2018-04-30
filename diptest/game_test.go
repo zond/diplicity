@@ -559,6 +559,26 @@ func TestGameListFilters(t *testing.T) {
 		},
 		{
 			"phase-length-minutes",
+			"60:",
+			true,
+		},
+		{
+			"phase-length-minutes",
+			"61:",
+			false,
+		},
+		{
+			"phase-length-minutes",
+			":60",
+			true,
+		},
+		{
+			"phase-length-minutes",
+			":59",
+			false,
+		},
+		{
+			"phase-length-minutes",
 			"61:1000",
 			false,
 		},

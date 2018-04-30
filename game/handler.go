@@ -196,7 +196,7 @@ func (req *gamesReq) boolFilter(fieldName, paramName string) func(*Game) bool {
 	}
 }
 
-func (req *gamesReq) intervalFilter(fieldName, paramName string) func(*Game) bool {
+func (req *gamesReq) intervalFilter(ctx context.Context, fieldName, paramName string) func(*Game) bool {
 	parm := req.r.Req().URL.Query().Get(paramName)
 	if parm == "" {
 		return nil
@@ -207,25 +207,38 @@ func (req *gamesReq) intervalFilter(fieldName, paramName string) func(*Game) boo
 		return nil
 	}
 
-	min, err := strconv.ParseFloat(parts[0], 64)
-	if err != nil {
-		return nil
+	var min *float64 = nil
+	var max *float64 = nil
+
+	mi, err := strconv.ParseFloat(parts[0], 64)
+	if err == nil {
+		min = &mi
 	}
 
-	max, err := strconv.ParseFloat(parts[1], 64)
-	if err != nil {
+	ma, err := strconv.ParseFloat(parts[1], 64)
+	if err == nil {
+		max = &ma
+	}
+
+	if min == nil && max == nil {
 		return nil
 	}
 
 	return func(g *Game) bool {
 		cmpField := reflect.ValueOf(g).Elem().FieldByName(fieldName)
+		var cmp float64
 		if cmpField.Kind() == reflect.Float32 || cmpField.Kind() == reflect.Float64 {
-			cmp := cmpField.Float()
-			return cmp >= min && cmp <= max
+			cmp = cmpField.Float()
 		} else {
-			cmp := cmpField.Int()
-			return cmp >= int64(min) && cmp <= int64(max)
+			cmp = float64(cmpField.Int())
 		}
+		if min != nil && cmp < *min {
+			return false
+		}
+		if max != nil && cmp > *max {
+			return false
+		}
+		return true
 	}
 }
 
@@ -299,25 +312,25 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 	if f := req.boolFilter("Private", "only-private"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
-	if f := req.intervalFilter("PhaseLengthMinutes", "phase-length-minutes"); f != nil {
+	if f := req.intervalFilter(req.ctx, "PhaseLengthMinutes", "phase-length-minutes"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
-	if f := req.intervalFilter("MinReliability", "min-reliability"); f != nil {
+	if f := req.intervalFilter(req.ctx, "MinReliability", "min-reliability"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
-	if f := req.intervalFilter("MinQuickness", "min-quickness"); f != nil {
+	if f := req.intervalFilter(req.ctx, "MinQuickness", "min-quickness"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
-	if f := req.intervalFilter("MaxHater", "max-hater"); f != nil {
+	if f := req.intervalFilter(req.ctx, "MaxHater", "max-hater"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
-	if f := req.intervalFilter("MaxHated", "max-hated"); f != nil {
+	if f := req.intervalFilter(req.ctx, "MaxHated", "max-hated"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
-	if f := req.intervalFilter("MinRating", "min-rating"); f != nil {
+	if f := req.intervalFilter(req.ctx, "MinRating", "min-rating"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
-	if f := req.intervalFilter("MaxRating", "max-rating"); f != nil {
+	if f := req.intervalFilter(req.ctx, "MaxRating", "max-rating"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
 
