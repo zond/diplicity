@@ -181,19 +181,13 @@ func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
 	return nil, err
 }
 
-func (req *gamesReq) boolFilter(fieldName, paramName string) func(*Game) bool {
+func (req *gamesReq) boolFilter(fieldName, paramName string, q *datastore.Query) *datastore.Query {
 	parm := req.r.Req().URL.Query().Get(paramName)
 	if parm == "" {
-		return nil
+		return q
 	}
 
-	return func(g *Game) bool {
-		cmp := reflect.ValueOf(g).Elem().FieldByName(fieldName).Bool()
-		if parm == "true" {
-			return cmp
-		}
-		return !cmp
-	}
+	return q.Filter(fmt.Sprintf("%s=", fieldName), parm == "true")
 }
 
 func (req *gamesReq) intervalFilter(ctx context.Context, fieldName, paramName string) func(*Game) bool {
@@ -242,6 +236,12 @@ func (req *gamesReq) intervalFilter(ctx context.Context, fieldName, paramName st
 	}
 }
 
+/*
+ * prepare creates a query and a bunch of filters useful when generating the next
+ * batch of games to return.
+ * WARNING: If you add filtering here, you should both add it to the gameListerParams in game.go
+ *          and add some testing in diptest/game_test.go/TestGameListFilters and /TestIndexCreation.
+ */
 func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, viewerStatsFilter bool) (*gamesReq, error) {
 	req := &gamesReq{
 		ctx:               appengine.NewContext(r.Req()),
@@ -288,30 +288,18 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 		return true
 	})
 	if variantFilter := uq.Get("variant"); variantFilter != "" {
-		req.detailFilters = append(req.detailFilters, func(g *Game) bool {
-			return g.Variant == variantFilter
-		})
+		q = q.Filter("Variant=", variantFilter)
 	}
 	if allocFilter := uq.Get("nation-allocation"); allocFilter != "" {
 		wantedAlloc, err := strconv.Atoi(allocFilter)
 		if err == nil {
-			req.detailFilters = append(req.detailFilters, func(g *Game) bool {
-				return g.NationAllocation == AllocationMethod(wantedAlloc)
-			})
+			q = q.Filter("NationAllocation=", wantedAlloc)
 		}
 	}
-	if f := req.boolFilter("DisableConferenceChat", "conference-chat-disabled"); f != nil {
-		req.detailFilters = append(req.detailFilters, f)
-	}
-	if f := req.boolFilter("DisableGroupChat", "group-chat-disabled"); f != nil {
-		req.detailFilters = append(req.detailFilters, f)
-	}
-	if f := req.boolFilter("DisablePrivateChat", "private-chat-disabled"); f != nil {
-		req.detailFilters = append(req.detailFilters, f)
-	}
-	if f := req.boolFilter("Private", "only-private"); f != nil {
-		req.detailFilters = append(req.detailFilters, f)
-	}
+	q = req.boolFilter("DisableConferenceChat", "conference-chat-disabled", q)
+	q = req.boolFilter("DisableGroupChat", "group-chat-disabled", q)
+	q = req.boolFilter("DisablePrivateChat", "private-chat-disabled", q)
+	q = req.boolFilter("Private", "only-private", q)
 	if f := req.intervalFilter(req.ctx, "PhaseLengthMinutes", "phase-length-minutes"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
@@ -365,6 +353,11 @@ func (h *gamesHandler) fetch(iter *datastore.Iterator, max int) (Games, error) {
 	return result, err
 }
 
+/*
+ * handle uses the generating and filtering setup in prepare
+ * to generate the next batch (according to cursor and limit)
+ * of games to return.
+ */
 func (req *gamesReq) handle() error {
 	var err error
 	games := make(Games, 0, req.limit)
