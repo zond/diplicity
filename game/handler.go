@@ -427,7 +427,7 @@ var (
 		route: ListFinishedGamesRoute,
 	}
 	startedGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("StartedAt"),
+		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
 		name:  "started-games",
 		desc:  []string{"Started games", "Started games, sorted with oldest first."},
 		route: ListStartedGamesRoute,

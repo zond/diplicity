@@ -16,7 +16,7 @@ var (
 			"-FinishedAt",
 		},
 		{
-			"StartedAt",
+			"-StartedAt",
 		},
 	}
 	fields = []string{

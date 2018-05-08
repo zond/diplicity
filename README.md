@@ -55,5 +55,8 @@ When running the server locally, you can also use the query parameter `fake-emai
 
 To run the tests
 
-1. Start the local server with a clean database and consistent datastore. Since the tests don't wait around for consistency to be achieved, this simplifies writing the tests. Run `dev_appserver.py --clear_datastore=yes --datastore_consistency_policy=consistent .` in the `app` directory.
+1. Start the local server with a clean database and consistent datastore. Since the tests don't wait around for consistency to be achieved, this simplifies writing the tests. Also, use `--require_indexes` so that you know all the necessary indices are present in `app/index.yaml`. If you find indices for `Game` missing, update and run `go run tools/genindex.go`, for other entity types remove `app/index.yaml`, run `go run tools/genindex.go` and then run the tests without `--require_indexes` to let `dev_appserver.py` add missing indices as it comes across them. The reason `Game` indices is special is that they are built using composite indexes according to https://cloud.google.com/appengine/articles/indexselection.
+
+    dev_appserver.py --require_indexes --skip_sdk_update_check=true --datastore_path=autotest --clear_datastore=true --datastore_consistency_policy=consistent .
+
 2. Run `go test -v` in the `diptest` directory.
