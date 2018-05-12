@@ -415,7 +415,7 @@ type Game struct {
 
 	ActiveBans         []Ban    `datastore:"-"`
 	FailedRequirements []string `datastore:"-"`
-	FirstMember        Member   `datastore:"-" json:",omitempty" methods:"POST"`
+	FirstMember        *Member  `datastore:"-" json:",omitempty" methods:"POST"`
 
 	CreatedAt   time.Time
 	CreatedAgo  time.Duration `datastore:"-" ticker:"true"`
@@ -644,7 +644,10 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 
 	for _, otherGame := range games {
 		if game.canMergeInto(&otherGame, user) {
-			member := &game.FirstMember
+			member := game.FirstMember
+			if member == nil {
+				member = &Member{}
+			}
 			if joinedGame, _, err := createMemberHelper(ctx, r, otherGame.ID, user, member); err != nil {
 				return nil, err
 			} else {
@@ -667,6 +670,9 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	err := Copy(game, r, "POST")
 	if err != nil {
 		return nil, err
+	}
+	if game.FirstMember == nil {
+		game.FirstMember = &Member{}
 	}
 	if _, found := variants.Variants[game.Variant]; !found {
 		return nil, HTTPErr{"unknown variant", http.StatusBadRequest}

@@ -20,7 +20,7 @@ func TestJoinLeaveGame(t *testing.T) {
 			"Desc":               gameDesc,
 			"PhaseLengthMinutes": time.Duration(60),
 			"NoMerge":            true,
-			"FirstMember": game.Member{
+			"FirstMember": &game.Member{
 				NationPreferences: "Austria,England",
 			},
 		}).Success().

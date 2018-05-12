@@ -367,7 +367,7 @@ func TestCreateGameWithAlias(t *testing.T) {
 		Body(map[string]interface{}{
 			"Variant": "Classical",
 			"NoMerge": true,
-			"FirstMember": game.Member{
+			"FirstMember": &game.Member{
 				GameAlias: gameAlias,
 			},
 			"Desc":               gameDesc,
@@ -394,7 +394,7 @@ func TestCreateGameWithPrefs(t *testing.T) {
 		Body(map[string]interface{}{
 			"Variant": "Classical",
 			"NoMerge": true,
-			"FirstMember": game.Member{
+			"FirstMember": &game.Member{
 				NationPreferences: string(godip.Austria),
 			},
 			"Desc":               gameDesc,
