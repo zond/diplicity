@@ -265,6 +265,8 @@ func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 			}).Success()
 		}
 
+		WaitForEmptyQueue("game-asyncResolvePhase")
+
 		extGame.Follow("channels", "Links").Success().
 			AssertNotRel("message", "Links")
 		extGame.Follow("channels", "Links").Success().

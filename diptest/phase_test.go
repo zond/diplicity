@@ -132,6 +132,8 @@ func TestDIASEnding(t *testing.T) {
 			}
 		})
 
+		WaitForEmptyQueue("game-asyncResolvePhase")
+
 		t.Run("VerifyGameFinished", func(t *testing.T) {
 			g := startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 				Follow("finished-games", "Links").Success().
@@ -222,6 +224,7 @@ func TestDIASEnding(t *testing.T) {
 						"WantsDIAS":      true,
 					}).Success()
 				}
+				WaitForEmptyQueue("game-asyncResolvePhase")
 				g := startedGameEnvs[0].GetRoute(game.ListMyFinishedGamesRoute).Success().
 					Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 				g.Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
@@ -643,6 +646,8 @@ func testReadyResolution(t *testing.T) {
 			}).Success()
 		}
 	})
+
+	WaitForEmptyQueue("game-asyncResolvePhase")
 
 	t.Run("TestOldPhase", func(t *testing.T) {
 		p := startedGames[0].Follow("phases", "Links").Success().

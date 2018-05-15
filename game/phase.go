@@ -31,6 +31,7 @@ import (
 )
 
 var (
+	asyncResolvePhaseFunc             *DelayFunc
 	timeoutResolvePhaseFunc           *DelayFunc
 	sendPhaseNotificationsToUsersFunc *DelayFunc
 	sendPhaseNotificationsToFCMFunc   *DelayFunc
@@ -40,6 +41,7 @@ var (
 )
 
 func init() {
+	asyncResolvePhaseFunc = NewDelayFunc("game-asyncResolvePhase", asyncResolvePhase)
 	timeoutResolvePhaseFunc = NewDelayFunc("game-timeoutResolvePhase", timeoutResolvePhase)
 	sendPhaseNotificationsToUsersFunc = NewDelayFunc("game-sendPhaseNotificationsToUsers", sendPhaseNotificationsToUsers)
 	sendPhaseNotificationsToFCMFunc = NewDelayFunc("game-sendPhaseNotificationsToFCM", sendPhaseNotificationsToFCM)
@@ -367,8 +369,16 @@ func sendPhaseNotificationsToUsers(ctx context.Context, host, scheme string, gam
 	return nil
 }
 
+func asyncResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
+	return resolvePhaseHelper(ctx, gameID, phaseOrdinal, false)
+}
+
 func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
-	log.Infof(ctx, "timeoutResolvePhase(..., %v, %v)", gameID, phaseOrdinal)
+	return resolvePhaseHelper(ctx, gameID, phaseOrdinal, true)
+}
+
+func resolvePhaseHelper(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, timeoutTriggered bool) error {
+	log.Infof(ctx, "resolvePhaseHelper(..., %v, %v, %v)", gameID, phaseOrdinal, timeoutTriggered)
 
 	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
 	if err != nil {
@@ -395,11 +405,11 @@ func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdina
 		}
 
 		return (&PhaseResolver{
-			Context:       ctx,
-			Game:          game,
-			Phase:         phase,
-			PhaseStates:   phaseStates,
-			TaskTriggered: true,
+			Context:          ctx,
+			Game:             game,
+			Phase:            phase,
+			PhaseStates:      phaseStates,
+			TimeoutTriggered: timeoutTriggered,
 		}).Act()
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		log.Errorf(ctx, "Unable to commit resolve tx: %v", err)
@@ -412,11 +422,11 @@ func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdina
 }
 
 type PhaseResolver struct {
-	Context       context.Context
-	Game          *Game
-	Phase         *Phase
-	PhaseStates   PhaseStates
-	TaskTriggered bool
+	Context          context.Context
+	Game             *Game
+	Phase            *Phase
+	PhaseStates      PhaseStates
+	TimeoutTriggered bool
 }
 
 func (p *PhaseResolver) SCCounts(s *state.State) map[godip.Nation]int {
@@ -448,7 +458,7 @@ func (p *PhaseResolver) Act() error {
 
 	// Sanity check time and resolution status of the phase.
 
-	if p.TaskTriggered && p.Phase.DeadlineAt.After(time.Now()) {
+	if p.TimeoutTriggered && p.Phase.DeadlineAt.After(time.Now()) {
 		log.Infof(p.Context, "Resolution postponed to %v by %v; rescheduling task", p.Phase.DeadlineAt, PP(p.Phase))
 		return p.Phase.ScheduleResolution(p.Context)
 	}

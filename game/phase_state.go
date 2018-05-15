@@ -220,13 +220,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 			}
 
 			if len(readyNations) == len(variants.Variants[game.Variant].Nations) {
-				if err := (&PhaseResolver{
-					Context:       ctx,
-					Game:          game,
-					Phase:         phase,
-					PhaseStates:   allStates,
-					TaskTriggered: false,
-				}).Act(); err != nil {
+				if err := asyncResolvePhaseFunc.EnqueueIn(ctx, 0, game.ID, phase.PhaseOrdinal); err != nil {
 					return err
 				}
 			}
