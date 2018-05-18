@@ -9,6 +9,8 @@ queue:
   rate: 500/s
 - name: game-timeoutResolvePhase
   rate: 500/s
+- name: game-asyncStartGame
+  rate: 500/s
 - name: game-asyncResolvePhase
   rate: 500/s
 - name: game-fcmSendToTokens

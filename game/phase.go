@@ -1252,9 +1252,13 @@ func listOptions(w ResponseWriter, r Request) error {
 	// First try to load pre-cooked options.
 
 	phaseState := &PhaseState{}
-	foundPhaseState := false
-	if err := datastore.Get(ctx, phaseStateID, phaseState); err == nil {
-		foundPhaseState = true
+	if err := datastore.Get(ctx, phaseStateID, phaseState); err == datastore.ErrNoSuchEntity {
+		phaseState.GameID = game.ID
+		phaseState.PhaseOrdinal = phaseOrdinal
+		phaseState.Nation = member.Nation
+	} else if err != nil {
+		return err
+	} else {
 		options, err = unzipOptions(ctx, phaseState.ZippedOptions)
 		if err != nil {
 			log.Warningf(ctx, "PhaseState %+v has corrupt ZippedOptions for %v: %v", PP(phaseState), member.Nation, err)
@@ -1277,16 +1281,14 @@ func listOptions(w ResponseWriter, r Request) error {
 
 		// And save them for the future.
 
-		if foundPhaseState {
-			log.Warningf(ctx, "Found PhaseState without ZippedOptions! Saving the generated options.")
-			zippedOptions, err := zipOptions(ctx, options)
-			if err != nil {
-				return err
-			}
-			phaseState.ZippedOptions = zippedOptions
-			if _, err := datastore.Put(ctx, phaseStateID, phaseState); err != nil {
-				return err
-			}
+		log.Warningf(ctx, "Found PhaseState without ZippedOptions! Saving the generated options.")
+		zippedOptions, err := zipOptions(ctx, options)
+		if err != nil {
+			return err
+		}
+		phaseState.ZippedOptions = zippedOptions
+		if _, err := datastore.Put(ctx, phaseStateID, phaseState); err != nil {
+			return err
 		}
 	}
 	w.SetContent(NewItem(options).SetName("options").SetDesc([][]string{

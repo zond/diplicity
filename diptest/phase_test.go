@@ -56,6 +56,8 @@ func withStartedGameOpts(conf func(m map[string]interface{}), f func()) {
 			Follow("join", "Links").Body(map[string]interface{}{}).Success()
 	}
 
+	WaitForEmptyQueue("game-asyncStartGame")
+
 	envs[0].GetRoute(game.IndexRoute).Success().
 		Follow("my-started-games", "Links").Success().
 		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
@@ -207,6 +209,7 @@ func TestDIASEnding(t *testing.T) {
 					env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 						Follow("join", "Links").Body(map[string]interface{}{}).Success()
 				}
+				WaitForEmptyQueue("game-asyncStartGame")
 				startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 					Follow("my-started-games", "Links").Success().
 					Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).

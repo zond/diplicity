@@ -213,12 +213,19 @@ func createMemberHelper(
 			GameID: gameID,
 		}
 		game.Members = append(game.Members, *member)
+		if err := game.Save(ctx); err != nil {
+			return err
+		}
 		if len(game.Members) == len(variants.Variants[game.Variant].Nations) {
-			if err := game.Start(ctx, r); err != nil {
+			scheme := "http"
+			if r.Req().TLS != nil {
+				scheme = "https"
+			}
+			if err := asyncStartGameFunc.EnqueueIn(ctx, 0, game.ID, r.Req().Host, scheme); err != nil {
 				return err
 			}
 		}
-		return game.Save(ctx)
+		return nil
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, nil, err
 	}

@@ -411,6 +411,8 @@ func TestCreateGameWithPrefs(t *testing.T) {
 		}).Success()
 	}
 
+	WaitForEmptyQueue("game-asyncStartGame")
+
 	for i, env := range envs {
 		env.GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
