@@ -1,10 +1,12 @@
 package diptest
 
 import (
+	"fmt"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -365,7 +367,7 @@ func TestCreateGameWithAlias(t *testing.T) {
 		Body(map[string]interface{}{
 			"Variant": "Classical",
 			"NoMerge": true,
-			"FirstMember": game.Member{
+			"FirstMember": &game.Member{
 				GameAlias: gameAlias,
 			},
 			"Desc":               gameDesc,
@@ -392,7 +394,7 @@ func TestCreateGameWithPrefs(t *testing.T) {
 		Body(map[string]interface{}{
 			"Variant": "Classical",
 			"NoMerge": true,
-			"FirstMember": game.Member{
+			"FirstMember": &game.Member{
 				NationPreferences: string(godip.Austria),
 			},
 			"Desc":               gameDesc,
@@ -408,6 +410,8 @@ func TestCreateGameWithPrefs(t *testing.T) {
 			"NationPreferences": string(variants.Variants["Classical"].Nations[i]),
 		}).Success()
 	}
+
+	WaitForEmptyQueue("game-asyncStartGame")
 
 	for i, env := range envs {
 		env.GetRoute(game.IndexRoute).Success().
@@ -444,6 +448,90 @@ func TestCreateLeaveGame(t *testing.T) {
 		env.GetRoute(game.ListMyStagingGamesRoute).Success().
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 	})
+}
+
+func randString() *string {
+	if rand.Int() > 0 {
+		rval := fmt.Sprint(rand.Int())
+		return &rval
+	}
+	return nil
+}
+
+func randRange() *string {
+	rvalSlice := []string{}
+	if rand.Int() > 0 {
+		rvalSlice = append(rvalSlice, fmt.Sprint(rand.Int()))
+	}
+	if rand.Int() > 0 {
+		rvalSlice = append(rvalSlice, fmt.Sprint(rand.Int()))
+	}
+	if len(rvalSlice) > 0 {
+		rval := strings.Join(rvalSlice, ":")
+		return &rval
+	}
+	return nil
+}
+
+func randInt() *string {
+	if rand.Int() > 0 {
+		rval := fmt.Sprint(rand.Int())
+		return &rval
+	}
+	return nil
+}
+
+func randBool() *string {
+	if rand.Int() > 0 {
+		rval := "true"
+		if rand.Int() > 0 {
+			rval = "false"
+		}
+		return &rval
+	}
+	return nil
+}
+
+// Not really a test, but it forces the dev_appserver to create (or validate, if run with --require_indexes)
+// indices for a lot of combinations of filters and lists.
+func TestIndexCreation(t *testing.T) {
+	routes := []string{
+		game.ListMyStagingGamesRoute,
+		game.ListMyStartedGamesRoute,
+		game.ListMyFinishedGamesRoute,
+		game.ListOpenGamesRoute,
+		game.ListStartedGamesRoute,
+		game.ListFinishedGamesRoute,
+	}
+	filterParams := map[string]func() *string{
+		"variant":                  randString,
+		"min-reliability":          randRange,
+		"min-quickness":            randRange,
+		"max-hater":                randRange,
+		"max-hated":                randRange,
+		"min-rating":               randRange,
+		"max-rating":               randRange,
+		"only-private":             randRange,
+		"nation-allocation":        randInt,
+		"phase-length-minutes":     randRange,
+		"conference-chat-disabled": randBool,
+		"group-chat-disabled":      randBool,
+		"private-chat-disabled":    randBool,
+	}
+	for i := 0; i < 100; i++ {
+		for _, route := range routes {
+			env := NewEnv().SetUID(String("fake"))
+			req := env.GetRoute(route)
+			queryParams := url.Values{}
+			for param, gen := range filterParams {
+				generated := gen()
+				if generated != nil {
+					queryParams[param] = []string{*generated}
+				}
+			}
+			req.QueryParams(queryParams).Success()
+		}
+	}
 }
 
 func TestGameListFilters(t *testing.T) {

@@ -38,7 +38,7 @@ func bumpUserStatsHistograms(userStats UserStats, m map[string]Histogram) {
 	bumpNamedHistogram("Reliability", int(userStats.Reliability), m)
 	bumpNamedHistogram("Quickness", int(userStats.Quickness), m)
 	bumpNamedHistogram("OwnedBans", userStats.OwnedBans, m)
-	bumpNamedHistogram("SharedBans", userStats.SharedBans, m)
+	bumpNamedHistogram("NonOwnedBans", userStats.SharedBans-userStats.OwnedBans, m)
 	bumpNamedHistogram("Hated", int(userStats.Hated), m)
 	bumpNamedHistogram("Hater", int(userStats.Hater), m)
 	bumpNamedHistogram("Rating", int(userStats.Glicko.PracticalRating), m)
@@ -64,8 +64,8 @@ func newUserStatsHistograms(userDesc string) map[string]Histogram {
 		"ReadyPhases":     newHist(fmt.Sprintf("Number of phases (in all games) %s have marked RDY", userDesc)),
 		"Reliability":     newHist(fmt.Sprintf("Reliability [(ReadyPhases + ActivePhases) / (NMRPhases + 1)] attribute of %s", userDesc)),
 		"Quickness":       newHist(fmt.Sprintf("Quickness [ReadyPhases / (NMRPhases + ActivePhases + 1)] attribute of %s", userDesc)),
-		"OwnedBans":       newHist(fmt.Sprintf("Number of bans created by %s", userDesc)),
-		"SharedBans":      newHist(fmt.Sprintf("Number of bans involving (created by or just mentioning) %s", userDesc)),
+		"OwnedBans":       newHist(fmt.Sprintf("Number of bans created by %s (number of users banned by user)", userDesc)),
+		"NonOwnedBans":    newHist(fmt.Sprintf("Number of bans involving but not created by %s (number of users banned user)", userDesc)),
 		"Hater":           newHist(fmt.Sprintf("Hater [OwnedBans / (StartedGames + 1)] attribute of %s", userDesc)),
 		"Hated":           newHist(fmt.Sprintf("Hated [(SharedBans - OwnedBans) / (StartedGames + 1)] attribute of %s", userDesc)),
 		"Rating":          newHist(fmt.Sprintf("Rating [an ELO variant called Glicko] of %s", userDesc)),
@@ -88,6 +88,7 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 			"Variant":            newHist("Variant of active games"),
 			"CreatedAtDaysAgo":   newHist("Days ago active games were created"),
 			"StartedAtDaysAgo":   newHist("Days ago active games were started"),
+			"NewestPhaseOrdinal": newHist("Number of generated phases for active games"),
 			"Private":            newHist("Distribution of private vs public games"),
 			"ConferenceChat":     newHist("Distribution of games with vs without conference chat"),
 			"GroupChat":          newHist("Distribution of games with vs without group chat"),
@@ -123,6 +124,9 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 		bumpNamedHistogram("ConferenceChat", fmt.Sprint(!game.DisableConferenceChat), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("GroupChat", fmt.Sprint(!game.DisableGroupChat), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("PrivateChat", fmt.Sprint(!game.DisablePrivateChat), globalStats.ActiveGameHistograms)
+		if len(game.NewestPhaseMeta) > 0 {
+			bumpNamedHistogram("NewestPhaseOrdinal", game.NewestPhaseMeta[0].PhaseOrdinal, globalStats.ActiveGameHistograms)
+		}
 		for _, member := range game.Members {
 			activeGameMemberUserIds[member.User.Id] = struct{}{}
 			if !member.NewestPhaseState.OnProbation && !member.NewestPhaseState.Eliminated {

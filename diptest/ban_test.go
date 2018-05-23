@@ -219,6 +219,7 @@ func testBanEfficacy(t *testing.T) {
 		Body(map[string]interface{}{
 			"Variant":            "Classical",
 			"Desc":               newGameDesc,
+			"NoMerge":            true,
 			"PhaseLengthMinutes": time.Duration(60),
 		}).Success().
 		AssertEq(newGameDesc, "Properties", "Desc")

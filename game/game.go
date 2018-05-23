@@ -42,9 +42,13 @@ const (
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
+
+	asyncStartGameFunc = NewDelayFunc("game-asyncStartGame", asyncStartGame)
 }
 
 var (
+	asyncStartGameFunc *DelayFunc
+
 	prodSendGrid     *SendGrid
 	prodSendGridLock = sync.RWMutex{}
 
@@ -415,7 +419,7 @@ type Game struct {
 
 	ActiveBans         []Ban    `datastore:"-"`
 	FailedRequirements []string `datastore:"-"`
-	FirstMember        Member   `datastore:"-" json:",omitempty" methods:"POST"`
+	FirstMember        *Member  `datastore:"-" json:",omitempty" methods:"POST"`
 
 	CreatedAt   time.Time
 	CreatedAgo  time.Duration `datastore:"-" ticker:"true"`
@@ -644,7 +648,10 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 
 	for _, otherGame := range games {
 		if game.canMergeInto(&otherGame, user) {
-			member := &game.FirstMember
+			member := game.FirstMember
+			if member == nil {
+				member = &Member{}
+			}
 			if joinedGame, _, err := createMemberHelper(ctx, r, otherGame.ID, user, member); err != nil {
 				return nil, err
 			} else {
@@ -667,6 +674,9 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	err := Copy(game, r, "POST")
 	if err != nil {
 		return nil, err
+	}
+	if game.FirstMember == nil {
+		game.FirstMember = &Member{}
 	}
 	if _, found := variants.Variants[game.Variant]; !found {
 		return nil, HTTPErr{"unknown variant", http.StatusBadRequest}
@@ -777,67 +787,148 @@ func Allocate(preferers Preferers, nations godip.Nations) ([]godip.Nation, error
 	return result, nil
 }
 
-func (g *Game) Start(ctx context.Context, r Request) error {
-	variant := variants.Variants[g.Variant]
-	s, err := variant.Start()
-	if err != nil {
-		return err
-	}
+func asyncStartGame(ctx context.Context, gameID *datastore.Key, host, scheme string) error {
+	log.Infof(ctx, "asyncStartGame(..., %v, %q, %q)", gameID, host, scheme)
 
-	g.Started = true
-	g.StartedAt = time.Now()
-	g.Closed = true
-	if g.NationAllocation == RandomAllocation {
-		for memberIndex, nationIndex := range rand.Perm(len(variant.Nations)) {
-			g.Members[memberIndex].Nation = variant.Nations[nationIndex]
-		}
-	} else if g.NationAllocation == PreferenceAllocation {
-		alloc, err := Allocate(g.Members, variant.Nations)
-		if err != nil {
+	err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		g := &Game{}
+		if err := datastore.Get(ctx, gameID, g); err != nil {
+			log.Errorf(ctx, "datastore.Get(..., %v, %v): %v; hope datastore will get fixed", gameID, g, err)
 			return err
 		}
-		for memberIdx := range g.Members {
-			g.Members[memberIdx].Nation = alloc[memberIdx]
+		g.ID = gameID
+
+		variant := variants.Variants[g.Variant]
+		s, err := variant.Start()
+		if err != nil {
+			log.Errorf(ctx, "variant.Start(): %v; fix godip", err)
+			return err
 		}
-	} else {
-		return HTTPErr{fmt.Sprintf("unknown allocation method %v, pick %v or %v", g.NationAllocation, RandomAllocation, PreferenceAllocation), http.StatusBadRequest}
-	}
 
-	scheme := "http"
-	if r.Req().TLS != nil {
-		scheme = "https"
-	}
-	phase := NewPhase(s, g.ID, 1, r.Req().Host, scheme)
-	// To make old games work.
-	if g.PhaseLengthMinutes == 0 {
-		g.PhaseLengthMinutes = MAX_PHASE_DEADLINE
-	}
-	phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.PhaseLengthMinutes)
-	if err := phase.Save(ctx); err != nil {
+		g.Started = true
+		g.StartedAt = time.Now()
+		g.Closed = true
+		if g.NationAllocation == RandomAllocation {
+			for memberIndex, nationIndex := range rand.Perm(len(variant.Nations)) {
+				g.Members[memberIndex].Nation = variant.Nations[nationIndex]
+			}
+		} else if g.NationAllocation == PreferenceAllocation {
+			alloc, err := Allocate(g.Members, variant.Nations)
+			if err != nil {
+				log.Errorf(ctx, "Allocate(%+v, %+v): %v; fix Allocate", g.Members, variant.Nations, err)
+				return err
+			}
+			for memberIdx := range g.Members {
+				g.Members[memberIdx].Nation = alloc[memberIdx]
+			}
+		} else {
+			msg := fmt.Sprintf("unknown allocation method %v, pick %v or %v", g.NationAllocation, RandomAllocation, PreferenceAllocation)
+			log.Errorf(ctx, msg)
+			return HTTPErr{msg, http.StatusBadRequest}
+		}
+
+		phase := NewPhase(s, g.ID, 1, host, scheme)
+		// To ensure we don't get 0 phase length games.
+		if g.PhaseLengthMinutes == 0 {
+			g.PhaseLengthMinutes = MAX_PHASE_DEADLINE
+		}
+		phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.PhaseLengthMinutes)
+
+		toSave := []interface{}{
+			phase,
+		}
+
+		phaseID, err := phase.ID(ctx)
+		if err != nil {
+			log.Errorf(ctx, "phase.ID(...): %v", err)
+			return err
+		}
+		keys := []*datastore.Key{
+			phaseID,
+		}
+
+		state, err := phase.State(ctx, variant, nil)
+		if err != nil {
+			log.Errorf(ctx, "phase.State(..., %v, nil): %v", variant, err)
+			return err
+		}
+		for _, nat := range variant.Nations {
+			options := state.Phase().Options(state, nat)
+			profile, counts := state.GetProfile()
+			for k, v := range profile {
+				log.Debugf(ctx, "Profiling state: %v => %v, %v", k, v, counts[k])
+			}
+			zippedOptions, err := zipOptions(ctx, options)
+			if err != nil {
+				log.Errorf(ctx, "zipOptions(..., %+v): %v", options, err)
+				return err
+			}
+
+			phaseState := &PhaseState{
+				GameID:        g.ID,
+				PhaseOrdinal:  phase.PhaseOrdinal,
+				Nation:        nat,
+				ZippedOptions: zippedOptions,
+			}
+			phaseStateID, err := phaseState.ID(ctx)
+			if err != nil {
+				log.Errorf(ctx, "phaseState.ID(...): %v", err)
+				return err
+			}
+
+			toSave = append(toSave, phaseState)
+			keys = append(keys, phaseStateID)
+		}
+
+		if err = phase.Recalc(); err != nil {
+			log.Errorf(ctx, "phase.Recalc(): %v", err)
+			return err
+		}
+		g.NewestPhaseMeta = []PhaseMeta{phase.PhaseMeta}
+		phase.PhaseMeta.UnitsJSON = ""
+		phase.PhaseMeta.SCsJSON = ""
+		if g.NewestPhaseMeta[0].UnitsJSON == "" || g.NewestPhaseMeta[0].SCsJSON == "" {
+			msg := fmt.Sprintf("Sanity check failed, game JSON data is empty while we wanted it populated!")
+			log.Errorf(ctx, msg)
+			return fmt.Errorf(msg)
+		}
+
+		toSave = append(toSave, g)
+		keys = append(keys, gameID)
+
+		if _, err := datastore.PutMulti(ctx, keys, toSave); err != nil {
+			log.Errorf(ctx, "datastore.PutMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, toSave, err)
+			return err
+		}
+
+		if err := phase.ScheduleResolution(ctx); err != nil {
+			log.Errorf(ctx, "phase.ScheduleResolution(...): %v; hope datastore gets fixed", err)
+			return err
+		}
+		log.Infof(ctx, "%v has a %d minutes phase length, scheduled resolve", PP(g), g.PhaseLengthMinutes)
+
+		if err := phase.NotifyMembers(ctx, g); err != nil {
+			log.Errorf(ctx, "phase.NotifyMembers(..., %+v): %v; hope datastore gets fixed", g, err)
+			return err
+		}
+
+		uids := make([]string, len(g.Members))
+		for i, m := range g.Members {
+			uids[i] = m.User.Id
+		}
+		if err := UpdateUserStatsASAP(ctx, uids); err != nil {
+			log.Errorf(ctx, "UpdateUserStatsASAP(..., %+v): %v; hope datastore gets fixed", uids, err)
+			return err
+		}
+
+		return nil
+	}, &datastore.TransactionOptions{XG: true})
+	if err != nil {
+		log.Errorf(ctx, "Unable to commit transaction: %v; retrying", err)
 		return err
 	}
 
-	if err = phase.Recalc(); err != nil {
-		return err
-	}
-	g.NewestPhaseMeta = []PhaseMeta{phase.PhaseMeta}
-
-	if err := phase.ScheduleResolution(ctx); err != nil {
-		return err
-	}
-	log.Infof(ctx, "%v has a %d minutes phase length, scheduled resolve", PP(g), g.PhaseLengthMinutes)
-
-	if err := phase.NotifyMembers(ctx, g); err != nil {
-		return err
-	}
-
-	uids := make([]string, len(g.Members))
-	for i, m := range g.Members {
-		uids[i] = m.User.Id
-	}
-	if err := UpdateUserStatsASAP(ctx, uids); err != nil {
-		return err
-	}
+	log.Infof(ctx, "asyncStartGame(..., %v, %q, %q): *** SUCCESS ***", gameID, host, scheme)
 
 	return nil
 }

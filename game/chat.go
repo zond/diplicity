@@ -642,6 +642,10 @@ func (m *Message) Item(r Request) *Item {
 }
 
 func createMessageHelper(ctx context.Context, r Request, message *Message) error {
+	if strings.TrimSpace(message.Body) == "" {
+		return HTTPErr{"can not create empty messages", http.StatusBadRequest}
+	}
+
 	message.CreatedAt = time.Now()
 	sort.Sort(message.ChannelMembers)
 
@@ -1175,6 +1179,12 @@ func receiveMail(w ResponseWriter, r Request) error {
 		ChannelMembers: message.ChannelMembers,
 		Sender:         godip.Nation(fromNation),
 		Body:           strings.Join(okLines, "\n"),
+	}
+
+	if strings.TrimSpace(newMessage.Body) == "" {
+		e := "Unable to send empty message."
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
 	}
 
 	log.Infof(ctx, "Received %v via email", PP(newMessage))
