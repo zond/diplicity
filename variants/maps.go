@@ -114,6 +114,7 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) 
 		}
 		jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nationVariable, i))
 	}
+	jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrastNeutral;", godip.Neutral))
 	for prov, unit := range phase.Units {
 		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s);", unit.Type, prov, makeNationVariable(unit.Nation)))
 	}
