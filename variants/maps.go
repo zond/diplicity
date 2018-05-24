@@ -16,9 +16,10 @@ import (
 )
 
 var (
-	overrideColorReg = regexp.MustCompile("^#([a-fA-F0-9]{6,6}|[a-fA-F0-9]{8,8})$")
-	nationColorReg   = regexp.MustCompile("^(\\w+)/(#([a-fA-F0-9]{6,6}|[a-fA-F0-9]{8,8}))$")
-	variantColorReg  = regexp.MustCompile("^(\\w+)/(\\w+)/(#([a-fA-F0-9]{6,6}|[a-fA-F0-9]{8,8}))$")
+	overrideColorReg  = regexp.MustCompile("^#([a-fA-F0-9]{6,6}|[a-fA-F0-9]{8,8})$")
+	nationColorReg    = regexp.MustCompile("^(\\w+)/(#([a-fA-F0-9]{6,6}|[a-fA-F0-9]{8,8}))$")
+	variantColorReg   = regexp.MustCompile("^(\\w+)/(\\w+)/(#([a-fA-F0-9]{6,6}|[a-fA-F0-9]{8,8}))$")
+	nationVariableReg = regexp.MustCompile("[^a-zA-Z0-9]+")
 )
 
 func ParseColors(colors []string) (
@@ -69,6 +70,10 @@ func handleRenderMap(w ResponseWriter, r Request) error {
 	return RenderPhaseMap(w, r, phase, colors)
 }
 
+func makeNationVariable(nat godip.Nation) string {
+	return nationVariableReg.ReplaceAllString(nat.String(), "")
+}
+
 func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) error {
 	variant := variants.Variants[phase.Variant]
 
@@ -81,43 +86,48 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) 
 
 	staticJSBuf := []string{}
 	for _, nat := range variant.Nations {
-		staticJSBuf = append(staticJSBuf, fmt.Sprintf("var col%s;", nat))
+		nationVariable := makeNationVariable(nat)
+		staticJSBuf = append(staticJSBuf, fmt.Sprintf("var col%s;", nationVariable))
 	}
 
 	overrides, nations, variants := ParseColors(colors)
 
 	jsBuf := []string{}
 	for i, nat := range variant.Nations {
+		nationVariable := makeNationVariable(nat)
+
 		if nationMap, found := variants[phase.Variant]; found {
 			if color, found := nationMap[nat]; found {
-				jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nat, color))
+				jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nationVariable, color))
 				continue
 			}
 		}
 		if color, found := nations[nat]; found {
-			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nat, color))
+			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nationVariable, color))
 			continue
 		}
 		if len(overrides) > 0 {
 			color := overrides[0]
 			overrides = overrides[1:]
-			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nat, color))
+			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nationVariable, color))
 			continue
 		}
-		jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nat, i))
+		jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nationVariable, i))
 	}
+	jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrastNeutral;", godip.Neutral))
 	for prov, unit := range phase.Units {
-		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s);", unit.Type, prov, unit.Nation))
+		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s);", unit.Type, prov, makeNationVariable(unit.Nation)))
 	}
 	for prov, unit := range phase.Dislodgeds {
-		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s, true);", unit.Type, prov, unit.Nation))
+		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s, true);", unit.Type, prov, makeNationVariable(unit.Nation)))
 	}
 	gr := variant.Graph()
 	for _, prov := range gr.Provinces() {
 		if prov.Super() == prov {
 			if gr.SC(prov) != nil {
 				if nat, found := phase.SupplyCenters[prov]; found {
-					jsBuf = append(jsBuf, fmt.Sprintf("map.colorProvince(%q, col%s);", prov, nat))
+					nationVariable := makeNationVariable(nat)
+					jsBuf = append(jsBuf, fmt.Sprintf("map.colorProvince(%q, col%s);", prov, nationVariable))
 				} else {
 					jsBuf = append(jsBuf, fmt.Sprintf("map.hideProvince(%q);", prov))
 				}
@@ -128,12 +138,13 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) 
 	}
 	jsBuf = append(jsBuf, "map.showProvinces();")
 	for nat, orders := range phase.Orders {
+		nationVariable := makeNationVariable(nat)
 		for prov, order := range orders {
 			parts := []string{fmt.Sprintf("%q", prov)}
 			for _, part := range order {
 				parts = append(parts, fmt.Sprintf("%q", part))
 			}
-			jsBuf = append(jsBuf, fmt.Sprintf("map.addOrder([%s], col%s);", strings.Join(parts, ","), nat))
+			jsBuf = append(jsBuf, fmt.Sprintf("map.addOrder([%s], col%s);", strings.Join(parts, ","), nationVariable))
 		}
 	}
 	for prov, res := range phase.Resolutions {

@@ -10,6 +10,7 @@ function dippyMap(container) {
 	};
 	// Based on http://godsnotwheregodsnot.blogspot.se/2012/09/color-distribution-methodology.html.
 	that.contrasts = ["#FF2F80", "#0CBD66", "#FF90C9", "#BEC459", "#0086ED", "#FFB500", "#0AA6D8", "#A05837", "#EEC3FF", "#456648", "#D790FF", "#6A3A4C", "#324E72", "#A4E804", "#CB7E98", "#0089A3", "#404E55", "#FDE8DC", "#5B4534", "#922329", "#3A2465", "#99ADC0", "#BC23FF", "#72418F", "#201625", "#FFF69F", "#549E79", "#9B9700", "#772600", "#6B002C", "#6367A9", "#A77500", "#7900D7", "#1E6E00", "#C8A1A1", "#04F757", "#3B9700", "#8CD0FF", "#B05B6F", "#00FECF", "#575329", "#938A81", "#FF913F", "#A3C8C9", "#636375", "#452C2C", "#00A6AA", "#B4A8BD", "#34362D", "#886F4C", "#D157A0", "#FF8A9A", "#FAD09F", "#885578", "#788D66", "#7A87A1", "#B77B68", "#456D75", "#6F0062", "#00489C", "#001E09", "#C2FF99", "#C0B9B2", "#CC0744", "#A079BF", "#C2FFED", "#372101", "#00846F", "#013349", "#300018", "#A1C299", "#7B4F4B", "#000035", "#DDEFFF", "#D16100", "#B903AA", "#FFAA92", "#00C2A0", "#6B7900", "#BA0900", "#61615A", "#4A3B53", "#3B5DFF", "#4FC601", "#1B4400", "#FEFFE6", "#809693", "#5A0007", "#997D87", "#8FB0FF", "#004D43", "#B79762", "#63FFAC", "#0000A6", "#7A4900", "#FFDBE5", "#A30059", "#006FA6", "#008941", "#FF4A46", "#FF34FF", "#1CE6FF", "#FFFF00", "#000000"];
+	that.contrastNeutral = "#ffffffff";
 	that.Poi = function(x, y) {
 		this.x = x;
 		this.y = y;
