@@ -12,6 +12,7 @@ import (
 	"github.com/zond/godip/variants"
 	"github.com/zond/godip/variants/chaos"
 	"github.com/zond/godip/variants/hundred"
+	"github.com/zond/godip/variants/westernworld901"
 	"github.com/zond/godip/variants/youngstownredux"
 
 	vrt "github.com/zond/godip/variants/common"
@@ -26,6 +27,7 @@ var (
 	// has at least level 1, the Youngstown Redux entry is just an example.
 	// (And used when testing, by artificially forcing API level 0.)
 	LaunchSchedule = map[string]int{
+		westernworld901.WesternWorld901Variant.Name: 4,
 		chaos.ChaosVariant.Name:                     3,
 		hundred.HundredVariant.Name:                 2,
 		youngstownredux.YoungstownReduxVariant.Name: 1,
