@@ -203,6 +203,175 @@ indexes:
 # automatically uploaded to the admin console when you next deploy
 # your application using appcfg.py.
 
+- kind: Game
+  properties:
+  - name: Closed
+  - name: DisableConferenceChat
+  - name: DisableGroupChat
+  - name: DisablePrivateChat
+  - name: NationAllocation
+  - name: Private
+  - name: Variant
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Closed
+  - name: DisableConferenceChat
+  - name: Private
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Closed
+  - name: DisableGroupChat
+  - name: Private
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Closed
+  - name: DisablePrivateChat
+  - name: Private
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Closed
+  - name: NationAllocation
+  - name: Private
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Closed
+  - name: Private
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Closed
+  - name: Private
+  - name: Variant
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: DisableConferenceChat
+  - name: DisableGroupChat
+  - name: DisablePrivateChat
+  - name: Finished
+  - name: Members.User.Id
+  - name: NationAllocation
+  - name: Private
+  - name: Started
+  - name: Variant
+  - name: StartedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: DisableConferenceChat
+  - name: DisableGroupChat
+  - name: DisablePrivateChat
+  - name: Finished
+  - name: Members.User.Id
+  - name: NationAllocation
+  - name: Private
+  - name: Variant
+  - name: FinishedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: DisableConferenceChat
+  - name: DisableGroupChat
+  - name: DisablePrivateChat
+  - name: Finished
+  - name: NationAllocation
+  - name: Private
+  - name: Started
+  - name: Variant
+  - name: StartedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: DisableConferenceChat
+  - name: DisableGroupChat
+  - name: DisablePrivateChat
+  - name: Finished
+  - name: NationAllocation
+  - name: Private
+  - name: Variant
+  - name: FinishedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: DisableConferenceChat
+  - name: DisableGroupChat
+  - name: DisablePrivateChat
+  - name: Members.User.Id
+  - name: NationAllocation
+  - name: Private
+  - name: Started
+  - name: Variant
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Members.User.Id
+  - name: FinishedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Members.User.Id
+  - name: Started
+  - name: StartedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Private
+  - name: FinishedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: Finished
+  - name: Private
+  - name: Started
+  - name: StartedAt
+    direction: desc
+
+- kind: Game
+  properties:
+  - name: Members.User.Id
+  - name: Started
+  - name: NMembers
+    direction: desc
+  - name: CreatedAt
 
 - kind: GameResult
   properties:
