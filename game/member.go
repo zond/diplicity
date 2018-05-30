@@ -101,7 +101,7 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 		}
 		game.ID = gameID
 		isMember := false
-		member, isMember = game.GetMember(user.Id)
+		member, isMember = game.GetMemberByUserId(user.Id)
 		if !isMember {
 			return HTTPErr{"non existing member", http.StatusNotFound}
 		}
@@ -142,7 +142,7 @@ func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId strin
 		}
 		game.ID = gameID
 		isMember := false
-		member, isMember = game.GetMember(userId)
+		member, isMember = game.GetMemberByUserId(userId)
 		if !isMember {
 			return HTTPErr{"can only leave member games", http.StatusNotFound}
 		}
@@ -201,7 +201,7 @@ func createMemberHelper(
 		}
 		game.ID = gameID
 		isMember := false
-		_, isMember = game.GetMember(user.Id)
+		_, isMember = game.GetMemberByUserId(user.Id)
 		if isMember {
 			return HTTPErr{"user already member", http.StatusBadRequest}
 		}

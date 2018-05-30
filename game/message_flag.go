@@ -144,7 +144,7 @@ func createMessageFlag(w ResponseWriter, r Request) (*MessageFlag, error) {
 		userByNation[member.Nation] = member.User
 	}
 
-	_, isMember := game.GetMember(user.Id)
+	_, isMember := game.GetMemberByUserId(user.Id)
 	if !isMember {
 		return nil, HTTPErr{"can only flag messages in member games", http.StatusForbidden}
 	}

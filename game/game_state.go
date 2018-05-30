@@ -132,7 +132,7 @@ func updateGameState(w ResponseWriter, r Request) (*GameState, error) {
 			return err
 		}
 		game.ID = gameID
-		member, isMember := game.GetMember(user.Id)
+		member, isMember := game.GetMemberByUserId(user.Id)
 		if !isMember {
 			return HTTPErr{"can only update phase state of member games", http.StatusNotFound}
 		}
@@ -196,7 +196,7 @@ func loadGameState(w ResponseWriter, r Request) (*GameState, error) {
 	}
 	game.ID = gameID
 
-	member, isMember := game.GetMember(user.Id)
+	member, isMember := game.GetMemberByUserId(user.Id)
 	if isMember {
 		r.Values()[memberNationFlag] = member.Nation
 	}
@@ -222,7 +222,7 @@ func listGameStates(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	member, isMember := game.GetMember(user.Id)
+	member, isMember := game.GetMemberByUserId(user.Id)
 	if isMember {
 		r.Values()[memberNationFlag] = member.Nation
 	}

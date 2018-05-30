@@ -135,7 +135,7 @@ func deleteOrder(w ResponseWriter, r Request) (*Order, error) {
 			return err
 		}
 		game.ID = gameID
-		member, isMember := game.GetMember(user.Id)
+		member, isMember := game.GetMemberByUserId(user.Id)
 		if !isMember {
 			return HTTPErr{"can only delete orders in member games", http.StatusNotFound}
 		}
@@ -199,7 +199,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 		if phase.Resolved {
 			return HTTPErr{"can only update orders for unresolved phases", http.StatusPreconditionFailed}
 		}
-		member, isMember := game.GetMember(user.Id)
+		member, isMember := game.GetMemberByUserId(user.Id)
 		if !isMember {
 			return HTTPErr{"can only update orders in member games", http.StatusNotFound}
 		}
@@ -287,7 +287,7 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 		if phase.Resolved {
 			return HTTPErr{"can only create orders for unresolved phases", http.StatusPreconditionFailed}
 		}
-		member, isMember := game.GetMember(user.Id)
+		member, isMember := game.GetMemberByUserId(user.Id)
 		if !isMember {
 			return HTTPErr{"can only create orders for member games", http.StatusNotFound}
 		}
@@ -386,7 +386,7 @@ func listOrders(w ResponseWriter, r Request) error {
 
 	var nation godip.Nation
 
-	if member, found := game.GetMember(user.Id); found {
+	if member, found := game.GetMemberByUserId(user.Id); found {
 		nation = member.Nation
 	}
 

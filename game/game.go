@@ -544,7 +544,16 @@ func (g *Game) DescFor(nat godip.Nation) string {
 	return g.Desc
 }
 
-func (g *Game) GetMember(userID string) (*Member, bool) {
+func (g *Game) GetMemberByNation(nation godip.Nation) (*Member, bool) {
+	for i := range g.Members {
+		if g.Members[i].Nation == nation {
+			return &g.Members[i], true
+		}
+	}
+	return nil, false
+}
+
+func (g *Game) GetMemberByUserId(userID string) (*Member, bool) {
 	for i := range g.Members {
 		if g.Members[i].User.Id == userID {
 			return &g.Members[i], true
@@ -565,7 +574,7 @@ func (g *Game) Item(r Request) *Item {
 	gameItem := NewItem(g).SetName(g.Desc).AddLink(r.NewLink(GameResource.Link("self", Load, []string{"id", g.ID.Encode()})))
 	user, ok := r.Values()["user"].(*auth.User)
 	if ok {
-		if _, isMember := g.GetMember(user.Id); isMember {
+		if _, isMember := g.GetMemberByUserId(user.Id); isMember {
 			if g.Leavable() {
 				gameItem.AddLink(r.NewLink(MemberResource.Link("leave", Delete, []string{"game_id", g.ID.Encode(), "user_id", user.Id})))
 			}
@@ -733,7 +742,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 }
 
 func (g *Game) Redact(viewer *auth.User) {
-	_, isMember := g.GetMember(viewer.Id)
+	_, isMember := g.GetMemberByUserId(viewer.Id)
 	for index := range g.Members {
 		g.Members[index].Redact(viewer, isMember, g.Started)
 	}
@@ -907,8 +916,21 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host, scheme str
 		}
 		log.Infof(ctx, "%v has a %d minutes phase length, scheduled resolve", PP(g), g.PhaseLengthMinutes)
 
-		if err := phase.NotifyMembers(ctx, g); err != nil {
-			log.Errorf(ctx, "phase.NotifyMembers(..., %+v): %v; hope datastore gets fixed", g, err)
+		memberIds := make([]string, len(g.Members))
+		for i, member := range g.Members {
+			memberIds[i] = member.User.Id
+		}
+		if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, scheme, g.ID, phase.PhaseOrdinal, memberIds); err != nil {
+			log.Errorf(
+				ctx,
+				"sendPhaseNotificationsToUserFunc.EnqueueIn(..., 0, %q, %q, %v, %v, %+v): %v; hope datastore gets fixed",
+				host,
+				scheme,
+				g.ID,
+				phase.PhaseOrdinal,
+				memberIds,
+				err,
+			)
 			return err
 		}
 

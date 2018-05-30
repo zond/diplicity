@@ -139,7 +139,7 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 	res.game.ID = gameID
 
 	isMember := false
-	res.member, isMember = res.game.GetMember(userId)
+	res.member, isMember = res.game.GetMemberByUserId(userId)
 	if !isMember {
 		log.Errorf(ctx, "%q is not a member of %v, wtf? Exiting.", userId, res.game)
 		return nil, noConfigError
@@ -427,6 +427,9 @@ type PhaseResolver struct {
 	Phase            *Phase
 	PhaseStates      PhaseStates
 	TimeoutTriggered bool
+
+	// Don't populate this yourself, it's calculated by the PhaseResolver when you trigger it.
+	nonEliminatedUserIds []string
 }
 
 func (p *PhaseResolver) SCCounts(s *state.State) map[godip.Nation]int {
@@ -468,10 +471,20 @@ func (p *PhaseResolver) Act() error {
 		return nil
 	}
 
-	// Clean up old phase states.
+	// Clean up old phase states, and populate the nonEliminatedUserIds slice if necessary.
 
 	phaseStateIDs := make([]*datastore.Key, len(p.PhaseStates))
+	nonEliminatedUserIds := []string{}
 	for i := range p.PhaseStates {
+		if !p.PhaseStates[i].Eliminated {
+			member, found := p.Game.GetMemberByNation(p.PhaseStates[i].Nation)
+			if !found {
+				err := fmt.Errorf("p.Game.GetMemberByNation(%q) found no member; something is horribly wrong", p.PhaseStates[i].Nation)
+				log.Errorf(p.Context, err.Error())
+				return err
+			}
+			nonEliminatedUserIds = append(nonEliminatedUserIds, member.User.Id)
+		}
 		p.PhaseStates[i].ZippedOptions = nil
 		phaseStateID, err := p.PhaseStates[i].ID(p.Context)
 		if err != nil {
@@ -483,6 +496,9 @@ func (p *PhaseResolver) Act() error {
 	if _, err := datastore.PutMulti(p.Context, phaseStateIDs, p.PhaseStates); err != nil {
 		log.Errorf(p.Context, "Unable to save old phase states %v: %v; hope datastore will get fixed", PP(p.PhaseStates), err)
 		return err
+	}
+	if len(p.nonEliminatedUserIds) == 0 {
+		p.nonEliminatedUserIds = nonEliminatedUserIds
 	}
 
 	// Roll forward the game state.
@@ -772,6 +788,7 @@ func (p *PhaseResolver) Act() error {
 			newPhase.DeadlineAt = time.Now()
 			p.Phase = newPhase
 			p.PhaseStates = newPhaseStates
+			// Note that we are reusing the same resolver, which means the nonEliminatedUserIds will be the same, and not replaced when we Act().
 			if err := p.Act(); err != nil {
 				log.Errorf(p.Context, "Unable to continue rolling forward: %v; fix the resolver!", err)
 				return err
@@ -795,7 +812,15 @@ func (p *PhaseResolver) Act() error {
 
 	// Notify about the new phase.
 
-	if err := newPhase.NotifyMembers(p.Context, p.Game); err != nil {
+	if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(
+		p.Context,
+		0,
+		p.Phase.Host,
+		p.Phase.Scheme,
+		p.Game.ID,
+		p.Phase.PhaseOrdinal,
+		p.nonEliminatedUserIds,
+	); err != nil {
 		log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
 		return err
 	}
@@ -1087,7 +1112,7 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 	game.ID = gameID
 	phase.Refresh()
 
-	member, isMember := game.GetMember(user.Id)
+	member, isMember := game.GetMemberByUserId(user.Id)
 	if isMember {
 		r.Values()[memberNationFlag] = member.Nation
 	}
@@ -1196,17 +1221,6 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host, s
 	return p
 }
 
-func (p *Phase) NotifyMembers(ctx context.Context, game *Game) error {
-	memberIds := make([]string, len(game.Members))
-	for i, member := range game.Members {
-		memberIds[i] = member.User.Id
-	}
-	if len(memberIds) == 0 {
-		return nil
-	}
-	return sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, p.Host, p.Scheme, p.GameID, p.PhaseOrdinal, memberIds)
-}
-
 func listOptions(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1237,7 +1251,7 @@ func listOptions(w ResponseWriter, r Request) error {
 	}
 	game.ID = gameID
 
-	member, isMember := game.GetMember(user.Id)
+	member, isMember := game.GetMemberByUserId(user.Id)
 	if !isMember {
 		return HTTPErr{"can only load options for member games", http.StatusNotFound}
 	}
@@ -1436,7 +1450,7 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 
 	var nation godip.Nation
 
-	if member, found := game.GetMember(user.Id); found {
+	if member, found := game.GetMemberByUserId(user.Id); found {
 		nation = member.Nation
 	}
 
@@ -1474,7 +1488,7 @@ func listPhases(w ResponseWriter, r Request) error {
 	if err := datastore.Get(ctx, gameID, game); err != nil {
 		return err
 	}
-	member, isMember := game.GetMember(user.Id)
+	member, isMember := game.GetMemberByUserId(user.Id)
 	if isMember {
 		r.Values()[memberNationFlag] = member.Nation
 	}

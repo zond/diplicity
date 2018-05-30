@@ -126,7 +126,7 @@ func getMsgNotificationContext(ctx context.Context, host, scheme string, gameID 
 	res.game.ID = gameID
 
 	isMember := false
-	res.member, isMember = res.game.GetMember(userId)
+	res.member, isMember = res.game.GetMemberByUserId(userId)
 	if !isMember {
 		log.Errorf(ctx, "%q is not a member of %v, wtf? Exiting.", userId, res.game)
 		return nil, noConfigError
@@ -349,7 +349,7 @@ func sendMsgNotificationsToUsers(ctx context.Context, host, scheme string, gameI
 			return err
 		}
 		game.ID = gameID
-		member, isMember := game.GetMember(uids[0])
+		member, isMember := game.GetMemberByUserId(uids[0])
 		if !isMember {
 			log.Errorf(ctx, "%v isn't a member of %v, wtf? Giving up.", uids[0], gameID)
 			return nil
@@ -721,7 +721,7 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 	}
 	game.ID = gameID
 
-	member, found := game.GetMember(user.Id)
+	member, found := game.GetMemberByUserId(user.Id)
 	if !found {
 		return nil, HTTPErr{"can only create messages in member games", http.StatusNotFound}
 	}
@@ -815,7 +815,7 @@ func listMessages(w ResponseWriter, r Request) error {
 
 	var nation godip.Nation
 	mutedNats := map[godip.Nation]struct{}{}
-	if member, found := game.GetMember(user.Id); found {
+	if member, found := game.GetMemberByUserId(user.Id); found {
 		nation = member.Nation
 		gameStateID, err := GameStateID(ctx, gameID, nation)
 		if err != nil {
@@ -892,7 +892,7 @@ func listMessages(w ResponseWriter, r Request) error {
 			}
 			game.ID = gameID
 
-			member, isMember := game.GetMember(user.Id)
+			member, isMember := game.GetMemberByUserId(user.Id)
 			if !isMember {
 				return fmt.Errorf("not member of the game?")
 			}
@@ -1049,7 +1049,7 @@ func listChannels(w ResponseWriter, r Request) error {
 
 	var nation godip.Nation
 
-	member, isMember := game.GetMember(user.Id)
+	member, isMember := game.GetMemberByUserId(user.Id)
 	if isMember {
 		nation = member.Nation
 	}
