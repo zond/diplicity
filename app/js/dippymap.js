@@ -114,6 +114,7 @@ function dippyMap(container) {
 	};
 	that.addClickListener = function(province, handler, options) {
 		var nohighlight = (options || {}).nohighlight;
+		var permanent = (options || {}).permanent;
 		if (!nohighlight) {
 			that.highlightProvince(province);
 		}
@@ -140,12 +141,14 @@ function dippyMap(container) {
 		$(copy).bind('click', function() {
 			handler(province);
 		});
-		clickListenerRemovers.push(function() {
-			if (!nohighlight) {
-				that.unhighlightProvince(province); 
-			}
-			$(copy).unbind('click', handler);
-		});
+		if (!permanent) {
+			clickListenerRemovers.push(function() {
+				if (!nohighlight) {
+					that.unhighlightProvince(province); 
+				}
+				$(copy).unbind('click', handler);
+			});
+		}
 	};
 	that.addBox = function(province, corners, color) {
 		var loc = that.centerOf(province);
