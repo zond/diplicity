@@ -429,7 +429,7 @@ type PhaseResolver struct {
 	TimeoutTriggered bool
 
 	// Don't populate this yourself, it's calculated by the PhaseResolver when you trigger it.
-	nonEliminatedUserIds []string
+	nonEliminatedUserIds map[string]bool
 }
 
 func (p *PhaseResolver) SCCounts(s *state.State) map[godip.Nation]int {
@@ -474,7 +474,7 @@ func (p *PhaseResolver) Act() error {
 	// Clean up old phase states, and populate the nonEliminatedUserIds slice if necessary.
 
 	phaseStateIDs := make([]*datastore.Key, len(p.PhaseStates))
-	nonEliminatedUserIds := []string{}
+	nonEliminatedUserIds := map[string]bool{}
 	for i := range p.PhaseStates {
 		if !p.PhaseStates[i].Eliminated {
 			member, found := p.Game.GetMemberByNation(p.PhaseStates[i].Nation)
@@ -483,7 +483,7 @@ func (p *PhaseResolver) Act() error {
 				log.Errorf(p.Context, err.Error())
 				return err
 			}
-			nonEliminatedUserIds = append(nonEliminatedUserIds, member.User.Id)
+			nonEliminatedUserIds[member.User.Id] = true
 		}
 		p.PhaseStates[i].ZippedOptions = nil
 		phaseStateID, err := p.PhaseStates[i].ID(p.Context)
@@ -497,7 +497,7 @@ func (p *PhaseResolver) Act() error {
 		log.Errorf(p.Context, "Unable to save old phase states %v: %v; hope datastore will get fixed", PP(p.PhaseStates), err)
 		return err
 	}
-	if len(p.nonEliminatedUserIds) == 0 {
+	if p.nonEliminatedUserIds == nil {
 		p.nonEliminatedUserIds = nonEliminatedUserIds
 	}
 
@@ -567,6 +567,7 @@ func (p *PhaseResolver) Act() error {
 		Private:      p.Game.Private,
 	}
 
+	membersWithOptions := map[string]bool{}
 	for i := range p.Game.Members {
 		member := &p.Game.Members[i]
 
@@ -592,6 +593,9 @@ func (p *PhaseResolver) Act() error {
 		}
 		orderOptions := s.Phase().Options(s, member.Nation)
 		newOptions := len(orderOptions)
+		if newOptions > 0 {
+			membersWithOptions[member.User.Id] = true
+		}
 		if scCounts[member.Nation] == 0 {
 			wasEliminated = true
 			// Overwrite DIAS with eliminated, you can't be part of a DIAS if you are eliminated...
@@ -812,6 +816,12 @@ func (p *PhaseResolver) Act() error {
 
 	// Notify about the new phase.
 
+	membersToNotify := []string{}
+	for _, member := range p.Game.Members {
+		if p.nonEliminatedUserIds[member.User.Id] || membersWithOptions[member.User.Id] {
+			membersToNotify = append(membersToNotify, member.User.Id)
+		}
+	}
 	if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(
 		p.Context,
 		0,
@@ -819,7 +829,7 @@ func (p *PhaseResolver) Act() error {
 		p.Phase.Scheme,
 		p.Game.ID,
 		p.Phase.PhaseOrdinal,
-		p.nonEliminatedUserIds,
+		membersToNotify,
 	); err != nil {
 		log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
 		return err
