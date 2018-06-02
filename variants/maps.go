@@ -97,12 +97,12 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) 
 		nationVariable := makeNationVariable(nat)
 
 		if nationMap, found := variants[phase.Variant]; found {
-			if color, found := nationMap[nat]; found {
+			if color, found := nationMap[godip.Nation(nationVariable)]; found {
 				jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nationVariable, color))
 				continue
 			}
 		}
-		if color, found := nations[nat]; found {
+		if color, found := nations[godip.Nation(nationVariable)]; found {
 			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nationVariable, color))
 			continue
 		}
