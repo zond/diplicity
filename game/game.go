@@ -515,6 +515,9 @@ func (g *Game) abbrMatchesNations(abbr godip.Nation) int {
 }
 
 func (g *Game) AbbrNats(nats Nations) Nations {
+	if len(nats) == len(variants.Variants[g.Variant].Nations) {
+		return Nations{"Everyone"}
+	}
 	result := make(Nations, len(nats))
 	for i, nat := range nats {
 		result[i] = g.AbbrNat(nat)
