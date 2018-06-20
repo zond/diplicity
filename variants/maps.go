@@ -85,7 +85,7 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	staticJSBuf := []string{}
-	for _, nat := range variant.Nations {
+	for _, nat := range append(variant.Nations, godip.Neutral) {
 		nationVariable := makeNationVariable(nat)
 		staticJSBuf = append(staticJSBuf, fmt.Sprintf("var col%s;", nationVariable))
 	}
@@ -93,7 +93,7 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) 
 	overrides, nations, variants := ParseColors(colors)
 
 	jsBuf := []string{}
-	for i, nat := range variant.Nations {
+	for i, nat := range append(variant.Nations, godip.Neutral) {
 		nationVariable := makeNationVariable(nat)
 
 		if nationMap, found := variants[phase.Variant]; found {
@@ -112,9 +112,12 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) 
 			jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nationVariable, color))
 			continue
 		}
-		jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nationVariable, i))
+		if nat == godip.Neutral {
+			jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrastNeutral;", godip.Neutral))
+		} else {
+			jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrasts[%d];", nationVariable, i))
+		}
 	}
-	jsBuf = append(jsBuf, fmt.Sprintf("col%s = map.contrastNeutral;", godip.Neutral))
 	for prov, unit := range phase.Units {
 		jsBuf = append(jsBuf, fmt.Sprintf("map.addUnit('unit%s', %q, col%s);", unit.Type, prov, makeNationVariable(unit.Nation)))
 	}
