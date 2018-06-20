@@ -290,8 +290,8 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 		log.Infof(ctx, "Found an FCM token to send to: %v", PP(fcmToken))
 		finishedTokens[fcmToken.Value] = struct{}{}
 		notificationBody := msgContext.message.Body
-		if runes := []rune(notificationBody); len(runes) > 64 {
-			notificationBody = string(runes[:64]) + "..."
+		if runes := []rune(notificationBody); len(runes) > 512 {
+			notificationBody = string(runes[:512]) + "..."
 		}
 		notificationPayload := &fcm.NotificationPayload{
 			Title: fmt.Sprintf(
