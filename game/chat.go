@@ -289,6 +289,10 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 		}
 		log.Infof(ctx, "Found an FCM token to send to: %v", PP(fcmToken))
 		finishedTokens[fcmToken.Value] = struct{}{}
+		notificationBody := msgContext.message.Body
+		if runes := []rune(notificationBody); len(runes) > 64 {
+			notificationBody = string(runes[:64]) + "..."
+		}
 		notificationPayload := &fcm.NotificationPayload{
 			Title: fmt.Sprintf(
 				"%s: %s => %s",
@@ -296,7 +300,7 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 				msgContext.game.AbbrNat(msgContext.message.Sender),
 				msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
 			),
-			Body:        msgContext.message.Body,
+			Body:        notificationBody,
 			Tag:         "diplicity-engine-new-message",
 			ClickAction: fmt.Sprintf("%s://%s/Game/%s/Channel/%s/Messages", scheme, host, gameID.Encode(), channelMembers.String()),
 		}
