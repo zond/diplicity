@@ -156,6 +156,39 @@ func testChat(t *testing.T) {
 			AssertEq(2.0, "Properties", "NMessages").
 			AssertEq(0.0, "Properties", "NMessagesSince", "NMessages")
 	})
+
+	t.Run("TestNMessagesGroupChat", func(t *testing.T) {
+		members := sort.StringSlice{startedGameNats[0], startedGameNats[1], startedGameNats[2]}
+		sort.Sort(members)
+		chanName := strings.Join(members, ",")
+
+		for i := 0; i < 3; i++ {
+			startedGames[i].Follow("channels", "Links").Success().
+				AssertNotFind(chanName, []string{"Properties"}, []string{"Name"})
+		}
+
+		bdy := String("body")
+
+		startedGames[0].Follow("channels", "Links").Success().
+			Follow("message", "Links").Body(map[string]interface{}{
+			"Body":           bdy,
+			"ChannelMembers": members,
+		}).Success()
+
+		WaitForEmptyQueue("game-sendMsgNotificationsToUsers")
+
+		for i := 0; i < 3; i++ {
+			startedGames[i].Follow("channels", "Links").Success().
+				Find(chanName, []string{"Properties"}, []string{"Name"}).
+				AssertEq(1.0, "Properties", "NMessages").
+				AssertEq(1.0, "Properties", "NMessagesSince", "NMessages").
+				Follow("messages", "Links").Success()
+			startedGames[i].Follow("channels", "Links").Success().
+				Find(chanName, []string{"Properties"}, []string{"Name"}).
+				AssertEq(1.0, "Properties", "NMessages").
+				AssertEq(0.0, "Properties", "NMessagesSince", "NMessages")
+		}
+	})
 }
 
 func TestDisabledChats(t *testing.T) {
