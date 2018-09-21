@@ -1012,7 +1012,7 @@ func countUnreadMessages(ctx context.Context, channels Channels, viewer godip.Na
 	for i := range channels {
 		go func(c *Channel, since time.Time) {
 			if since.IsZero() {
-				channels[i].NMessagesSince.NMessages = channels[i].NMessages
+				c.NMessagesSince.NMessages = c.NMessages
 				results <- nil
 			} else {
 				results <- c.CountSince(ctx, since)
