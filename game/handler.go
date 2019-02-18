@@ -81,6 +81,8 @@ const (
 	RenderPhaseMapRoute         = "RenderPhaseMap"
 	ReRateRoute                 = "ReRate"
 	GlobalStatsRoute            = "GlobalStats"
+	RssRoute                    = "Rss"
+	ShowGameRssRoute            = "ShowGameRss"
 	ResaveRoute                 = "Resave"
 	AllocateNationsRoute        = "AllocateNations"
 )
@@ -667,6 +669,8 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Options", []string{"GET"}, ListOptionsRoute, listOptions)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Map", []string{"GET"}, RenderPhaseMapRoute, renderPhaseMap)
 	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
+	Handle(r, "/Rss", []string{"GET"}, RssRoute, handleRss)
+	Handle(r, "/Rss/Game/{game_id}", []string{"GET"}, ShowGameRssRoute, showGameRss)
 	HandleResource(r, GameResource)
 	HandleResource(r, AllocationResource)
 	HandleResource(r, MemberResource)
