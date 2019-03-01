@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -30,11 +31,32 @@ func makeURL(route string, urlParams ...string) (*url.URL, error) {
 	return phaseURL, nil
 }
 
+// The RFC2616 date format.
+var httpDateFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
+
 // Supported query parameters:
 //   gameID: Limit the feed to a single game.
 //   variant: Limit the feed to a single variant.
 //   phaseType: Limit the feed to a single phase type.
 func handleRss(w ResponseWriter, r Request) error {
+	// If the request header includes If-Modified-Since then just check if an hour
+	// has elapsed. The feed is generated dynamically, so it's expensive to check
+	// whether there's actually an update available or not.
+	ifModifiedSince := r.Req().Header.Get("If-Modified-Since")
+	ifDate, err := time.Parse(httpDateFormat, ifModifiedSince)
+	if err == nil {
+		now := time.Now()
+		diff := now.Sub(ifDate)
+		if diff.Hours() < 1 {
+			w.WriteHeader(http.StatusNotModified)
+			return nil
+		}
+	} else {
+		// Ignore as the header probably wasn't present (or wasn't understood).
+		err = nil
+	}
+
+	// Process the request.
 	ctx := appengine.NewContext(r.Req())
 	uq := r.Req().URL.Query()
 
@@ -137,6 +159,7 @@ func handleRss(w ResponseWriter, r Request) error {
 
 	// Cache settings.
 	w.Header().Set("Etag", eventTimes[0].String())
+	w.Header().Set("Last-Modified", eventTimes[0].Format(httpDateFormat))
 	w.Header().Set("Cache-Control", "max-age=86400") // 1 day
 
 	w.Write([]byte(rss))
