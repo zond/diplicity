@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"time"
 
@@ -100,8 +101,9 @@ func handleRss(w ResponseWriter, r Request) error {
 		}
 	}
 
+	sort.Slice(eventTimes, func(i, j int) bool { return eventTimes[i].After(eventTimes[j]) })
+
 	// Convert this into an RSS feed.
-	now := time.Now()
 	author := feeds.Author{Name: "Diplicity", Email: "diplicity-talk@googlegroups.com"}
 	appURL, err := makeURL(IndexRoute)
 	if err != nil {
@@ -112,7 +114,7 @@ func handleRss(w ResponseWriter, r Request) error {
 		Link:        &feeds.Link{Href: appURL.String()},
 		Description: "Feed of phases from Diplicity games.",
 		Author:      &author,
-		Created:     now,
+		Created:     eventTimes[0],
 	}
 
 	feed.Items = []*feeds.Item{}
@@ -132,6 +134,10 @@ func handleRss(w ResponseWriter, r Request) error {
 	if err != nil {
 		return err
 	}
+
+	// Cache settings.
+	w.Header().Set("Etag", eventTimes[0].String())
+	w.Header().Set("Cache-Control", "max-age=86400") // 1 day
 
 	w.Write([]byte(rss))
 
