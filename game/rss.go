@@ -66,6 +66,9 @@ func handleRss(w ResponseWriter, r Request) error {
 		err = nil
 	}
 
+	// If the RSS feed will never change then cache it for a long time.
+	permanentCache := false
+
 	games := Games{}
 	// Treat the case where a game ID has been specified differently.
 	if gameIDFilter := uq.Get("gameID"); gameIDFilter != "" {
@@ -76,6 +79,9 @@ func handleRss(w ResponseWriter, r Request) error {
 		game := Game{}
 		err = datastore.Get(ctx, gameID, &game)
 		game.ID = gameID
+		if game.Finished {
+			permanentCache = true
+		}
 		games = append(games, game)
 	} else {
 		q := datastore.NewQuery(gameKind).Filter("Started=", true)
@@ -160,7 +166,11 @@ func handleRss(w ResponseWriter, r Request) error {
 	// Cache settings.
 	w.Header().Set("Etag", eventTimes[0].String())
 	w.Header().Set("Last-Modified", eventTimes[0].Format(httpDateFormat))
-	w.Header().Set("Cache-Control", "max-age=86400") // 1 day
+	cacheControl := "max-age=86400" // 1 day
+	if permanentCache {
+		cacheControl = "max-age=31536000" // 1 year
+	}
+	w.Header().Set("Cache-Control", cacheControl)
 
 	w.Write([]byte(rss))
 
