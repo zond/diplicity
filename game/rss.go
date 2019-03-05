@@ -114,8 +114,8 @@ func handleRss(w ResponseWriter, r Request) error {
 		checked := itemMap[checkedKey]
 		modified := itemMap[modifiedKey]
 		if checked != nil && checked.Value != nil && modified != nil && modified.Value != nil {
-			checkedStr := hex.EncodeToString(checked.Value)
-			modifiedStr := hex.EncodeToString(modified.Value)
+			checkedStr := string(checked.Value[:])
+			modifiedStr := string(modified.Value[:])
 			if !updateNeeded(r, checkedStr, modifiedStr) {
 				w.WriteHeader(http.StatusNotModified)
 				return nil
@@ -203,16 +203,16 @@ func handleRss(w ResponseWriter, r Request) error {
 	if err != nil {
 		return err
 	}
-	created := time.Now()
+	lastModified := time.Now()
 	if len(eventTimes) > 0 {
-		created = eventTimes[0]
+		lastModified = eventTimes[0]
 	}
 	feed := &feeds.Feed{
 		Title:       "Diplicity RSS",
 		Link:        &feeds.Link{Href: appURL.String()},
 		Description: "Feed of phases from Diplicity games.",
 		Author:      &author,
-		Created:     created,
+		Created:     lastModified,
 	}
 
 	feed.Items = []*feeds.Item{}
@@ -237,7 +237,24 @@ func handleRss(w ResponseWriter, r Request) error {
 	if permanentCache {
 		cacheControl = "max-age=31536000" // 1 year
 	}
-	writeRss(w, rss, created.String(), created.Format(httpDateFormat), cacheControl)
+	modifiedStr := lastModified.Format(httpDateFormat)
+	writeRss(w, rss, lastModified.String(), modifiedStr, cacheControl)
+
+	// Populate memcache.
+	// Use an expiry of 1 hour, since requests after that will hit the db anyway.
+	checkedStr := time.Now().Format(httpDateFormat)
+	checkedItem := &memcache.Item{
+		Key:        checkedKey,
+		Value:      []byte(checkedStr),
+		Expiration: time.Hour,
+	}
+	modifiedItem := &memcache.Item{
+		Key:        modifiedKey,
+		Value:      []byte(modifiedStr),
+		Expiration: time.Hour,
+	}
+	items := []*memcache.Item{checkedItem, modifiedItem}
+	memcache.SetMulti(ctx, items)
 
 	return nil
 }
