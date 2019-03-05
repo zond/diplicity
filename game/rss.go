@@ -1,6 +1,8 @@
 package game
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,6 +13,7 @@ import (
 	"github.com/gorilla/feeds"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/memcache"
 
 	. "github.com/zond/goaeoas"
 )
@@ -32,32 +35,95 @@ func makeURL(route string, urlParams ...string) (*url.URL, error) {
 }
 
 // The RFC2616 date format.
-var httpDateFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
+const httpDateFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
+
+// A key prefix for the date the RSS cache was last checked.
+const rssCheckedMemcacheKey = "rssChecked:"
+
+// A key prefix for the date the RSS cache was last known to be modified.
+const rssModifiedMemcacheKey = "rssModified:"
+
+// A fast (mostly collision resistant) hash function.
+// Note that this isn't cryptographically secure.
+// Returns a 32 character string.
+func hashStr(inputStr string) string {
+	hashArray := md5.Sum([]byte(inputStr))
+	return hex.EncodeToString(hashArray[:])
+}
+
+// Write the RSS feed.
+//   w The writer to use.
+//   rss The body of the RSS feed.
+//   etag A value to indicate the version of the feed.
+//   cacheControl How long the page should be cached for.
+func writeRss(w ResponseWriter, rss string, etag string, lastModified string, cacheControl string) {
+	w.Header().Set("Etag", etag)
+	w.Header().Set("Last-Modified", lastModified)
+	w.Header().Set("Cache-Control", cacheControl)
+	w.Write([]byte(rss))
+}
+
+// If the request header includes If-Modified-Since then we should do an update if
+// it was modified, or if an hour has elapsed since the db was last checked. The
+// feed is generated dynamically, so it's expensive to check whether there's
+// actually an update available or not.
+func updateNeeded(r Request, checked string, modified string) bool {
+	ifModifiedSince := r.Req().Header.Get("If-Modified-Since")
+	ifDate, err := time.Parse(httpDateFormat, ifModifiedSince)
+	if err != nil {
+		// The If-Modified-Since in the request wasn't understood.
+		return true
+	}
+
+	modifiedDate, err := time.Parse(httpDateFormat, modified)
+	if err != nil {
+		fmt.Printf("Modified date cache contains unparsable date string: %s", modified)
+		return true
+	}
+	if modifiedDate.After(ifDate) {
+		// There's definitely an update available
+		return true
+	}
+
+	checkedDate, err := time.Parse(httpDateFormat, checked)
+	if err != nil {
+		fmt.Printf("Checked date cache contains unparsable date string: %s", checked)
+		return true
+	}
+	// There might be an update available, so check for it if an hour has passed since the last check.
+	diff := checkedDate.Sub(ifDate)
+	return diff.Hours() > 1
+}
 
 // Supported query parameters:
 //   gameID: Limit the feed to a single game.
 //   variant: Limit the feed to a single variant.
 //   phaseType: Limit the feed to a single phase type.
 func handleRss(w ResponseWriter, r Request) error {
-	// If the request header includes If-Modified-Since then just check if an hour
-	// has elapsed. The feed is generated dynamically, so it's expensive to check
-	// whether there's actually an update available or not.
-	ifModifiedSince := r.Req().Header.Get("If-Modified-Since")
-	ifDate, err := time.Parse(httpDateFormat, ifModifiedSince)
+	ctx := appengine.NewContext(r.Req())
+
+	// Use memcache to handle If-Modified-Since requests.
+	urlHash := hashStr(r.Req().URL.String())
+	checkedKey := rssCheckedMemcacheKey + urlHash
+	modifiedKey := rssModifiedMemcacheKey + urlHash
+	itemMap, err := memcache.GetMulti(ctx, []string{checkedKey, modifiedKey})
+	if err != nil && err != memcache.ErrCacheMiss {
+		return err
+	}
 	if err == nil {
-		now := time.Now()
-		diff := now.Sub(ifDate)
-		if diff.Hours() < 1 {
-			w.WriteHeader(http.StatusNotModified)
-			return nil
+		checked := itemMap[checkedKey]
+		modified := itemMap[modifiedKey]
+		if checked != nil && checked.Value != nil && modified != nil && modified.Value != nil {
+			checkedStr := hex.EncodeToString(checked.Value)
+			modifiedStr := hex.EncodeToString(modified.Value)
+			if !updateNeeded(r, checkedStr, modifiedStr) {
+				w.WriteHeader(http.StatusNotModified)
+				return nil
+			}
 		}
-	} else {
-		// Ignore as the header probably wasn't present (or wasn't understood).
-		err = nil
 	}
 
 	// Process the request.
-	ctx := appengine.NewContext(r.Req())
 	uq := r.Req().URL.Query()
 
 	limit, err := strconv.ParseInt(uq.Get("limit"), 10, 64)
@@ -104,7 +170,7 @@ func handleRss(w ResponseWriter, r Request) error {
 	eventTimes := []time.Time{}
 	for _, game := range games {
 		phases := []Phase{}
-		q := datastore.NewQuery(phaseKind).Ancestor(game.ID)
+		q := datastore.NewQuery(phaseKind).Ancestor(game.ID).Filter("Resolved=", true)
 
 		if phaseTypeFilter := uq.Get("phaseType"); phaseTypeFilter != "" {
 			q = q.Filter("Type=", phaseTypeFilter)
@@ -137,12 +203,16 @@ func handleRss(w ResponseWriter, r Request) error {
 	if err != nil {
 		return err
 	}
+	created := time.Now()
+	if len(eventTimes) > 0 {
+		created = eventTimes[0]
+	}
 	feed := &feeds.Feed{
 		Title:       "Diplicity RSS",
 		Link:        &feeds.Link{Href: appURL.String()},
 		Description: "Feed of phases from Diplicity games.",
 		Author:      &author,
-		Created:     eventTimes[0],
+		Created:     created,
 	}
 
 	feed.Items = []*feeds.Item{}
@@ -163,16 +233,11 @@ func handleRss(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	// Cache settings.
-	w.Header().Set("Etag", eventTimes[0].String())
-	w.Header().Set("Last-Modified", eventTimes[0].Format(httpDateFormat))
 	cacheControl := "max-age=86400" // 1 day
 	if permanentCache {
 		cacheControl = "max-age=31536000" // 1 year
 	}
-	w.Header().Set("Cache-Control", cacheControl)
-
-	w.Write([]byte(rss))
+	writeRss(w, rss, created.String(), created.Format(httpDateFormat), cacheControl)
 
 	return nil
 }
