@@ -45,6 +45,12 @@ const rssCheckedMemcacheKey = "rssChecked:"
 // A key prefix for the date the RSS cache was last known to be modified.
 const rssModifiedMemcacheKey = "rssModified:"
 
+// The maximum number of games to include in the feed.
+const maxGames = 64
+
+// The maximum number of items to include in the feed.
+const maxItems = 256
+
 // A fast (mostly collision resistant) hash function.
 // Note that this isn't cryptographically secure.
 // Returns a 32 character string.
@@ -155,6 +161,8 @@ func makeSummary(phase Phase) string {
 //   gameID: Limit the feed to a single game.
 //   variant: Limit the feed to a single variant.
 //   phaseType: Limit the feed to a single phase type.
+//   gameLimit: The maximum number of games to return in the results.
+//   phaseLimit: The maximum number of phases from each game to return.
 func handleRss(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -182,12 +190,6 @@ func handleRss(w ResponseWriter, r Request) error {
 	// Process the request.
 	uq := r.Req().URL.Query()
 
-	limit, err := strconv.ParseInt(uq.Get("limit"), 10, 64)
-	if err != nil || limit > maxLimit {
-		limit = maxLimit
-		err = nil
-	}
-
 	// If the RSS feed will never change then cache it for a long time.
 	permanentCache := false
 
@@ -206,7 +208,13 @@ func handleRss(w ResponseWriter, r Request) error {
 		}
 		games = append(games, game)
 	} else {
-		q := datastore.NewQuery(gameKind).Filter("Started=", true)
+		limit, err := strconv.ParseInt(uq.Get("gameLimit"), 10, maxGames)
+		if err != nil || limit > maxLimit {
+			limit = maxLimit
+			err = nil
+		}
+
+		q := datastore.NewQuery(gameKind).Filter("Started=", true).Order("-CreatedAt").Limit(int(limit))
 
 		if variantFilter := uq.Get("variant"); variantFilter != "" {
 			q = q.Filter("Variant=", variantFilter)
@@ -225,8 +233,14 @@ func handleRss(w ResponseWriter, r Request) error {
 	events := map[time.Time][]event{}
 	eventTimes := []time.Time{}
 	for _, game := range games {
+		limit, err := strconv.ParseInt(uq.Get("phaseLimit"), 10, maxItems/len(games))
+		if err != nil || limit > maxLimit {
+			limit = maxLimit
+			err = nil
+		}
+
 		phases := []Phase{}
-		q := datastore.NewQuery(phaseKind).Ancestor(game.ID).Filter("Resolved=", true)
+		q := datastore.NewQuery(phaseKind).Ancestor(game.ID).Filter("Resolved=", true).Order("-ResolvedAt").Limit(int(limit))
 
 		if phaseTypeFilter := uq.Get("phaseType"); phaseTypeFilter != "" {
 			q = q.Filter("Type=", phaseTypeFilter)
