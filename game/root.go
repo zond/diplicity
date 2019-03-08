@@ -55,6 +55,9 @@ func handleIndex(w ResponseWriter, r Request) error {
 	})).AddLink(r.NewLink(Link{
 		Rel:   "global-stats",
 		Route: GlobalStatsRoute,
+	})).AddLink(r.NewLink(Link{
+		Rel:   "rss",
+		Route: RssRoute,
 	})).AddLink(r.NewLink(AllocationResource.Link("test-allocation", Create, nil)))
 
 	if user == nil {
