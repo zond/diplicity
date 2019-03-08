@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/zond/godip"
+
 	"github.com/gorilla/feeds"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
@@ -93,6 +95,60 @@ func updateNeeded(r Request, checked string, modified string) bool {
 	// There might be an update available, so check for it if an hour has passed since the last check.
 	diff := checkedDate.Sub(ifDate)
 	return diff.Hours() > 1
+}
+
+func makeSummary(phase Phase) string {
+	// A set of all nations still in the game.
+	nations := map[godip.Nation]bool{}
+	// SC Count
+	scCount := map[godip.Nation]int{}
+	for _, sc := range phase.SCs {
+		nation := sc.Owner
+		scCount[nation]++
+		nations[nation] = true
+	}
+	// Units
+	unitCount := map[godip.Nation]int{}
+	for _, unitWrapper := range phase.Units {
+		nation := unitWrapper.Unit.Nation
+		unitCount[nation]++
+		nations[nation] = true
+	}
+	// Dislodged
+	dislodgedCount := map[godip.Nation]int{}
+	for _, dislodged := range phase.Dislodgeds {
+		nation := dislodged.Dislodged.Nation
+		dislodgedCount[nation]++
+		nations[nation] = true
+	}
+	// Make ordered set of nations.
+	var nationsList []godip.Nation
+	for nation, _ := range nations {
+		nationsList = append(nationsList, nation)
+	}
+	sort.Slice(nationsList, func(i, j int) bool {
+		return nationsList[i].String() < nationsList[j].String()
+	})
+	// Delta
+	summary := "<table>"
+	if len(phase.Dislodgeds) > 0 {
+		summary += "<th><td>SC Count</td><td>Units</td><td>Dislodged</td><td>Delta</td></th>"
+	} else {
+		summary += "<th><td>SC Count</td><td>Units</td><td>Delta</td></th>"
+	}
+	for _, nation := range nationsList {
+		delta := scCount[nation] - unitCount[nation] - dislodgedCount[nation]
+		summary += "<tr>"
+		summary += "<td>" + nation.String() + "</td>"
+		if len(phase.Dislodgeds) > 0 {
+			summary += fmt.Sprintf("<td>%d</td><td>%d</td><td>%d</td><td>%d</td>", scCount[nation], unitCount[nation], dislodgedCount[nation], delta)
+		} else {
+			summary += fmt.Sprintf("<td>%d</td><td>%d</td><td>%+d</td>", scCount[nation], unitCount[nation], delta)
+		}
+		summary += "</tr>"
+	}
+	summary += "</table>"
+	return summary
 }
 
 // Supported query parameters:
@@ -181,7 +237,7 @@ func handleRss(w ResponseWriter, r Request) error {
 		}
 		for _, phase := range phases {
 			title := fmt.Sprintf("%s %d %s %s (%s)", game.Desc, phase.Year, phase.Season, phase.Type, game.Variant)
-			description := "Map should go here"
+			description := makeSummary(phase)
 			phaseURL, err := makeURL(RenderPhaseMapRoute, "game_id", game.ID.Encode(), "phase_ordinal", fmt.Sprint(phase.PhaseOrdinal))
 			if err != nil {
 				return err
