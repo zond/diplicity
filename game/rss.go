@@ -3,6 +3,7 @@ package game
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -68,6 +69,7 @@ func writeRss(w ResponseWriter, rss string, etag string, lastModified string, ca
 	w.Header().Set("Etag", etag)
 	w.Header().Set("Last-Modified", lastModified)
 	w.Header().Set("Cache-Control", cacheControl)
+	w.Header().Set("Content-Type", "application/rss+xml")
 	w.Write([]byte(rss))
 }
 
@@ -209,8 +211,8 @@ func handleRss(w ResponseWriter, r Request) error {
 		games = append(games, game)
 	} else {
 		limit, err := strconv.ParseInt(uq.Get("gameLimit"), 10, maxGames)
-		if err != nil || limit > maxLimit {
-			limit = maxLimit
+		if err != nil || limit > maxGames {
+			limit = maxGames
 			err = nil
 		}
 
@@ -233,9 +235,9 @@ func handleRss(w ResponseWriter, r Request) error {
 	events := map[time.Time][]event{}
 	eventTimes := []time.Time{}
 	for _, game := range games {
-		limit, err := strconv.ParseInt(uq.Get("phaseLimit"), 10, maxItems/len(games))
-		if err != nil || limit > maxLimit {
-			limit = maxLimit
+		limit, err := strconv.ParseInt(uq.Get("phaseLimit"), 10, 4)
+		if err != nil || limit > int64(maxItems/len(games)) {
+			limit = int64(maxItems / len(games))
 			err = nil
 		}
 
@@ -250,7 +252,14 @@ func handleRss(w ResponseWriter, r Request) error {
 			return err
 		}
 		for _, phase := range phases {
-			title := fmt.Sprintf("%s %d %s %s (%s)", game.Desc, phase.Year, phase.Season, phase.Type, game.Variant)
+			// This will double encode the title.
+			// See http://www.%E8%A9%B9%E5%A7%86%E6%96%AF.com/blog/2006/06/encoding-rss-titles
+			// for more details about the complexity of RSS reader compatibility.
+			titleBytes, err := xml.Marshal(fmt.Sprintf("%s %d %s %s (%s)", game.Desc, phase.Year, phase.Season, phase.Type, game.Variant))
+			title := string(titleBytes[:])
+			if err != nil {
+				return err
+			}
 			description := makeSummary(phase)
 			phaseURL, err := makeURL(RenderPhaseMapRoute, "game_id", game.ID.Encode(), "phase_ordinal", fmt.Sprint(phase.PhaseOrdinal))
 			if err != nil {
@@ -268,7 +277,6 @@ func handleRss(w ResponseWriter, r Request) error {
 	sort.Slice(eventTimes, func(i, j int) bool { return eventTimes[i].After(eventTimes[j]) })
 
 	// Convert this into an RSS feed.
-	author := feeds.Author{Name: "Diplicity", Email: "diplicity-talk@googlegroups.com"}
 	appURL, err := makeURL(IndexRoute)
 	if err != nil {
 		return err
@@ -281,8 +289,9 @@ func handleRss(w ResponseWriter, r Request) error {
 		Title:       "Diplicity RSS",
 		Link:        &feeds.Link{Href: appURL.String()},
 		Description: "Feed of phases from Diplicity games.",
-		Author:      &author,
+		Author:      &feeds.Author{Name: "Diplicity", Email: "diplicity-talk@googlegroups.com"},
 		Created:     lastModified,
+		Id:          urlHash,
 	}
 
 	feed.Items = []*feeds.Item{}
@@ -292,8 +301,10 @@ func handleRss(w ResponseWriter, r Request) error {
 				Title:       event.title,
 				Link:        &feeds.Link{Href: event.link},
 				Description: event.description,
-				Author:      &author,
-				Created:     t,
+				// Only the name field of the author is output.
+				Author:  &feeds.Author{Name: "diplicity-talk@googlegroups.com (Diplicity)", Email: "unused@example.com"},
+				Created: t,
+				Id:      urlHash + hashStr(event.link),
 			})
 		}
 	}
