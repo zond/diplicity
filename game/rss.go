@@ -3,12 +3,12 @@ package game
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/xml"
 	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/zond/godip"
@@ -255,8 +255,9 @@ func handleRss(w ResponseWriter, r Request) error {
 			// This will double encode the title.
 			// See http://www.%E8%A9%B9%E5%A7%86%E6%96%AF.com/blog/2006/06/encoding-rss-titles
 			// for more details about the complexity of RSS reader compatibility.
-			titleBytes, err := xml.Marshal(fmt.Sprintf("%s %d %s %s (%s)", game.Desc, phase.Year, phase.Season, phase.Type, game.Variant))
-			title := string(titleBytes[:])
+			title := fmt.Sprintf("%s %d %s %s (%s)", game.Desc, phase.Year, phase.Season, phase.Type, game.Variant)
+			title = strings.Replace(title, "&", "&amp;", -1)
+			title = strings.Replace(title, "<", "&lt;", -1)
 			if err != nil {
 				return err
 			}
@@ -291,7 +292,6 @@ func handleRss(w ResponseWriter, r Request) error {
 		Description: "Feed of phases from Diplicity games.",
 		Author:      &feeds.Author{Name: "Diplicity", Email: "diplicity-talk@googlegroups.com"},
 		Created:     lastModified,
-		Id:          urlHash,
 	}
 
 	feed.Items = []*feeds.Item{}
@@ -304,7 +304,7 @@ func handleRss(w ResponseWriter, r Request) error {
 				// Only the name field of the author is output.
 				Author:  &feeds.Author{Name: "diplicity-talk@googlegroups.com (Diplicity)", Email: "unused@example.com"},
 				Created: t,
-				Id:      urlHash + hashStr(event.link),
+				Id:      event.link,
 			})
 		}
 	}
