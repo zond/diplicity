@@ -147,7 +147,7 @@ func makeSummary(phase Phase) string {
 		summary += "<tr>"
 		summary += "<td>" + nation.String() + "</td>"
 		if len(phase.Dislodgeds) > 0 {
-			summary += fmt.Sprintf("<td>%d</td><td>%d</td><td>%d</td><td>%d</td>", scCount[nation], unitCount[nation], dislodgedCount[nation], delta)
+			summary += fmt.Sprintf("<td>%d</td><td>%d</td><td>%d</td><td>%+d</td>", scCount[nation], unitCount[nation], dislodgedCount[nation], delta)
 		} else {
 			summary += fmt.Sprintf("<td>%d</td><td>%d</td><td>%+d</td>", scCount[nation], unitCount[nation], delta)
 		}
