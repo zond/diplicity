@@ -210,7 +210,7 @@ func handleRss(w ResponseWriter, r Request) error {
 		}
 		games = append(games, game)
 	} else {
-		limit, err := strconv.ParseInt(uq.Get("gameLimit"), 10, maxGames)
+		limit, err := strconv.ParseInt(uq.Get("gameLimit"), 10, 64)
 		if err != nil || limit > maxGames {
 			limit = maxGames
 			err = nil
@@ -235,10 +235,14 @@ func handleRss(w ResponseWriter, r Request) error {
 	events := map[time.Time][]event{}
 	eventTimes := []time.Time{}
 	for _, game := range games {
-		limit, err := strconv.ParseInt(uq.Get("phaseLimit"), 10, 4)
-		if err != nil || limit > int64(maxItems/len(games)) {
-			limit = int64(maxItems / len(games))
+		limit, err := strconv.ParseInt(uq.Get("phaseLimit"), 10, 64)
+		if err != nil {
+			// Default to the last four phases per game.
+			limit = 4
 			err = nil
+		}
+		if limit > int64(maxItems/len(games)) {
+			limit = int64(maxItems / len(games))
 		}
 
 		phases := []Phase{}
