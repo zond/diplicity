@@ -105,7 +105,52 @@ func updateNeeded(r Request, checked string, modified string) bool {
 	return diff.Hours() > 1
 }
 
-func makeSummary(phase Phase) string {
+func makeSummaryHtml(phase Phase, nationsList []godip.Nation, scCount map[godip.Nation]int,
+	unitCount map[godip.Nation]int, dislodgedCount map[godip.Nation]int) string {
+	summary := "<table>"
+	if len(phase.Dislodgeds) > 0 {
+		summary += "<th><td>SC Count</td><td>Units</td><td>Dislodged</td><td>Delta</td></th>"
+	} else {
+		summary += "<th><td>SC Count</td><td>Units</td><td>Delta</td></th>"
+	}
+	for _, nation := range nationsList {
+		delta := scCount[nation] - unitCount[nation] - dislodgedCount[nation]
+		summary += "<tr>"
+		summary += "<td>" + nation.String() + "</td>"
+		if len(phase.Dislodgeds) > 0 {
+			summary += fmt.Sprintf("<td>%d</td><td>%d</td><td>%d</td><td>%+d</td>", scCount[nation], unitCount[nation], dislodgedCount[nation], delta)
+		} else {
+			summary += fmt.Sprintf("<td>%d</td><td>%d</td><td>%+d</td>", scCount[nation], unitCount[nation], delta)
+		}
+		summary += "</tr>"
+	}
+	summary += "</table>"
+	return summary
+}
+
+func makeSummaryMarkdown(phase Phase, nationsList []godip.Nation, scCount map[godip.Nation]int,
+	unitCount map[godip.Nation]int, dislodgedCount map[godip.Nation]int) string {
+	summary := ""
+	if len(phase.Dislodgeds) > 0 {
+		summary += "| SC Count | Units | Dislodged | Delta |\n"
+		summary += "| --- | --- | --- | --- |"
+	} else {
+		summary += "| SC Count | Units | Delta |\n"
+		summary += "| --- | --- | --- |"
+	}
+	for _, nation := range nationsList {
+		delta := scCount[nation] - unitCount[nation] - dislodgedCount[nation]
+		summary += "\n| " + nation.String() + " |"
+		if len(phase.Dislodgeds) > 0 {
+			summary += fmt.Sprintf(" %d | %d | %d | %+d |", scCount[nation], unitCount[nation], dislodgedCount[nation], delta)
+		} else {
+			summary += fmt.Sprintf(" %d | %d | %+d |", scCount[nation], unitCount[nation], delta)
+		}
+	}
+	return summary
+}
+
+func makeSummary(phase Phase, format string) string {
 	// A set of all nations still in the game.
 	nations := map[godip.Nation]bool{}
 	// SC Count
@@ -137,26 +182,11 @@ func makeSummary(phase Phase) string {
 	sort.Slice(nationsList, func(i, j int) bool {
 		return nationsList[i].String() < nationsList[j].String()
 	})
-	// Delta
-	summary := "<table>"
-	if len(phase.Dislodgeds) > 0 {
-		summary += "<th><td>SC Count</td><td>Units</td><td>Dislodged</td><td>Delta</td></th>"
-	} else {
-		summary += "<th><td>SC Count</td><td>Units</td><td>Delta</td></th>"
+
+	if format == "markdown" {
+		return makeSummaryMarkdown(phase, nationsList, scCount, unitCount, dislodgedCount)
 	}
-	for _, nation := range nationsList {
-		delta := scCount[nation] - unitCount[nation] - dislodgedCount[nation]
-		summary += "<tr>"
-		summary += "<td>" + nation.String() + "</td>"
-		if len(phase.Dislodgeds) > 0 {
-			summary += fmt.Sprintf("<td>%d</td><td>%d</td><td>%d</td><td>%+d</td>", scCount[nation], unitCount[nation], dislodgedCount[nation], delta)
-		} else {
-			summary += fmt.Sprintf("<td>%d</td><td>%d</td><td>%+d</td>", scCount[nation], unitCount[nation], delta)
-		}
-		summary += "</tr>"
-	}
-	summary += "</table>"
-	return summary
+	return makeSummaryHtml(phase, nationsList, scCount, unitCount, dislodgedCount)
 }
 
 // Supported query parameters:
@@ -165,6 +195,7 @@ func makeSummary(phase Phase) string {
 //   phaseType: Limit the feed to a single phase type.
 //   gameLimit: The maximum number of games to return in the results.
 //   phaseLimit: The maximum number of phases from each game to return.
+//   format: The format of the description (e.g. "html" or "markdown").
 func handleRss(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -265,7 +296,8 @@ func handleRss(w ResponseWriter, r Request) error {
 			if err != nil {
 				return err
 			}
-			description := makeSummary(phase)
+			format := uq.Get("format")
+			description := makeSummary(phase, format)
 			phaseURL, err := makeURL(RenderPhaseMapRoute, "game_id", game.ID.Encode(), "phase_ordinal", fmt.Sprint(phase.PhaseOrdinal))
 			if err != nil {
 				return err
