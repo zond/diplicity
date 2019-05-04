@@ -617,7 +617,8 @@ func (p *PhaseResolver) Act() error {
 		// When a player updates a phase state, it's always set to 'OnProbation = false'.
 		// Thus, if the player was on probation last phase, we know they didn't enter orders or update their phase state, and they are safe to put on probation again.
 		// The reason for the `||` is that they can still be ready to resolve, due to not having options!
-		autoProbation := wasOnProbation || (!hadOrders && !wasReady)
+		// A player should not be on probation once they've been eliminated from the game.
+		autoProbation := (wasOnProbation || (!hadOrders && !wasReady)) && !wasEliminated
 		if autoProbation {
 			probationaries = append(probationaries, member.User.Id)
 		}
