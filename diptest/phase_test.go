@@ -739,3 +739,170 @@ func testReadyResolution(t *testing.T) {
 	})
 
 }
+
+func TestEliminatedNMRPlayer(t *testing.T) {
+	withStartedGameOpts(func(opts map[string]interface{}) {
+		opts["Variant"] = "Pure"
+	}, func() {
+		gameDesc := String("game-desc")
+		t.Run("CreateStagingGamePlayer0", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute(game.IndexRoute).
+				Success().Follow("create-game", "Links").
+				Body(map[string]interface{}{
+					"Variant":            "Pure",
+					"NoMerge":            true,
+					"Desc":               gameDesc,
+					"PhaseLengthMinutes": 60 * 24,
+				}).Success()
+		})
+		t.Run("PreparePhaseStatesWithOneNMR", func(t *testing.T) {
+			for i, nat := range startedGameNats {
+				var order []string
+				switch nat {
+				case "Austria":
+					// Austria is NMR.
+					continue
+				case "England":
+					order = []string{"lon", "Move", "vie"}
+				case "France":
+					order = []string{"par", "Support", "lon", "vie"}
+				case "Germany":
+					order = []string{"ber", "Hold"}
+				case "Italy":
+					order = []string{"rom", "Hold"}
+				case "Turkey":
+					order = []string{"con", "Hold"}
+				case "Russia":
+					order = []string{"mos", "Hold"}
+				}
+
+				p := startedGames[i].Follow("phases", "Links").Success().
+					Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+
+				p.Follow("create-order", "Links").Body(map[string]interface{}{
+					"Parts": order,
+				}).Success()
+
+				p.Follow("phase-states", "Links").Success().
+					Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+					Follow("update", "Links").Body(map[string]interface{}{
+					"ReadyToResolve": true,
+					"WantsDIAS":      false,
+				}).Success()
+			}
+		})
+		t.Run("TimeoutResolvePhase1", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
+				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "1").Success()
+		})
+		t.Run("TestOldPhase1", func(t *testing.T) {
+			p := startedGames[0].Follow("phases", "Links").Success().
+				Find(1, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				AssertEq(true, "Properties", "Resolved").
+				AssertLen(7, "Properties", "Resolutions")
+
+			pr := p.Follow("phase-result", "Links").Success().
+				AssertLen(6, "Properties", "ReadyUsers").
+				AssertLen(1, "Properties", "NMRUsers").
+				AssertNil("Properties", "ActiveUsers")
+			for i, env := range startedGameEnvs {
+				if startedGameNats[i] == "Austria" {
+					pr.Find(env.GetUID(), []string{"Properties", "NMRUsers"}, nil)
+				} else {
+					pr.Find(env.GetUID(), []string{"Properties", "ReadyUsers"}, nil)
+				}
+			}
+		})
+		t.Run("PreparePhase3WithNoMoreNMRs", func(t *testing.T) {
+			for i, nat := range startedGameNats {
+				var order []string
+				switch nat {
+				case "Austria":
+					// Austria is eliminated.
+					continue
+				case "England":
+					order = []string{"vie", "Hold"}
+				case "France":
+					order = []string{"par", "Hold"}
+				case "Germany":
+					order = []string{"ber", "Hold"}
+				case "Italy":
+					order = []string{"rom", "Hold"}
+				case "Turkey":
+					order = []string{"con", "Hold"}
+				case "Russia":
+					order = []string{"mos", "Hold"}
+				}
+
+				p := startedGames[i].Follow("phases", "Links").Success().
+					Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
+
+				p.Follow("create-order", "Links").Body(map[string]interface{}{
+					"Parts": order,
+				}).Success()
+			}
+		})
+		t.Run("TimeoutResolvePhase3", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
+				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "3").Success()
+		})
+		t.Run("TestOldPhase3", func(t *testing.T) {
+			p := startedGames[0].Follow("phases", "Links").Success().
+				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				AssertEq(true, "Properties", "Resolved").
+				AssertLen(6, "Properties", "Resolutions")
+
+			pr := p.Follow("phase-result", "Links").Success().
+				AssertNil("Properties", "ReadyUsers").
+				// Austria is still NMR even though they have no options, because they still have an SC.
+				// This is maybe slightly harsh, but then again they shouldn't NMR.
+				AssertLen(1, "Properties", "NMRUsers").
+				AssertLen(6, "Properties", "ActiveUsers")
+			for i, env := range startedGameEnvs {
+				if startedGameNats[i] == "Austria" {
+					pr.Find(env.GetUID(), []string{"Properties", "NMRUsers"}, nil)
+				} else {
+					pr.Find(env.GetUID(), []string{"Properties", "ActiveUsers"}, nil)
+				}
+			}
+		})
+		t.Run("PreparePhase5WithNoMoreNMRs", func(t *testing.T) {
+			for i, nat := range startedGameNats {
+				// Only England gets a build.
+				if nat != "England" {
+					continue
+				}
+				order := []string{"lon", "Build", "Army"}
+				p := startedGames[i].Follow("phases", "Links").Success().
+					Find(5, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
+
+				p.Follow("create-order", "Links").Body(map[string]interface{}{
+					"Parts": order,
+				}).Success()
+			}
+		})
+		t.Run("TimeoutResolvePhase5", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
+				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "5").Success()
+		})
+		t.Run("TestOldPhase5", func(t *testing.T) {
+			p := startedGames[0].Follow("phases", "Links").Success().
+				Find(5, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				AssertEq(true, "Properties", "Resolved").
+				AssertLen(1, "Properties", "Resolutions")
+
+			pr := p.Follow("phase-result", "Links").Success().
+				// Austria is now Ready rather than NMR because they are eliminated.
+				AssertLen(6, "Properties", "ReadyUsers").
+				AssertNil("Properties", "NMRUsers").
+				AssertLen(1, "Properties", "ActiveUsers")
+			for i, env := range startedGameEnvs {
+				if startedGameNats[i] == "England" {
+					pr.Find(env.GetUID(), []string{"Properties", "ActiveUsers"}, nil)
+				} else {
+					pr.Find(env.GetUID(), []string{"Properties", "ReadyUsers"}, nil)
+				}
+			}
+		})
+	})
+}
