@@ -70,8 +70,12 @@ func handleRenderMap(w ResponseWriter, r Request) error {
 	return RenderPhaseMap(w, r, phase, colors)
 }
 
+func makeVariable(s string) string {
+	return nationVariableReg.ReplaceAllString(s, "")
+}
+
 func makeNationVariable(nat godip.Nation) string {
-	return nationVariableReg.ReplaceAllString(nat.String(), "")
+	return makeVariable(nat.String())
 }
 
 func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) error {
@@ -96,7 +100,7 @@ func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) 
 	for i, nat := range append(variant.Nations, godip.Neutral) {
 		nationVariable := makeNationVariable(nat)
 
-		if nationMap, found := variants[phase.Variant]; found {
+		if nationMap, found := variants[makeVariable(phase.Variant)]; found {
 			if color, found := nationMap[godip.Nation(nationVariable)]; found {
 				jsBuf = append(jsBuf, fmt.Sprintf("col%s = %q;", nationVariable, color))
 				continue
