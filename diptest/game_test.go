@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zond/diplicity/auth"
 	"github.com/zond/diplicity/game"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
@@ -46,6 +47,43 @@ func permutations(arr godip.Nations) []godip.Nations {
 	}
 	helper(arr, len(arr))
 	return res
+}
+
+func TestInactiveMemberEjection(t *testing.T) {
+	gameDesc := String("test-game")
+	env := NewEnv().SetUID(String("fake"))
+	t.Run("TestCreateGame", func(t *testing.T) {
+		env.GetRoute(game.IndexRoute).Success().
+			Follow("create-game", "Links").
+			Body(map[string]interface{}{
+				"Variant":            "Classical",
+				"NoMerge":            true,
+				"Desc":               gameDesc,
+				"PhaseLengthMinutes": time.Duration(60),
+			}).Success().
+			AssertEq(gameDesc, "Properties", "Desc")
+
+		env.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			AssertNil("Properties", "NewestPhaseMeta")
+	})
+	t.Run("TestReapDoesntEvict", func(t *testing.T) {
+		env.GetRoute(game.ReapInactiveWaitingPlayersRoute).Success()
+		env.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			AssertNil("Properties", "NewestPhaseMeta")
+	})
+	t.Run("TestReapEvicts", func(t *testing.T) {
+		user := env.GetRoute(game.IndexRoute).Success().GetValue("Properties", "User")
+		(user.(map[string]interface{}))["ValidUntil"] = time.Now().Add(-24 * 30 * time.Hour)
+		env.PutRoute(auth.TestUpdateUserRoute).Body(user).Success()
+		env.GetRoute(game.ReapInactiveWaitingPlayersRoute).QueryParams(url.Values{
+			"max-staging-game-inactivity": []string{"0"},
+		}).Success()
+		WaitForEmptyQueue("game-ejectMember")
+		env.GetRoute(game.ListMyStagingGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	})
 }
 
 func TestPreferenceAllocation(t *testing.T) {

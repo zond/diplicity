@@ -133,7 +133,7 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 	return member, nil
 }
 
-func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId string) (*Member, error) {
+func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId string, idempotent bool) (*Member, error) {
 	var member *Member
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
@@ -144,6 +144,9 @@ func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId strin
 		isMember := false
 		member, isMember = game.GetMemberByUserId(userId)
 		if !isMember {
+			if idempotent {
+				return nil
+			}
 			return HTTPErr{"can only leave member games", http.StatusNotFound}
 		}
 		if !game.Leavable() {
@@ -183,7 +186,7 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 		return nil, err
 	}
 
-	return deleteMemberHelper(ctx, gameID, user.Id)
+	return deleteMemberHelper(ctx, gameID, user.Id, false)
 }
 
 func createMemberHelper(

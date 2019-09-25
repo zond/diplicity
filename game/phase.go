@@ -178,7 +178,7 @@ func ejectProbationaries(ctx context.Context, probationaries []string) error {
 			return err
 		}
 		for _, gameID := range ids {
-			if _, err := deleteMemberHelper(ctx, gameID, probationary); err != nil {
+			if _, err := deleteMemberHelper(ctx, gameID, probationary, true); err != nil {
 				log.Infof(ctx, "Unable to delete %q from game %v: %v; fix 'deleteMemberHelper' or hope datastore gets fixed", probationary, gameID, err)
 				return err
 			}
