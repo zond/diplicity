@@ -14,7 +14,7 @@ import (
 
 	"github.com/aymerick/raymond"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/jhillyerd/enmime"
+	"github.com/zond/enmime"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
 	"github.com/zond/godip"
