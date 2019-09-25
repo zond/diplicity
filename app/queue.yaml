@@ -1,4 +1,6 @@
 queue:
+- name: game-resave
+  rate: 500/s
 - name: game-updateGlickos
   rate: 500/s
 - name: game-reRateGlickos

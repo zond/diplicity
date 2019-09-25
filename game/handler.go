@@ -15,7 +15,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/delay"
 	"google.golang.org/appengine/log"
 
 	dipVariants "github.com/zond/godip/variants"
@@ -25,7 +24,7 @@ import (
 
 var (
 	router              = mux.NewRouter()
-	resaveFunc          *delay.Function
+	resaveFunc          *DelayFunc
 	containerGenerators = map[string]func() interface{}{
 		gameKind:        func() interface{} { return &Game{} },
 		gameResultKind:  func() interface{} { return &GameResult{} },
@@ -36,7 +35,7 @@ var (
 )
 
 func init() {
-	resaveFunc = delay.Func("resaveFunc", resave)
+	resaveFunc = NewDelayFunc("game-resave", resave)
 	AllocationResource = &Resource{
 		Create:      createAllocation,
 		RenderLinks: true,
@@ -618,7 +617,7 @@ func resave(ctx context.Context, kind string, counter int, cursorString string) 
 		if err != nil {
 			return err
 		}
-		resaveFunc.Call(ctx, kind, counter, cursor.String())
+		resaveFunc.EnqueueIn(ctx, 0, kind, counter, cursor.String())
 	} else if err != datastore.Done {
 		return err
 	}
@@ -650,7 +649,7 @@ func handleResave(w ResponseWriter, r Request) error {
 		return fmt.Errorf("Kind %q not supported by resave", kind)
 	}
 
-	resaveFunc.Call(ctx, kind, 0, "")
+	resaveFunc.EnqueueIn(ctx, 0, kind, 0, "")
 
 	return nil
 }
