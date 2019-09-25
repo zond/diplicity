@@ -17,7 +17,6 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/user"
 
 	dipVariants "github.com/zond/godip/variants"
 
@@ -685,22 +684,6 @@ func handleResave(w ResponseWriter, r Request) error {
 
 func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
-
-	if !user.IsAdmin(ctx) && !appengine.IsDevAppServer() {
-		user, ok := r.Values()["user"].(*auth.User)
-		if !ok {
-			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
-		}
-
-		superusers, err := auth.GetSuperusers(ctx)
-		if err != nil {
-			return err
-		}
-
-		if !superusers.Includes(user.Id) {
-			return HTTPErr{"unauthorized", http.StatusForbidden}
-		}
-	}
 
 	games := Games{}
 	ids, err := datastore.NewQuery(gameKind).Filter("Started=", false).GetAll(ctx, &games)

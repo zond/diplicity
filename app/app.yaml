@@ -8,6 +8,9 @@ inbound_services:
 - mail
 
 handlers:
+- url: /_reap-inactive-waiting-players
+  script: _go_app
+  login: admin
 - url: /(firebase-messaging-sw.js)
   static_files: js/\1
   upload: js/firebase-messaging-sw.js
