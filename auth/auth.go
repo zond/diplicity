@@ -41,6 +41,7 @@ const (
 	ApproveRedirectRoute  = "ApproveRedirect"
 	ListRedirectURLsRoute = "ListRedirectURLs"
 	ReplaceFCMRoute       = "ReplaceFCM"
+	TestUpdateUserRoute   = "TestUpdateUser"
 )
 
 const (
@@ -598,16 +599,22 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 			})
 		}
 		user := &User{
-			Email:         fakeEmail,
-			FamilyName:    "Fakeson",
-			GivenName:     "Fakey",
-			Id:            fakeID,
-			Name:          "Fakey Fakeson",
-			VerifiedEmail: true,
-			ValidUntil:    time.Now().Add(time.Hour * 24),
+			Id: fakeID,
 		}
-
-		if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
+		if err := datastore.Get(ctx, UserID(ctx, user.Id), user); err == datastore.ErrNoSuchEntity {
+			user = &User{
+				Email:         fakeEmail,
+				FamilyName:    "Fakeson",
+				GivenName:     "Fakey",
+				Id:            fakeID,
+				Name:          "Fakey Fakeson",
+				VerifiedEmail: true,
+				ValidUntil:    time.Now().Add(time.Hour * 24),
+			}
+			if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
+				return false, err
+			}
+		} else if err != nil {
 			return false, err
 		}
 
@@ -974,10 +981,32 @@ func logHeaders(w ResponseWriter, r Request) (bool, error) {
 	return true, nil
 }
 
+func handleTestUpdateUser(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		return HTTPErr{"only permitted during tests", http.StatusUnauthorized}
+	}
+
+	user := &User{}
+	if err := json.NewDecoder(r.Req().Body).Decode(user); err != nil {
+		return err
+	}
+
+	if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
+		return err
+	}
+
+	log.Infof(ctx, "******* put user %v, %v", user.Id, user.ValidUntil)
+
+	return nil
+}
+
 func SetupRouter(r *mux.Router) {
 	router = r
 	HandleResource(router, UserConfigResource)
 	HandleResource(router, RedirectURLResource)
+	Handle(router, "/_test_update_user", []string{"PUT"}, TestUpdateUserRoute, handleTestUpdateUser)
 	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
 	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
 	// Don't use `Handle` here, because we don't want CORS support for this particular route.

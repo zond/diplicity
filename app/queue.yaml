@@ -1,4 +1,6 @@
 queue:
+- name: game-ejectMember
+  rate: 500/s
 - name: game-resave
   rate: 500/s
 - name: game-updateGlickos

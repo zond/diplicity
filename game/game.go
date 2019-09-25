@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/oddg/hungarian-algorithm"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
@@ -26,6 +25,7 @@ import (
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/taskqueue"
 
+	hungarianAlgorithm "github.com/oddg/hungarian-algorithm"
 	. "github.com/zond/goaeoas"
 )
 

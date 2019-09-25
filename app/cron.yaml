@@ -1,0 +1,4 @@
+cron:
+- description: "Reap inactive players from open games."
+  url: /_reap-inactive-waiting-players
+  schedule: every 24 hours

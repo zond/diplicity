@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
@@ -16,6 +17,7 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/user"
 
 	dipVariants "github.com/zond/godip/variants"
 
@@ -25,6 +27,7 @@ import (
 var (
 	router              = mux.NewRouter()
 	resaveFunc          *DelayFunc
+	ejectMemberFunc     *DelayFunc
 	containerGenerators = map[string]func() interface{}{
 		gameKind:        func() interface{} { return &Game{} },
 		gameResultKind:  func() interface{} { return &GameResult{} },
@@ -36,6 +39,7 @@ var (
 
 func init() {
 	resaveFunc = NewDelayFunc("game-resave", resave)
+	ejectMemberFunc = NewDelayFunc("game-ejectMember", ejectMember)
 	AllocationResource = &Resource{
 		Create:      createAllocation,
 		RenderLinks: true,
@@ -43,46 +47,48 @@ func init() {
 }
 
 const (
-	maxLimit = 128
+	maxLimit                    = 128
+	MAX_STAGING_GAME_INACTIVITY = 30 * 24 * time.Hour
 )
 
 const (
-	GetSWJSRoute                = "GetSWJS"
-	GetMainJSRoute              = "GetMainJS"
-	ConfigureRoute              = "AuthConfigure"
-	IndexRoute                  = "Index"
-	ListOpenGamesRoute          = "ListOpenGames"
-	ListStartedGamesRoute       = "ListStartedGames"
-	ListFinishedGamesRoute      = "ListFinishedGames"
-	ListMyStagingGamesRoute     = "ListMyStagingGames"
-	ListMyStartedGamesRoute     = "ListMyStartedGames"
-	ListMyFinishedGamesRoute    = "ListMyFinishedGames"
-	ListOtherStagingGamesRoute  = "ListOtherStagingGames"
-	ListOtherStartedGamesRoute  = "ListOtherStartedGames"
-	ListOtherFinishedGamesRoute = "ListOtherFinishedGames"
-	ListOrdersRoute             = "ListOrders"
-	ListPhasesRoute             = "ListPhases"
-	ListPhaseStatesRoute        = "ListPhaseStates"
-	ListGameStatesRoute         = "ListGameStates"
-	ListOptionsRoute            = "ListOptions"
-	ListChannelsRoute           = "ListChannels"
-	ListMessagesRoute           = "ListMessages"
-	ListBansRoute               = "ListBans"
-	ListTopRatedPlayersRoute    = "ListTopRatedPlayers"
-	ListTopReliablePlayersRoute = "ListTopReliablePlayers"
-	ListTopHatedPlayersRoute    = "ListTopHatedPlayers"
-	ListTopHaterPlayersRoute    = "ListTopHaterPlayers"
-	ListTopQuickPlayersRoute    = "ListTopQuickPlayers"
-	ListFlaggedMessagesRoute    = "ListFlaggedMessages"
-	DevResolvePhaseTimeoutRoute = "DevResolvePhaseTimeout"
-	DevUserStatsUpdateRoute     = "DevUserStatsUpdate"
-	ReceiveMailRoute            = "ReceiveMail"
-	RenderPhaseMapRoute         = "RenderPhaseMap"
-	ReRateRoute                 = "ReRate"
-	GlobalStatsRoute            = "GlobalStats"
-	RssRoute                    = "Rss"
-	ResaveRoute                 = "Resave"
-	AllocateNationsRoute        = "AllocateNations"
+	GetSWJSRoute                    = "GetSWJS"
+	GetMainJSRoute                  = "GetMainJS"
+	ConfigureRoute                  = "AuthConfigure"
+	IndexRoute                      = "Index"
+	ListOpenGamesRoute              = "ListOpenGames"
+	ListStartedGamesRoute           = "ListStartedGames"
+	ListFinishedGamesRoute          = "ListFinishedGames"
+	ListMyStagingGamesRoute         = "ListMyStagingGames"
+	ListMyStartedGamesRoute         = "ListMyStartedGames"
+	ListMyFinishedGamesRoute        = "ListMyFinishedGames"
+	ListOtherStagingGamesRoute      = "ListOtherStagingGames"
+	ListOtherStartedGamesRoute      = "ListOtherStartedGames"
+	ListOtherFinishedGamesRoute     = "ListOtherFinishedGames"
+	ListOrdersRoute                 = "ListOrders"
+	ListPhasesRoute                 = "ListPhases"
+	ListPhaseStatesRoute            = "ListPhaseStates"
+	ListGameStatesRoute             = "ListGameStates"
+	ListOptionsRoute                = "ListOptions"
+	ListChannelsRoute               = "ListChannels"
+	ListMessagesRoute               = "ListMessages"
+	ListBansRoute                   = "ListBans"
+	ListTopRatedPlayersRoute        = "ListTopRatedPlayers"
+	ListTopReliablePlayersRoute     = "ListTopReliablePlayers"
+	ListTopHatedPlayersRoute        = "ListTopHatedPlayers"
+	ListTopHaterPlayersRoute        = "ListTopHaterPlayers"
+	ListTopQuickPlayersRoute        = "ListTopQuickPlayers"
+	ListFlaggedMessagesRoute        = "ListFlaggedMessages"
+	DevResolvePhaseTimeoutRoute     = "DevResolvePhaseTimeout"
+	DevUserStatsUpdateRoute         = "DevUserStatsUpdate"
+	ReceiveMailRoute                = "ReceiveMail"
+	RenderPhaseMapRoute             = "RenderPhaseMap"
+	ReRateRoute                     = "ReRate"
+	GlobalStatsRoute                = "GlobalStats"
+	RssRoute                        = "Rss"
+	ResaveRoute                     = "Resave"
+	AllocateNationsRoute            = "AllocateNations"
+	ReapInactiveWaitingPlayersRoute = "ReapInactiveWaitingPlayersRoute"
 )
 
 type userStatsHandler struct {
@@ -654,8 +660,94 @@ func handleResave(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !user.IsAdmin(ctx) && !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	games := Games{}
+	ids, err := datastore.NewQuery(gameKind).Filter("Started=", false).GetAll(ctx, &games)
+	if err != nil {
+		return err
+	}
+	for idx, id := range ids {
+		games[idx].ID = id
+	}
+
+	userIdMap := map[string]bool{}
+	for _, game := range games {
+		for _, member := range game.Members {
+			userIdMap[member.User.Id] = true
+		}
+	}
+
+	userIds := make([]*datastore.Key, 0, len(userIdMap))
+	for userId := range userIdMap {
+		userIds = append(userIds, auth.UserID(ctx, userId))
+	}
+
+	users := make([]auth.User, len(userIds))
+	if err := datastore.GetMulti(ctx, userIds, users); err != nil {
+		return err
+	}
+
+	userMap := map[string]auth.User{}
+	for idx, user := range users {
+		userMap[userIds[idx].StringID()] = user
+	}
+
+	minValidUntil := time.Now().Add(-MAX_STAGING_GAME_INACTIVITY)
+	if paramInactivity := r.Req().URL.Query().Get("max-staging-game-inactivity"); paramInactivity != "" {
+		parsed, err := strconv.Atoi(paramInactivity)
+		if err != nil {
+			return err
+		}
+		minValidUntil = time.Now().Add(time.Duration(-parsed) * time.Second)
+	}
+
+	for _, game := range games {
+		for _, member := range game.Members {
+			if userMap[member.User.Id].ValidUntil.Before(minValidUntil) {
+				log.Infof(ctx, "%q has ValidUntil older than %v, ejecting from %v (%v)", member.User.Email, minValidUntil, game.ID, game.Desc)
+				ejectMemberFunc.EnqueueIn(ctx, 0, game.ID, member.User.Id)
+			}
+		}
+	}
+
+	return nil
+}
+
+func ejectMember(ctx context.Context, gameID *datastore.Key, userId string) error {
+	log.Infof(ctx, "ejectMember(..., %v, %v)", gameID, userId)
+
+	if _, err := deleteMemberHelper(ctx, gameID, userId, true); err != nil {
+		log.Errorf(ctx, "deleteMemberHelper(..., %v, %v, true): %v; hope datastore gets fixed", gameID, userId, err)
+		return err
+	}
+
+	log.Infof(ctx, "ejectMember(..., %v, %v): *** SUCCESS ***", gameID, userId)
+
+	return nil
+
+}
+
 func SetupRouter(r *mux.Router) {
 	router = r
+	Handle(r, "/_reap-inactive-waiting-players", []string{"GET"}, ReapInactiveWaitingPlayersRoute, handleReapInactiveWaitingPlayers)
 	Handle(r, "/_re-save", []string{"GET"}, ResaveRoute, handleResave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
