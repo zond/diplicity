@@ -9,8 +9,7 @@ import (
 var (
 	sortOrders = [][]string{
 		{
-			"-NMembers",
-			"CreatedAt",
+			"StartETA",
 		},
 		{
 			"-FinishedAt",

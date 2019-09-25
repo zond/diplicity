@@ -441,13 +441,13 @@ var (
 	// The reason we have both openGamesHandler and stagingGamesHandler is because in theory we could have
 	// started games in openGamesHandler - if we had a replacement mechanism.
 	openGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("-NMembers").Order("CreatedAt"),
+		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("StartETA"),
 		name:  "open-games",
 		desc:  []string{"Open games", "Open games, sorted with fullest and oldest first."},
 		route: ListOpenGamesRoute,
 	}
 	stagingGamesHandler = gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("-NMembers").Order("CreatedAt"),
+		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
 		name:  "my-staging-games",
 		desc:  []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
 		route: ListMyStagingGamesRoute,
