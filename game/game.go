@@ -414,6 +414,7 @@ type Game struct {
 
 	NMembers int
 	Members  Members
+	StartETA time.Time
 
 	NewestPhaseMeta []PhaseMeta
 
@@ -617,6 +618,17 @@ func (g *Game) Item(r Request) *Item {
 
 func (g *Game) Save(ctx context.Context) error {
 	g.NMembers = len(g.Members)
+	if g.Started {
+		g.StartETA = g.StartedAt
+	} else if len(g.Members) > 1 {
+		requiredSpots := float64(len(variants.Variants[g.Variant].Nations))
+		emptySpots := requiredSpots - float64(len(g.Members))
+		rate := (float64(len(g.Members)) - 1) / float64(time.Now().UnixNano()-g.CreatedAt.UnixNano())
+		timeLeft := time.Duration(float64(time.Nanosecond) * (emptySpots / rate))
+		g.StartETA = time.Now().Add(timeLeft)
+	} else {
+		g.StartETA = time.Now().Add(time.Hour * 24 * 7)
+	}
 
 	var err error
 	if g.ID == nil {

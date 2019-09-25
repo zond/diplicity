@@ -607,11 +607,32 @@ func resave(ctx context.Context, kind string, counter int, cursorString string) 
 			if err := datastore.Get(ctx, containerID, container); err != nil {
 				return err
 			}
-			if _, err := datastore.Put(ctx, containerID, container); err != nil {
-				return err
+			val := reflect.ValueOf(container)
+			if field := val.Elem().FieldByName("ID"); field.IsValid() && reflect.TypeOf(containerID).AssignableTo(field.Type()) {
+				field.Set(reflect.ValueOf(containerID))
+			}
+			typ := reflect.TypeOf(container)
+			meth, ok := typ.MethodByName("Save")
+			if ok && meth.Type.NumIn() == 2 && reflect.TypeOf(ctx).AssignableTo(meth.Type.In(1)) {
+				out := meth.Func.Call([]reflect.Value{val, reflect.ValueOf(ctx)})
+				if len(out) > 0 {
+					if out[len(out)-1].Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+						errVal := out[len(out)-1]
+						if !errVal.IsNil() {
+							return errVal.Interface().(error)
+						}
+					}
+				}
+				log.Infof(ctx, "Processed %v via Save(ctx)", containerID)
+			} else {
+				if _, err := datastore.Put(ctx, containerID, container); err != nil {
+					return err
+				}
+				log.Infof(ctx, "Processed %v via datastore.Put(ctx, ...)", containerID)
 			}
 			return nil
 		}, &datastore.TransactionOptions{XG: false}); err != nil {
+			log.Errorf(ctx, "Failed to process %v: %v", containerID, err)
 			return err
 		}
 		processed++
@@ -634,18 +655,20 @@ func resave(ctx context.Context, kind string, counter int, cursorString string) 
 func handleResave(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
-	user, ok := r.Values()["user"].(*auth.User)
-	if !ok {
-		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
-	}
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
 
-	superusers, err := auth.GetSuperusers(ctx)
-	if err != nil {
-		return err
-	}
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
 
-	if !superusers.Includes(user.Id) {
-		return HTTPErr{"unauthorized", http.StatusForbidden}
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
 	}
 
 	kind := r.Req().URL.Query().Get("kind")
