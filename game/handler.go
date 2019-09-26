@@ -690,6 +690,7 @@ func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
 	if err != nil {
 		return err
 	}
+	log.Infof(ctx, "Found %v staging games", len(games))
 	for idx, id := range ids {
 		games[idx].ID = id
 	}
@@ -700,6 +701,7 @@ func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
 			userIdMap[member.User.Id] = true
 		}
 	}
+	log.Infof(ctx, "Found %v users waiting for these games", len(userIdMap))
 
 	userIds := make([]*datastore.Key, 0, len(userIdMap))
 	for userId := range userIdMap {
@@ -724,15 +726,19 @@ func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
 		}
 		minValidUntil = time.Now().Add(time.Duration(-parsed) * time.Second)
 	}
+	log.Infof(ctx, "Going to eject users with ValidUntil < %v from these games", minValidUntil)
 
+	count := 0
 	for _, game := range games {
 		for _, member := range game.Members {
 			if userMap[member.User.Id].ValidUntil.Before(minValidUntil) {
 				log.Infof(ctx, "%q has ValidUntil older than %v, ejecting from %v (%v)", member.User.Email, minValidUntil, game.ID, game.Desc)
 				ejectMemberFunc.EnqueueIn(ctx, 0, game.ID, member.User.Id)
+				count++
 			}
 		}
 	}
+	log.Infof(ctx, "Ejected %v users from waiting games", count)
 
 	return nil
 }
