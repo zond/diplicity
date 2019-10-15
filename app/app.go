@@ -1,4 +1,4 @@
-package app
+package main
 
 import (
 	"net/http"
@@ -6,11 +6,12 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/routes"
+	"google.golang.org/appengine"
 
 	. "github.com/zond/goaeoas"
 )
 
-func init() {
+func main() {
 	jsonFormURL, err := url.Parse("/js/jsonform.js")
 	if err != nil {
 		panic(err)
@@ -24,4 +25,5 @@ func init() {
 	router := mux.NewRouter()
 	routes.Setup(router)
 	http.Handle("/", router)
+	appengine.Main()
 }

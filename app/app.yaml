@@ -1,5 +1,4 @@
-runtime: go
-api_version: go1
+runtime: go111
 automatic_scaling:
   max_idle_instances: 1
   max_concurrent_requests: 100
@@ -9,7 +8,7 @@ inbound_services:
 
 handlers:
 - url: /_reap-inactive-waiting-players
-  script: _go_app
+  script: auto
   login: admin
 - url: /(firebase-messaging-sw.js)
   static_files: js/\1
@@ -23,5 +22,5 @@ handlers:
 - url: /img
   static_dir: img
 - url: /.*
-  script: _go_app
+  script: auto
   secure: always
