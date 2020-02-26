@@ -220,11 +220,7 @@ func createMemberHelper(
 			return err
 		}
 		if len(game.Members) == len(variants.Variants[game.Variant].Nations) {
-			scheme := "http"
-			if r.Req().TLS != nil {
-				scheme = "https"
-			}
-			if err := asyncStartGameFunc.EnqueueIn(ctx, 0, game.ID, r.Req().Host, scheme); err != nil {
+			if err := asyncStartGameFunc.EnqueueIn(ctx, 0, game.ID, r.Req().Host, DefaultScheme); err != nil {
 				return err
 			}
 		}

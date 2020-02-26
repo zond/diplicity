@@ -697,11 +697,7 @@ func createMessageHelper(ctx context.Context, r Request, message *Message) error
 			return err
 		}
 
-		scheme := "http"
-		if r.Req().TLS != nil {
-			scheme = "https"
-		}
-		return message.NotifyRecipients(ctx, r.Req().Host, scheme, channel, game)
+		return message.NotifyRecipients(ctx, r.Req().Host, DefaultScheme, channel, game)
 	}, &datastore.TransactionOptions{XG: true})
 }
 

@@ -63,11 +63,7 @@ func handleIndex(w ResponseWriter, r Request) error {
 	if user == nil {
 		redirectURL := r.Req().URL
 		redirectURL.Host = r.Req().Host
-		if r.Req().TLS == nil {
-			redirectURL.Scheme = "http"
-		} else {
-			redirectURL.Scheme = "https"
-		}
+		redirectURL.Scheme = DefaultScheme
 		index.AddLink(r.NewLink(Link{
 			Rel:   "login",
 			Route: auth.LoginRoute,
