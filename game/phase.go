@@ -1006,6 +1006,8 @@ type Phase struct {
 	Bounces     []Bounce
 	Resolutions []Resolution
 	Host        string
+	// Ignore this field completely, it should never be used, and is simply hard to remove.
+	Scheme string
 }
 
 func (p *Phase) toVariantsPhase(variant string, orderMap map[godip.Nation]map[godip.Province][]string) *dvars.Phase {
