@@ -440,7 +440,7 @@ func (r *Req) Failure() *Result {
 
 func (r *Req) do() *Result {
 	if r.url == nil {
-		u, err := router.Get(r.route).Schemes(DefaultScheme).URL(r.routeParams...)
+		u, err := router.Get(r.route).URL(r.routeParams...)
 		if err != nil {
 			panic(fmt.Errorf("creating URL for %q and %+v: %v", r.route, r.routeParams, err))
 		}
