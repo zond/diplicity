@@ -385,11 +385,7 @@ func getOAuth2Config(ctx context.Context, r *http.Request) (*oauth2.Config, erro
 	if err != nil {
 		return nil, err
 	}
-	if appengine.IsDevAppServer() {
-		redirectURL.Scheme = "http"
-	} else {
-		redirectURL.Scheme = "https"
-	}
+	redirectURL.Scheme = DefaultSchema
 	redirectURL.Host = r.Host
 
 	oauth, err := getOAuth(ctx)
@@ -535,11 +531,7 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		if err := datastore.Get(ctx, approvedURL.ID(ctx), approvedURL); err == datastore.ErrNoSuchEntity {
 			requestedURL := r.URL
 			requestedURL.Host = r.Host
-			if appengine.IsDevAppServer() {
-				requestedURL.Scheme = "http"
-			} else {
-				requestedURL.Scheme = "https"
-			}
+			requestedURL.Scheme = DefaultScheme
 			requestedURL.RawQuery = ""
 			requestedURL.Path = ""
 
@@ -724,11 +716,7 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 
 	if herr, ok := errI.(HTTPErr); ok && herr.Status == http.StatusUnauthorized {
 		redirectURL := r.Req().URL
-		if appengine.IsDevAppServer() {
-			redirectURL.Scheme = "http"
-		} else {
-			redirectURL.Scheme = "https"
-		}
+		redirectURL.Scheme = DefaultScheme
 		redirectURL.Host = r.Req().Host
 
 		loginURL, err := router.Get(LoginRoute).Schemes(DefaultScheme).URL()
