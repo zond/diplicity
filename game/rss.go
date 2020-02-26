@@ -27,13 +27,13 @@ type event struct {
 	link        string
 }
 
-func makeURL(route string, urlParams ...string) (*url.URL, error) {
-	phaseURL, err := router.Get(route).Schemes(DefaultScheme).URL(urlParams...)
+func makeURL(route string, host string, urlParams ...string) (*url.URL, error) {
+	phaseURL, err := router.Get(route).URL(urlParams...)
 	if err != nil {
 		return nil, err
 	}
-	phaseURL.Host = "diplicity-engine.appspot.com"
-	phaseURL.Scheme = "https"
+	phaseURL.Host = host
+	phaseURL.Scheme = DefaultScheme
 	return phaseURL, nil
 }
 
@@ -298,7 +298,7 @@ func handleRss(w ResponseWriter, r Request) error {
 			}
 			format := uq.Get("format")
 			description := makeSummary(phase, format)
-			phaseURL, err := makeURL(RenderPhaseMapRoute, "game_id", game.ID.Encode(), "phase_ordinal", fmt.Sprint(phase.PhaseOrdinal))
+			phaseURL, err := makeURL(RenderPhaseMapRoute, r.Req().Host, "game_id", game.ID.Encode(), "phase_ordinal", fmt.Sprint(phase.PhaseOrdinal))
 			if err != nil {
 				return err
 			}
@@ -314,7 +314,7 @@ func handleRss(w ResponseWriter, r Request) error {
 	sort.Slice(eventTimes, func(i, j int) bool { return eventTimes[i].After(eventTimes[j]) })
 
 	// Convert this into an RSS feed.
-	appURL, err := makeURL(IndexRoute)
+	appURL, err := makeURL(IndexRoute, r.Req().Host)
 	if err != nil {
 		return err
 	}

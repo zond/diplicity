@@ -100,14 +100,13 @@ func PP(i interface{}) string {
 	return string(b)
 }
 
-func GetUnsubscribeURL(ctx context.Context, r *mux.Router, host, scheme string, userId string) (*url.URL, error) {
-	unsubscribeURL, err := r.Get(UnsubscribeRoute).Schemes(DefaultScheme).URL("user_id", userId)
+func GetUnsubscribeURL(ctx context.Context, r *mux.Router, host string, userId string) (*url.URL, error) {
+	unsubscribeURL, err := r.Get(UnsubscribeRoute).URL("user_id", userId)
 	if err != nil {
 		return nil, err
 	}
-
 	unsubscribeURL.Host = host
-	unsubscribeURL.Scheme = scheme
+	unsubscribeURL.Scheme = DefaultScheme
 
 	unsubToken, err := EncodeString(ctx, userId)
 	if err != nil {
@@ -263,7 +262,7 @@ func getSuperusersKey(ctx context.Context) *datastore.Key {
 }
 
 func SetSuperusers(ctx context.Context, superusers *Superusers) error {
-	log.Infof(ctx, "setting superusers to %+v", superusers)
+	log.Infof(ctx, "Setting superusers to %+v", superusers)
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		currentSuperusers := &Superusers{}
 		if err := datastore.Get(ctx, getSuperusersKey(ctx), currentSuperusers); err == nil {
@@ -381,12 +380,12 @@ func getOAuth(ctx context.Context) (*OAuth, error) {
 }
 
 func getOAuth2Config(ctx context.Context, r *http.Request) (*oauth2.Config, error) {
-	redirectURL, err := router.Get(OAuth2CallbackRoute).Schemes(DefaultScheme).URL()
+	redirectURL, err := router.Get(OAuth2CallbackRoute).URL()
 	if err != nil {
 		return nil, err
 	}
-	redirectURL.Scheme = DefaultScheme
 	redirectURL.Host = r.Host
+	redirectURL.Scheme = DefaultScheme
 
 	oauth, err := getOAuth(ctx)
 	if err != nil {
@@ -540,7 +539,7 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 				HTTPError(w, r, err)
 				return
 			}
-			approveURL, err := router.Get(ApproveRedirectRoute).Schemes(DefaultScheme).URL()
+			approveURL, err := router.Get(ApproveRedirectRoute).URL()
 			if err != nil {
 				HTTPError(w, r, err)
 				return
@@ -719,7 +718,7 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 		redirectURL.Scheme = DefaultScheme
 		redirectURL.Host = r.Req().Host
 
-		loginURL, err := router.Get(LoginRoute).Schemes(DefaultScheme).URL()
+		loginURL, err := router.Get(LoginRoute).URL()
 		if err != nil {
 			return false, err
 		}
@@ -767,7 +766,7 @@ func handleApproveRedirect(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	loginURL, err := router.Get(LoginRoute).Schemes(DefaultScheme).URL()
+	loginURL, err := router.Get(LoginRoute).URL()
 	q := loginURL.Query()
 	q.Set("redirect-to", toApproveURL.String())
 	loginURL.RawQuery = q.Encode()
@@ -984,8 +983,6 @@ func handleTestUpdateUser(w ResponseWriter, r Request) error {
 	if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
 		return err
 	}
-
-	log.Infof(ctx, "******* put user %v, %v", user.Id, user.ValidUntil)
 
 	return nil
 }

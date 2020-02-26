@@ -811,8 +811,8 @@ func Allocate(preferers Preferers, nations godip.Nations) ([]godip.Nation, error
 	return result, nil
 }
 
-func asyncStartGame(ctx context.Context, gameID *datastore.Key, host, scheme string) error {
-	log.Infof(ctx, "asyncStartGame(..., %v, %q, %q)", gameID, host, scheme)
+func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) error {
+	log.Infof(ctx, "asyncStartGame(..., %v, %q)", gameID, host)
 
 	err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		g := &Game{}
@@ -851,7 +851,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host, scheme str
 			return HTTPErr{msg, http.StatusBadRequest}
 		}
 
-		phase := NewPhase(s, g.ID, 1, host, scheme)
+		phase := NewPhase(s, g.ID, 1, host)
 		// To ensure we don't get 0 phase length games.
 		if g.PhaseLengthMinutes == 0 {
 			g.PhaseLengthMinutes = MAX_PHASE_DEADLINE
@@ -935,12 +935,11 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host, scheme str
 		for i, member := range g.Members {
 			memberIds[i] = member.User.Id
 		}
-		if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, scheme, g.ID, phase.PhaseOrdinal, memberIds); err != nil {
+		if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, g.ID, phase.PhaseOrdinal, memberIds); err != nil {
 			log.Errorf(
 				ctx,
-				"sendPhaseNotificationsToUserFunc.EnqueueIn(..., 0, %q, %q, %v, %v, %+v): %v; hope datastore gets fixed",
+				"sendPhaseNotificationsToUserFunc.EnqueueIn(..., 0, %q, %v, %v, %+v): %v; hope datastore gets fixed",
 				host,
-				scheme,
 				g.ID,
 				phase.PhaseOrdinal,
 				memberIds,
@@ -965,7 +964,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host, scheme str
 		return err
 	}
 
-	log.Infof(ctx, "asyncStartGame(..., %v, %q, %q): *** SUCCESS ***", gameID, host, scheme)
+	log.Infof(ctx, "asyncStartGame(..., %v, %q): *** SUCCESS ***", gameID, host)
 
 	return nil
 }

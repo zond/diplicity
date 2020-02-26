@@ -86,7 +86,7 @@ type msgNotificationContext struct {
 	mapURL       *url.URL
 }
 
-func getMsgNotificationContext(ctx context.Context, host, scheme string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) (*msgNotificationContext, error) {
+func getMsgNotificationContext(ctx context.Context, host string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) (*msgNotificationContext, error) {
 	res := &msgNotificationContext{}
 
 	var err error
@@ -132,13 +132,13 @@ func getMsgNotificationContext(ctx context.Context, host, scheme string, gameID 
 		return nil, noConfigError
 	}
 
-	res.mapURL, err = router.Get(RenderPhaseMapRoute).Schemes(DefaultScheme).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.game.NewestPhaseMeta[0].PhaseOrdinal))
+	res.mapURL, err = router.Get(RenderPhaseMapRoute).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.game.NewestPhaseMeta[0].PhaseOrdinal))
 	if err != nil {
 		log.Errorf(ctx, "Unable to create map URL for game %v and phase %v: %v; wtf?", res.game.ID, res.game.NewestPhaseMeta[0].PhaseOrdinal, err)
 		return nil, err
 	}
 	res.mapURL.Host = host
-	res.mapURL.Scheme = scheme
+	res.mapURL.Scheme = DefaultScheme
 
 	res.mailData = map[string]interface{}{
 		"game":    res.game,
@@ -176,10 +176,10 @@ func sendEmailError(ctx context.Context, to string, errorMessage string) error {
 	return nil
 }
 
-func sendMsgNotificationsToMail(ctx context.Context, host, scheme string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) error {
-	log.Infof(ctx, "sendMsgNotificationsToMail(..., %q, %q, %v, %+v, %v, %q)", host, scheme, gameID, channelMembers, messageID, userId)
+func sendMsgNotificationsToMail(ctx context.Context, host string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) error {
+	log.Infof(ctx, "sendMsgNotificationsToMail(..., %q, %v, %+v, %v, %q)", host, gameID, channelMembers, messageID, userId)
 
-	msgContext, err := getMsgNotificationContext(ctx, host, scheme, gameID, channelMembers, messageID, userId)
+	msgContext, err := getMsgNotificationContext(ctx, host, gameID, channelMembers, messageID, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 		return nil
@@ -199,7 +199,7 @@ func sendMsgNotificationsToMail(ctx context.Context, host, scheme string, gameID
 		return err
 	}
 
-	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, host, scheme, userId)
+	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, host, userId)
 	if err != nil {
 		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix auth.GetUnsubscribeURL", userId, err)
 		return err
@@ -252,15 +252,15 @@ func sendMsgNotificationsToMail(ctx context.Context, host, scheme string, gameID
 	}
 	log.Infof(ctx, "Successfully sent %v", PP(msg))
 
-	log.Infof(ctx, "sendMsgNotificationsToMail(..., %q, %q, %v, %+v, %v, %q) *** SUCCESS ***", host, scheme, gameID, channelMembers, messageID, userId)
+	log.Infof(ctx, "sendMsgNotificationsToMail(..., %q, %v, %+v, %v, %q) *** SUCCESS ***", host, gameID, channelMembers, messageID, userId)
 
 	return nil
 }
 
-func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string, finishedTokens map[string]struct{}) error {
-	log.Infof(ctx, "sendMsgNotificationsToFCM(..., %q, %q, %v, %+v, %v, %q, %+v)", host, scheme, gameID, channelMembers, messageID, userId, finishedTokens)
+func sendMsgNotificationsToFCM(ctx context.Context, host string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string, finishedTokens map[string]struct{}) error {
+	log.Infof(ctx, "sendMsgNotificationsToFCM(..., %q, %v, %+v, %v, %q, %+v)", host, gameID, channelMembers, messageID, userId, finishedTokens)
 
-	msgContext, err := getMsgNotificationContext(ctx, host, scheme, gameID, channelMembers, messageID, userId)
+	msgContext, err := getMsgNotificationContext(ctx, host, gameID, channelMembers, messageID, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 		return nil
@@ -302,7 +302,7 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 			),
 			Body:        notificationBody,
 			Tag:         "diplicity-engine-new-message",
-			ClickAction: fmt.Sprintf("%s://%s/Game/%s/Channel/%s/Messages", scheme, host, gameID.Encode(), channelMembers.String()),
+			ClickAction: fmt.Sprintf("%s://%s/Game/%s/Channel/%s/Messages", DefaultScheme, host, gameID.Encode(), channelMembers.String()),
 		}
 
 		fcmToken.MessageConfig.Customize(ctx, notificationPayload, msgContext.mailData)
@@ -323,7 +323,7 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 			}
 
 			if len(msgContext.userConfig.FCMTokens) > len(finishedTokens) {
-				if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, scheme, gameID, channelMembers, messageID, userId, finishedTokens); err != nil {
+				if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, gameID, channelMembers, messageID, userId, finishedTokens); err != nil {
 					log.Errorf(ctx, "Unable to enqueue sending of rest of notifications: %v; hope datastore gets fixed", err)
 					return err
 				}
@@ -338,13 +338,13 @@ func sendMsgNotificationsToFCM(ctx context.Context, host, scheme string, gameID 
 		break
 	}
 
-	log.Infof(ctx, "sendMsgNotificationsToFCM(..., %q, %q, %v, %+v, %v, %q, %+v) *** SUCCESS ***", host, scheme, gameID, channelMembers, messageID, userId, finishedTokens)
+	log.Infof(ctx, "sendMsgNotificationsToFCM(..., %q, %v, %+v, %v, %q, %+v) *** SUCCESS ***", host, gameID, channelMembers, messageID, userId, finishedTokens)
 
 	return nil
 }
 
-func sendMsgNotificationsToUsers(ctx context.Context, host, scheme string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, uids []string) error {
-	log.Infof(ctx, "sendMsgNotificationsToUsers(..., %q, %q, %v, %+v, %v, %+v)", host, scheme, gameID, channelMembers, messageID, uids)
+func sendMsgNotificationsToUsers(ctx context.Context, host string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, uids []string) error {
+	log.Infof(ctx, "sendMsgNotificationsToUsers(..., %q, %v, %+v, %v, %+v)", host, gameID, channelMembers, messageID, uids)
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
@@ -377,16 +377,16 @@ func sendMsgNotificationsToUsers(ctx context.Context, host, scheme string, gameI
 			return err
 		}
 
-		if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, scheme, gameID, channelMembers, messageID, uids[0], map[string]struct{}{}); err != nil {
+		if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, gameID, channelMembers, messageID, uids[0], map[string]struct{}{}); err != nil {
 			log.Errorf(ctx, "Unable to enqueue sending FCM to %q: %v; hope datastore gets fixed", uids[0], err)
 			return err
 		}
-		if err := sendMsgNotificationsToMailFunc.EnqueueIn(ctx, 0, host, scheme, gameID, channelMembers, messageID, uids[0]); err != nil {
+		if err := sendMsgNotificationsToMailFunc.EnqueueIn(ctx, 0, host, gameID, channelMembers, messageID, uids[0]); err != nil {
 			log.Errorf(ctx, "Unable to enqueue sending mail to %q: %v; hope datastore gets fixed", uids[0], err)
 			return err
 		}
 		if len(uids) > 1 {
-			if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, scheme, gameID, channelMembers, messageID, uids[1:]); err != nil {
+			if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, gameID, channelMembers, messageID, uids[1:]); err != nil {
 				log.Errorf(ctx, "Unable to enqueue sending to rest: %v; hope datastore gets fixed", err)
 				return err
 			}
@@ -398,7 +398,7 @@ func sendMsgNotificationsToUsers(ctx context.Context, host, scheme string, gameI
 	}
 	log.Infof(ctx, "Successfully enqueued sending notification to %q, and to rest if there were any", uids[0])
 
-	log.Infof(ctx, "sendMsgNotificationsToUsers(..., %q, %q, %v, %+v, %v, %+v) *** SUCCESS ***", host, scheme, gameID, channelMembers, messageID, uids)
+	log.Infof(ctx, "sendMsgNotificationsToUsers(..., %q, %v, %+v, %v, %+v) *** SUCCESS ***", host, gameID, channelMembers, messageID, uids)
 
 	return nil
 }
@@ -574,7 +574,7 @@ type Message struct {
 	Age            time.Duration `datastore:"-" ticker:"true"`
 }
 
-func (m *Message) NotifyRecipients(ctx context.Context, host, scheme string, channel *Channel, game *Game) error {
+func (m *Message) NotifyRecipients(ctx context.Context, host string, channel *Channel, game *Game) error {
 	// Build a slice of game state IDs.
 	stateIDs := []*datastore.Key{}
 	for _, nat := range m.ChannelMembers {
@@ -631,7 +631,7 @@ func (m *Message) NotifyRecipients(ctx context.Context, host, scheme string, cha
 		return nil
 	}
 
-	if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, scheme, m.GameID, m.ChannelMembers, m.ID, memberIds); err != nil {
+	if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, m.GameID, m.ChannelMembers, m.ID, memberIds); err != nil {
 		log.Errorf(ctx, "Unable to schedule notification tasks: %v", err)
 		return err
 	}
@@ -697,7 +697,7 @@ func createMessageHelper(ctx context.Context, r Request, message *Message) error
 			return err
 		}
 
-		return message.NotifyRecipients(ctx, r.Req().Host, DefaultScheme, channel, game)
+		return message.NotifyRecipients(ctx, r.Req().Host, channel, game)
 	}, &datastore.TransactionOptions{XG: true})
 }
 

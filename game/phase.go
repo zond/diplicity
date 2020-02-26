@@ -104,7 +104,7 @@ type phaseNotificationContext struct {
 	mailData     map[string]interface{}
 }
 
-func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string) (*phaseNotificationContext, error) {
+func getPhaseNotificationContext(ctx context.Context, host string, gameID *datastore.Key, phaseOrdinal int64, userId string) (*phaseNotificationContext, error) {
 	res := &phaseNotificationContext{}
 
 	var err error
@@ -145,13 +145,13 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 		return nil, noConfigError
 	}
 
-	res.mapURL, err = router.Get(RenderPhaseMapRoute).Schemes(DefaultScheme).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.phase.PhaseOrdinal))
+	res.mapURL, err = router.Get(RenderPhaseMapRoute).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.phase.PhaseOrdinal))
 	if err != nil {
 		log.Errorf(ctx, "Unable to create map URL for game %v and phase %v: %v; wtf?", res.game.ID, res.phase.PhaseOrdinal, err)
 		return nil, err
 	}
 	res.mapURL.Host = host
-	res.mapURL.Scheme = scheme
+	res.mapURL.Scheme = DefaultScheme
 
 	res.mailData = map[string]interface{}{
 		"phaseMeta": res.phase.PhaseMeta,
@@ -190,10 +190,10 @@ func ejectProbationaries(ctx context.Context, probationaries []string) error {
 	return nil
 }
 
-func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string) error {
-	log.Infof(ctx, "sendPhaseNotificationsToMail(..., %q, %q, %v, %v, %q)", host, scheme, gameID, phaseOrdinal, userId)
+func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *datastore.Key, phaseOrdinal int64, userId string) error {
+	log.Infof(ctx, "sendPhaseNotificationsToMail(..., %q, %v, %v, %q)", host, gameID, phaseOrdinal, userId)
 
-	msgContext, err := getPhaseNotificationContext(ctx, host, scheme, gameID, phaseOrdinal, userId)
+	msgContext, err := getPhaseNotificationContext(ctx, host, gameID, phaseOrdinal, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 		return nil
@@ -213,7 +213,7 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 		return err
 	}
 
-	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, host, scheme, userId)
+	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, host, userId)
 	if err != nil {
 		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix auth.GetUnsubscribeURL", userId, err)
 		return err
@@ -258,15 +258,15 @@ func sendPhaseNotificationsToMail(ctx context.Context, host, scheme string, game
 	}
 	log.Infof(ctx, "Successfully sent %v", PP(msg))
 
-	log.Infof(ctx, "sendPhaseNotificationsToMail(..., %q, %q, %v, %v, %q) *** SUCCESS ***", host, scheme, gameID, phaseOrdinal, userId)
+	log.Infof(ctx, "sendPhaseNotificationsToMail(..., %q, %v, %v, %q) *** SUCCESS ***", host, gameID, phaseOrdinal, userId)
 
 	return nil
 }
 
-func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, userId string, finishedTokens map[string]struct{}) error {
-	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %q, %q, %v, %v, %q, %+v)", host, scheme, gameID, phaseOrdinal, userId, finishedTokens)
+func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datastore.Key, phaseOrdinal int64, userId string, finishedTokens map[string]struct{}) error {
+	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %q, %v, %v, %q, %+v)", host, gameID, phaseOrdinal, userId, finishedTokens)
 
-	msgContext, err := getPhaseNotificationContext(ctx, host, scheme, gameID, phaseOrdinal, userId)
+	msgContext, err := getPhaseNotificationContext(ctx, host, gameID, phaseOrdinal, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 		return nil
@@ -320,7 +320,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameI
 			}
 
 			if len(msgContext.userConfig.FCMTokens) > len(finishedTokens) {
-				if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, scheme, gameID, phaseOrdinal, userId, finishedTokens); err != nil {
+				if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, userId, finishedTokens); err != nil {
 					log.Errorf(ctx, "Unable to enqueue sending of rest of notifications: %v; hope datastore gets fixed", err)
 					return err
 				}
@@ -335,25 +335,25 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host, scheme string, gameI
 		break
 	}
 
-	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %q, %q, %v, %v, %q, %+v) *** SUCCESS ***", host, scheme, gameID, phaseOrdinal, userId, finishedTokens)
+	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %q, %v, %v, %q, %+v) *** SUCCESS ***", host, gameID, phaseOrdinal, userId, finishedTokens)
 
 	return nil
 }
 
-func sendPhaseNotificationsToUsers(ctx context.Context, host, scheme string, gameID *datastore.Key, phaseOrdinal int64, uids []string) error {
-	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %q, %v, %v, %+v)", host, scheme, gameID, phaseOrdinal, uids)
+func sendPhaseNotificationsToUsers(ctx context.Context, host string, gameID *datastore.Key, phaseOrdinal int64, uids []string) error {
+	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %v, %v, %+v)", host, gameID, phaseOrdinal, uids)
 
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, scheme, gameID, phaseOrdinal, uids[0], map[string]struct{}{}); err != nil {
+		if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, uids[0], map[string]struct{}{}); err != nil {
 			log.Errorf(ctx, "Unable to enqueue sending to %q: %v; hope datastore gets fixed", uids[0], err)
 			return err
 		}
-		if err := sendPhaseNotificationsToMailFunc.EnqueueIn(ctx, 0, host, scheme, gameID, phaseOrdinal, uids[0]); err != nil {
+		if err := sendPhaseNotificationsToMailFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, uids[0]); err != nil {
 			log.Errorf(ctx, "Unable to enqueue sending mail to %q: %v; hope datastore gets fixed", uids[0], err)
 			return err
 		}
 		if len(uids) > 1 {
-			if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, scheme, gameID, phaseOrdinal, uids[1:]); err != nil {
+			if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, uids[1:]); err != nil {
 				log.Errorf(ctx, "Unable to enqueue sending to rest: %v; hope datastore gets fixed", err)
 				return err
 			}
@@ -364,7 +364,7 @@ func sendPhaseNotificationsToUsers(ctx context.Context, host, scheme string, gam
 		return err
 	}
 
-	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %q, %v, %v, %+v) *** SUCCESS ***", host, scheme, gameID, phaseOrdinal, uids)
+	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %v, %v, %+v) *** SUCCESS ***", host, gameID, phaseOrdinal, uids)
 
 	return nil
 }
@@ -545,7 +545,7 @@ func (p *PhaseResolver) Act() error {
 
 	// Create the new phase.
 
-	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1, p.Phase.Host, p.Phase.Scheme)
+	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1, p.Phase.Host)
 	// To make old games work.
 	if p.Game.PhaseLengthMinutes == 0 {
 		p.Game.PhaseLengthMinutes = MAX_PHASE_DEADLINE
@@ -827,7 +827,6 @@ func (p *PhaseResolver) Act() error {
 		p.Context,
 		0,
 		p.Phase.Host,
-		p.Phase.Scheme,
 		p.Game.ID,
 		p.Phase.PhaseOrdinal,
 		membersToNotify,
@@ -1007,7 +1006,6 @@ type Phase struct {
 	Bounces     []Bounce
 	Resolutions []Resolution
 	Host        string
-	Scheme      string
 }
 
 func (p *Phase) toVariantsPhase(variant string, orderMap map[godip.Nation]map[godip.Province][]string) *dvars.Phase {
@@ -1195,7 +1193,7 @@ func (p *Phase) Save(ctx context.Context) error {
 	return err
 }
 
-func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host, scheme string) *Phase {
+func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host string) *Phase {
 	current := s.Phase()
 	p := &Phase{
 		PhaseMeta: PhaseMeta{
@@ -1207,7 +1205,6 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host, s
 		},
 		GameID: gameID,
 		Host:   host,
-		Scheme: scheme,
 	}
 	units, scs, dislodgeds, dislodgers, bounces, _ := s.Dump()
 	for prov, unit := range units {

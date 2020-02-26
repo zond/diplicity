@@ -220,7 +220,7 @@ func createMemberHelper(
 			return err
 		}
 		if len(game.Members) == len(variants.Variants[game.Variant].Nations) {
-			if err := asyncStartGameFunc.EnqueueIn(ctx, 0, game.ID, r.Req().Host, DefaultScheme); err != nil {
+			if err := asyncStartGameFunc.EnqueueIn(ctx, 0, game.ID, r.Req().Host); err != nil {
 				return err
 			}
 		}
