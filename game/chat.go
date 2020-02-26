@@ -14,8 +14,8 @@ import (
 
 	"github.com/aymerick/raymond"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/zond/enmime"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/enmime"
 	"github.com/zond/go-fcm"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
@@ -132,7 +132,7 @@ func getMsgNotificationContext(ctx context.Context, host, scheme string, gameID 
 		return nil, noConfigError
 	}
 
-	res.mapURL, err = router.Get(RenderPhaseMapRoute).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.game.NewestPhaseMeta[0].PhaseOrdinal))
+	res.mapURL, err = router.Get(RenderPhaseMapRoute).Schemes(DefaultScheme).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.game.NewestPhaseMeta[0].PhaseOrdinal))
 	if err != nil {
 		log.Errorf(ctx, "Unable to create map URL for game %v and phase %v: %v; wtf?", res.game.ID, res.game.NewestPhaseMeta[0].PhaseOrdinal, err)
 		return nil, err

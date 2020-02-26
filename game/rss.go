@@ -28,7 +28,7 @@ type event struct {
 }
 
 func makeURL(route string, urlParams ...string) (*url.URL, error) {
-	phaseURL, err := router.Get(route).URL(urlParams...)
+	phaseURL, err := router.Get(route).Schemes(DefaultScheme).URL(urlParams...)
 	if err != nil {
 		return nil, err
 	}

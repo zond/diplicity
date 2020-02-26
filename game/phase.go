@@ -145,7 +145,7 @@ func getPhaseNotificationContext(ctx context.Context, host, scheme string, gameI
 		return nil, noConfigError
 	}
 
-	res.mapURL, err = router.Get(RenderPhaseMapRoute).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.phase.PhaseOrdinal))
+	res.mapURL, err = router.Get(RenderPhaseMapRoute).Schemes(DefaultScheme).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.phase.PhaseOrdinal))
 	if err != nil {
 		log.Errorf(ctx, "Unable to create map URL for game %v and phase %v: %v; wtf?", res.game.ID, res.phase.PhaseOrdinal, err)
 		return nil, err

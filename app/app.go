@@ -22,6 +22,11 @@ func main() {
 		panic(err)
 	}
 	SetJSVURL(jsvURL)
+	if appengine.IsDevAppServer() {
+		DefaultScheme = "http"
+	} else {
+		DefaultScheme = "https"
+	}
 	router := mux.NewRouter()
 	routes.Setup(router)
 	http.Handle("/", router)

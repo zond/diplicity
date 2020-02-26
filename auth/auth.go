@@ -101,7 +101,7 @@ func PP(i interface{}) string {
 }
 
 func GetUnsubscribeURL(ctx context.Context, r *mux.Router, host, scheme string, userId string) (*url.URL, error) {
-	unsubscribeURL, err := r.Get(UnsubscribeRoute).URL("user_id", userId)
+	unsubscribeURL, err := r.Get(UnsubscribeRoute).Schemes(DefaultScheme).URL("user_id", userId)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +381,7 @@ func getOAuth(ctx context.Context) (*OAuth, error) {
 }
 
 func getOAuth2Config(ctx context.Context, r *http.Request) (*oauth2.Config, error) {
-	redirectURL, err := router.Get(OAuth2CallbackRoute).URL()
+	redirectURL, err := router.Get(OAuth2CallbackRoute).Schemes(DefaultScheme).URL()
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +548,7 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 				HTTPError(w, r, err)
 				return
 			}
-			approveURL, err := router.Get(ApproveRedirectRoute).URL()
+			approveURL, err := router.Get(ApproveRedirectRoute).Schemes(DefaultScheme).URL()
 			if err != nil {
 				HTTPError(w, r, err)
 				return
@@ -731,7 +731,7 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 		}
 		redirectURL.Host = r.Req().Host
 
-		loginURL, err := router.Get(LoginRoute).URL()
+		loginURL, err := router.Get(LoginRoute).Schemes(DefaultScheme).URL()
 		if err != nil {
 			return false, err
 		}
@@ -779,7 +779,7 @@ func handleApproveRedirect(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	loginURL, err := router.Get(LoginRoute).URL()
+	loginURL, err := router.Get(LoginRoute).Schemes(DefaultScheme).URL()
 	q := loginURL.Query()
 	q.Set("redirect-to", toApproveURL.String())
 	loginURL.RawQuery = q.Encode()

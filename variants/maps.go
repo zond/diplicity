@@ -81,7 +81,7 @@ func makeNationVariable(nat godip.Nation) string {
 func RenderPhaseMap(w ResponseWriter, r Request, phase *Phase, colors []string) error {
 	variant := variants.Variants[phase.Variant]
 
-	mapURL, err := router.Get(VariantMapRoute).URL("name", phase.Variant)
+	mapURL, err := router.Get(VariantMapRoute).Schemes(DefaultScheme).URL("name", phase.Variant)
 	if err != nil {
 		return err
 	}
