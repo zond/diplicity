@@ -385,7 +385,7 @@ func getOAuth2Config(ctx context.Context, r *http.Request) (*oauth2.Config, erro
 	if err != nil {
 		return nil, err
 	}
-	redirectURL.Scheme = DefaultSchema
+	redirectURL.Scheme = DefaultScheme
 	redirectURL.Host = r.Host
 
 	oauth, err := getOAuth(ctx)
