@@ -78,7 +78,7 @@ func zipOptions(ctx context.Context, options interface{}) ([]byte, error) {
 func unzipOptions(ctx context.Context, b []byte) (interface{}, error) {
 	zippedReader, err := gzip.NewReader(bytes.NewBuffer(b))
 	if err != nil {
-		log.Errorf(ctx, "While trying to create zipped options reader: %v", err)
+		log.Warningf(ctx, "While trying to create zipped options reader: %v", err)
 		return nil, err
 	}
 	var opts interface{}
