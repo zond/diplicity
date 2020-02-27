@@ -705,7 +705,7 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
 		if err != nil {
-			return nil, err
+			return err
 		}
 		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
