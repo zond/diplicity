@@ -708,7 +708,7 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 			return nil, err
 		}
 		game := &Game{}
-		if err := datastore.get(ctx, gameID, game); err != nil {
+		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}
 		if len(game.NewestPhaseMeta) == 0 {
@@ -720,7 +720,7 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 			return err
 		}
 		phase := &phase{}
-		if err := datastore.get(ctx, phaseID, phase); err != nil {
+		if err := datastore.Get(ctx, phaseID, phase); err != nil {
 			return err
 		}
 		return phase.ScheduleResolution(ctx)
