@@ -89,6 +89,7 @@ const (
 	AllocateNationsRoute            = "AllocateNations"
 	ReapInactiveWaitingPlayersRoute = "ReapInactiveWaitingPlayersRoute"
 	ReScheduleRoute                 = "ReSchedule"
+	ReScheduleAllBrokenRoute        = "ReScheduleAllBroken"
 )
 
 type userStatsHandler struct {
@@ -683,6 +684,57 @@ func handleResave(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func handleReScheduleAllBroken(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	games := Games{}
+	ids, err := datastore.NewQuery(gameKind).Filter("Finished=", false).GetAll(ctx, &games)
+	if err != nil {
+		return err
+	}
+	for idx, id := range ids {
+		games[idx].ID = id
+	}
+	log.Infof(ctx, "Found %v unfinished games.", len(games))
+	for _, game := range games {
+		if len(game.NewestPhaseMeta) > 0 {
+			if game.NewestPhaseMeta[0].DeadlineAt.Before(time.Now()) && !game.NewestPhaseMeta[0].Resolved {
+				log.Infof(ctx, "Rescheduling %+v", game)
+				if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+					phaseID, err := PhaseID(ctx, game.ID, game.NewestPhaseMeta[0].PhaseOrdinal)
+					if err != nil {
+						return err
+					}
+					phase := &Phase{}
+					if err := datastore.Get(ctx, phaseID, phase); err != nil {
+						return err
+					}
+					return phase.ScheduleResolution(ctx)
+				}, &datastore.TransactionOptions{XG: true}); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func handleReSchedule(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -719,19 +771,19 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 		if err != nil {
 			return err
 		}
-		phase := &phase{}
+		phase := &Phase{}
 		if err := datastore.Get(ctx, phaseID, phase); err != nil {
 			return err
 		}
 		return phase.ScheduleResolution(ctx)
-	}, &datastore.transactionoptions{xg: true}); err != nil {
-		log.errorf(ctx, "unable to commit send tx: %v", err)
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return err
 	}
+	return nil
 }
 
-func handlereapinactivewaitingplayers(w responsewriter, r request) error {
-	ctx := appengine.newcontext(r.req())
+func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
 
 	games := Games{}
 	ids, err := datastore.NewQuery(gameKind).Filter("Started=", false).GetAll(ctx, &games)
@@ -812,6 +864,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
 	Handle(r, "/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
+	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
