@@ -88,6 +88,7 @@ const (
 	ResaveRoute                     = "Resave"
 	AllocateNationsRoute            = "AllocateNations"
 	ReapInactiveWaitingPlayersRoute = "ReapInactiveWaitingPlayersRoute"
+	ReScheduleRoute                 = "ReSchedule"
 )
 
 type userStatsHandler struct {
@@ -682,8 +683,55 @@ func handleResave(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
+func handleReSchedule(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+		if err != nil {
+			return nil, err
+		}
+		game := &Game{}
+		if err := datastore.get(ctx, gameID, game); err != nil {
+			return err
+		}
+		if len(game.NewestPhaseMeta) == 0 {
+			log.Infof(ctx, "%+v has no phases, can't re-schedule.", game)
+			return nil
+		}
+		phaseID, err := PhaseID(ctx, gameID, game.NewestPhaseMeta[0].PhaseOrdinal)
+		if err != nil {
+			return err
+		}
+		phase := &phase{}
+		if err := datastore.get(ctx, phaseID, phase); err != nil {
+			return err
+		}
+		return phase.ScheduleResolution(ctx)
+	}, &datastore.transactionoptions{xg: true}); err != nil {
+		log.errorf(ctx, "unable to commit send tx: %v", err)
+		return err
+	}
+}
+
+func handlereapinactivewaitingplayers(w responsewriter, r request) error {
+	ctx := appengine.newcontext(r.req())
 
 	games := Games{}
 	ids, err := datastore.NewQuery(gameKind).Filter("Started=", false).GetAll(ctx, &games)
@@ -763,6 +811,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-save", []string{"GET"}, ResaveRoute, handleResave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
+	Handle(r, "/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
