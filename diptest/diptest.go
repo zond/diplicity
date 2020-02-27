@@ -417,6 +417,9 @@ func (r *Req) Success() *Result {
 		bodyDesc = fmt.Sprintf(" with %q", string(r.body))
 	}
 	if res.Status < 200 || res.Status > 299 {
+		if strings.Index(string(res.BodyBytes), "the runtime process for the instance running on port ") == 0 {
+			return r.Success()
+		}
 		panic(fmt.Errorf("%qing %q%v: %v\n%s", r.method, r.url.String(), bodyDesc, res.Status, res.BodyBytes))
 	}
 	return res
