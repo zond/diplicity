@@ -90,6 +90,7 @@ const (
 	ReapInactiveWaitingPlayersRoute = "ReapInactiveWaitingPlayersRoute"
 	ReScheduleRoute                 = "ReSchedule"
 	ReScheduleAllBrokenRoute        = "ReScheduleAllBroken"
+	ReScheduleAllRoute              = "ReScheduleAll"
 )
 
 type userStatsHandler struct {
@@ -684,7 +685,7 @@ func handleResave(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func handleReScheduleAllBroken(w ResponseWriter, r Request) error {
+func reScheduleAll(w ResponseWriter, r Request, onlyBroken bool) error {
 	ctx := appengine.NewContext(r.Req())
 
 	if !appengine.IsDevAppServer() {
@@ -714,7 +715,7 @@ func handleReScheduleAllBroken(w ResponseWriter, r Request) error {
 	log.Infof(ctx, "Found %v unfinished games.", len(games))
 	for _, game := range games {
 		if len(game.NewestPhaseMeta) > 0 {
-			if game.NewestPhaseMeta[0].DeadlineAt.Before(time.Now()) && !game.NewestPhaseMeta[0].Resolved {
+			if !onlyBroken || (game.NewestPhaseMeta[0].DeadlineAt.Before(time.Now()) && !game.NewestPhaseMeta[0].Resolved) {
 				log.Infof(ctx, "Rescheduling %+v", game)
 				if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 					phaseID, err := PhaseID(ctx, game.ID, game.NewestPhaseMeta[0].PhaseOrdinal)
@@ -733,6 +734,14 @@ func handleReScheduleAllBroken(w ResponseWriter, r Request) error {
 		}
 	}
 	return nil
+}
+
+func handleReScheduleAllBroken(w ResponseWriter, r Request) error {
+	return reScheduleAll(w, r, true)
+}
+
+func handleReScheduleAll(w ResponseWriter, r Request) error {
+	return reScheduleAll(w, r, false)
 }
 
 func handleReSchedule(w ResponseWriter, r Request) error {
@@ -865,6 +874,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
 	Handle(r, "/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
+	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
