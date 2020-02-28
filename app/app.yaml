@@ -10,6 +10,9 @@ handlers:
 - url: /_reap-inactive-waiting-players
   script: auto
   login: admin
+- url: /(favicon.ico)
+  static_files: img/\1
+  upload: img/favicon.ico
 - url: /(firebase-messaging-sw.js)
   static_files: js/\1
   upload: js/firebase-messaging-sw.js
