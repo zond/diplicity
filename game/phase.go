@@ -538,7 +538,7 @@ func (p *PhaseResolver) Act() error {
 
 	p.Phase.Resolved = true
 	p.Phase.ResolvedAt = time.Now()
-	if err := p.Phase.Save(p.Context); err != nil {
+	if err := p.Phase.DBSave(p.Context); err != nil {
 		log.Errorf(p.Context, "Unable to save old phase %v: %v; hope datastore gets fixed", PP(p.Phase), err)
 		return err
 	}
@@ -693,7 +693,7 @@ func (p *PhaseResolver) Act() error {
 
 	// Save the new phase.
 
-	if err := newPhase.Save(p.Context); err != nil {
+	if err := newPhase.DBSave(p.Context); err != nil {
 		log.Errorf(p.Context, "Unable to save new Phase %v: %v; hope datastore will get fixed", PP(newPhase), err)
 		return err
 	}
@@ -1006,8 +1006,18 @@ type Phase struct {
 	Bounces     []Bounce
 	Resolutions []Resolution
 	Host        string
-	// Ignore this field completely, it should never be used, and is simply hard to remove.
-	Scheme string
+}
+
+func (p *Phase) Load(props []datastore.Property) error {
+	err := datastore.LoadStruct(p, props)
+	if _, is := err.(*datastore.ErrFieldMismatch); is {
+		err = nil
+	}
+	return err
+}
+
+func (p *Phase) Save() ([]datastore.Property, error) {
+	return datastore.SaveStruct(p)
 }
 
 func (p *Phase) toVariantsPhase(variant string, orderMap map[godip.Nation]map[godip.Province][]string) *dvars.Phase {
@@ -1184,7 +1194,7 @@ func (p *Phase) ID(ctx context.Context) (*datastore.Key, error) {
 	return PhaseID(ctx, p.GameID, p.PhaseOrdinal)
 }
 
-func (p *Phase) Save(ctx context.Context) error {
+func (p *Phase) DBSave(ctx context.Context) error {
 	key, err := p.ID(ctx)
 	if err != nil {
 		return err

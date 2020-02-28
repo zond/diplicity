@@ -8,7 +8,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gorilla/feeds v1.1.1
 	github.com/gorilla/mux v1.7.4
-	github.com/gorilla/schema v1.1.0 // indirect
 	github.com/jmoiron/jsonq v0.0.0-20150511023944-e874b168d07e
 	github.com/kr/pretty v0.2.0
 	github.com/oddg/hungarian-algorithm v0.0.0-20170809162819-9567cbc363de
