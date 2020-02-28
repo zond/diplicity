@@ -271,7 +271,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 				case "NotRegistered":
 					fallthrough
 				case "MismatchSenderId":
-					log.Errorf(ctx, "Token %q got %q, will remove it.", token, errMsg)
+					log.Warningf(ctx, "Token %q got %q, will remove it.", token, errMsg)
 					nestPut(idsToRemove, uid, token, errMsg)
 				case "Unavailable":
 					// Can be retried, it's supposed to be.
