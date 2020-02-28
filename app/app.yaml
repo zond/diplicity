@@ -12,18 +12,18 @@ handlers:
   login: admin
 - url: /(favicon.ico)
   static_files: img/\1
-  upload: img/favicon.ico
+  upload: app/img/favicon.ico
 - url: /(firebase-messaging-sw.js)
   static_files: js/\1
-  upload: js/firebase-messaging-sw.js
+  upload: app/js/firebase-messaging-sw.js
 - url: /html
-  static_dir: html
+  static_dir: app/html
 - url: /js
-  static_dir: js
+  static_dir: app/js
 - url: /css
-  static_dir: css
+  static_dir: app/css
 - url: /img
-  static_dir: img
+  static_dir: app/img
 - url: /.*
   script: auto
   secure: always
