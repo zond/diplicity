@@ -899,9 +899,9 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, MessageFlagResource)
 	HandleResource(r, FlaggedMessagesResource)
 	HeadCallback(func(head *Node) error {
-		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.6.0/firebase.js")
-		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.5.2/firebase-app.js")
-		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/3.5.2/firebase-messaging.js")
+		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/7.9.2/firebase.js")
+		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/7.9.2/firebase-app.js")
+		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/7.9.2/firebase-messaging.js")
 		head.AddEl("link", "rel", "stylesheet", "style", "text/css", "href", "/css/bootstrap.css")
 		head.AddEl("script", "src", "/js/main.js")
 		head.AddEl("link", "rel", "manifest", "href", "/js/manifest.json")
