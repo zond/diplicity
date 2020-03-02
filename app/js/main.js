@@ -1,14 +1,12 @@
 // Initialize Firebase
-var firebaseConfig = {
-  apiKey: "AIzaSyDxQpMuCYlu95_oG7FUCLFIYIIfvKz-4D8",
-  authDomain: "diplicity-engine.firebaseapp.com",
-  databaseURL: "https://diplicity-engine.firebaseio.com",
-  projectId: "diplicity-engine",
-  storageBucket: "diplicity-engine.appspot.com",
-  messagingSenderId: "635122585664",
-  appId: "1:635122585664:web:89244768f1d41245a74fa5"
+var config = {
+	apiKey: "AIzaSyB0rX7dts3Rk0UnDRR9A4vghO01mwCvLxY",
+	authDomain: "diplicity-engine.firebaseapp.com",
+	databaseURL: "https://diplicity-engine.firebaseio.com",
+	storageBucket: "diplicity-engine.appspot.com",
+	messagingSenderId: "635122585664"
 };
-firebase.initializeApp(firebaseConfig);
+firebase.initializeApp(config);
 
 const messaging = firebase.messaging();
 messaging.requestPermission().then(function() {
