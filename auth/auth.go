@@ -471,7 +471,27 @@ func DecodeBytes(ctx context.Context, b []byte) ([]byte, error) {
 	return plain, nil
 }
 
-func EncodeToken(ctx context.Context, user *User) (string, error) {
+func encodeOAuthToken(ctx context.Context, token *oauth2.Token) (string, error) {
+	b, err := json.Marshal(token)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+func decodeOAuthToken(ctx context.Context, b64 string) (*oauth2.Token, error) {
+	b, err := base64.URLEncoding.DecodeString(b64)
+	if err != nil {
+		return nil, err
+	}
+	token := &oauth2.Token{}
+	if err := json.Unmarshal(b, token); err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+func encodeUserToToken(ctx context.Context, user *User) (string, error) {
 	plain, err := json.Marshal(user)
 	if err != nil {
 		return "", err
@@ -484,45 +504,45 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 
 	conf, err := getOAuth2Config(ctx, r)
 	if err != nil {
+		log.Errorf(ctx, "Unable to load OAuth2Config: %v", err)
 		HTTPError(w, r, err)
 		return
 	}
 
-	token, err := conf.Exchange(ctx, r.URL.Query().Get("code"))
+	code := r.URL.Query().Get("code")
+	token, err := conf.Exchange(ctx, code)
 	if err != nil {
+		log.Warningf(ctx, "Unable to exchange code for token %#v: %v", code, err)
 		HTTPError(w, r, err)
 		return
 	}
 
-	client := oauth2.NewClient(ctx, oauth2.StaticTokenSource(token))
-	service, err := oauth2service.New(client)
+	user, err := getUserFromToken(ctx, token)
 	if err != nil {
+		log.Errorf(ctx, "Unable to produce user from token %#v: %v", token, err)
 		HTTPError(w, r, err)
 		return
 	}
-	userInfo, err := oauth2service.NewUserinfoService(service).Get().Context(ctx).Do()
+
+	state := r.URL.Query().Get("state")
+	redirectURL, err := url.Parse(state)
 	if err != nil {
-		HTTPError(w, r, err)
-		return
-	}
-	user := infoToUser(userInfo)
-	user.ValidUntil = time.Now().Add(time.Hour * 24)
-	if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
+		log.Warningf(ctx, "Unable to parse state parameter %#v to URL: %v", state, err)
 		HTTPError(w, r, err)
 		return
 	}
 
-	redirectURL, err := url.Parse(r.URL.Query().Get("state"))
-	if err != nil {
-		HTTPError(w, r, err)
-		return
-	}
-
-	strippedRedirectURL := *redirectURL
-	strippedRedirectURL.RawQuery = ""
-	strippedRedirectURL.Path = ""
-
+	// Clients that are able to call this endpoint independently (without being
+	// redirected from Google OAuth2 service) - which is what is necessary to
+	// set the 'approve-redirect' query parameter - can work around the approved redirect
+	// security measure anyway, and don't really need them anyway (since they are
+	// mostly there to prevent evil blogs using your pre-recorded approval log in
+	// as you to diplicity.
 	if r.URL.Query().Get("approve-redirect") != "true" {
+		strippedRedirectURL := *redirectURL
+		strippedRedirectURL.RawQuery = ""
+		strippedRedirectURL.Path = ""
+
 		approvedURL := &RedirectURL{
 			UserId:      user.Id,
 			RedirectURL: strippedRedirectURL.String(),
@@ -534,13 +554,23 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 			requestedURL.RawQuery = ""
 			requestedURL.Path = ""
 
-			cipher, err := EncodeString(ctx, fmt.Sprintf("%s,%s", redirectURL.String(), user.Id))
+			b64Token, err := encodeOAuthToken(ctx, token)
 			if err != nil {
+				log.Errorf(ctx, "Unable to encode OAuth2 token %+v to base64: %v", token, err)
+				HTTPError(w, r, err)
+				return
+			}
+
+			clear := fmt.Sprintf("%s,%s,%s", redirectURL.String(), user.Id, b64Token)
+			cipher, err := EncodeString(ctx, clear)
+			if err != nil {
+				log.Errorf(ctx, "Unable to encrypt  %#v: %v", clear, err)
 				HTTPError(w, r, err)
 				return
 			}
 			approveURL, err := router.Get(ApproveRedirectRoute).URL()
 			if err != nil {
+				log.Errorf(ctx, "Unable to get ApproveRedirectRoute %#v: %v", ApproveRedirectRoute, err)
 				HTTPError(w, r, err)
 				return
 			}
@@ -550,13 +580,40 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 <form method="GET" action="%s"><input type="submit" value="No"/></form>`, strippedRedirectURL.String(), requestedURL.String(), approveURL.String(), cipher, redirectURL.String()))
 			return
 		} else if err != nil {
+			log.Errorf(ctx, "Unable to load approved redirect URL for %+v: %v", approvedURL, err)
 			HTTPError(w, r, err)
 			return
 		}
 	}
 
-	userToken, err := EncodeToken(ctx, user)
+	finishLogin(ctx, w, r, user, redirectURL)
+}
+
+func getUserFromToken(ctx context.Context, token *oauth2.Token) (*User, error) {
+	client := oauth2.NewClient(ctx, oauth2.StaticTokenSource(token))
+	service, err := oauth2service.New(client)
 	if err != nil {
+		log.Warningf(ctx, "Unable to create OAuth2 client from token %#v: %v", token, err)
+		return nil, err
+	}
+	userInfo, err := oauth2service.NewUserinfoService(service).Get().Context(ctx).Do()
+	if err != nil {
+		log.Warningf(ctx, "Unable to fetch user info: %v", err)
+		return nil, err
+	}
+	user := infoToUser(userInfo)
+	user.ValidUntil = time.Now().Add(time.Hour * 24)
+	if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
+		log.Warningf(ctx, "Unable to store user info %+v: %v", user, err)
+		return nil, err
+	}
+	return user, nil
+}
+
+func finishLogin(ctx context.Context, w http.ResponseWriter, r *http.Request, user *User, redirectURL *url.URL) {
+	userToken, err := encodeUserToToken(ctx, user)
+	if err != nil {
+		log.Errorf(ctx, "Unable to encrypt token for %+v: %v", user, err)
 		HTTPError(w, r, err)
 		return
 	}
@@ -736,18 +793,22 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 func handleApproveRedirect(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
-	plain, err := DecodeString(ctx, r.Req().URL.Query().Get("state"))
+	state := r.Req().URL.Query().Get("state")
+	plain, err := DecodeString(ctx, state)
 	if err != nil {
+		log.Warningf(ctx, "Unable to decode state %#v: %v", state, err)
 		return err
 	}
 
 	parts := strings.Split(plain, ",")
-	if len(parts) != 2 {
-		return fmt.Errorf("plain text token is not two strings joined by ','")
+	if len(parts) != 3 {
+		log.Warningf(ctx, "Plain text token %+v is not three strings joined by ','.", plain)
+		return fmt.Errorf("plain text token is not three strings joined by ','")
 	}
 
 	toApproveURL, err := url.Parse(parts[0])
 	if err != nil {
+		log.Warningf(ctx, "Unable to parse part of plain text %#v to URL: %v", parts[0], err)
 		return err
 	}
 
@@ -763,16 +824,24 @@ func handleApproveRedirect(w ResponseWriter, r Request) error {
 	}
 
 	if _, err := datastore.Put(ctx, approvedURL.ID(ctx), approvedURL); err != nil {
+		log.Errorf(ctx, "Unable to save approved url %+v: %v", approvedURL, err)
 		return err
 	}
 
-	loginURL, err := router.Get(LoginRoute).URL()
-	q := loginURL.Query()
-	q.Set("redirect-to", toApproveURL.String())
-	loginURL.RawQuery = q.Encode()
+	b64Token := parts[2]
+	token, err := decodeOAuthToken(ctx, b64Token)
+	if err != nil {
+		log.Warningf(ctx, "Unable to decode base64 encoded OAuth2 token %#v: %v", b64Token, err)
+		return err
+	}
 
-	http.Redirect(w, r.Req(), loginURL.String(), http.StatusTemporaryRedirect)
+	user, err := getUserFromToken(ctx, token)
+	if err != nil {
+		log.Warningf(ctx, "Unable to fetch user from token %#v: %v", token, err)
+		return err
+	}
 
+	finishLogin(ctx, w, r.Req(), user, toApproveURL)
 	return nil
 }
 
