@@ -10,20 +10,18 @@ handlers:
 - url: /_reap-inactive-waiting-players
   script: auto
   login: admin
+- url: /_ah/queue/go/delay
+  script: auto
+  login: admin
 - url: /(favicon.ico)
-  static_files: img/\1
-  upload: app/img/favicon.ico
+  static_files: app/img/\1
+  upload: app/img/.*
 - url: /(firebase-messaging-sw.js)
-  static_files: js/\1
-  upload: app/js/firebase-messaging-sw.js
-- url: /html
-  static_dir: app/html
-- url: /js
-  static_dir: app/js
-- url: /css
-  static_dir: app/css
-- url: /img
-  static_dir: app/img
+  static_files: app/js/\1
+  upload: app/js/.*
+- url: /(html|js|css|img)/(.*)
+  static_files: app/\1/\2
+  upload: app/(html|js|css|img)/(.*)
 - url: /.*
   script: auto
   secure: always
