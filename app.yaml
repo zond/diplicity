@@ -14,14 +14,14 @@ handlers:
   script: auto
   login: admin
 - url: /(favicon.ico)
-  static_files: app/img/\1
-  upload: app/img/.*
+  static_files: static/img/\1
+  upload: static/img/.*
 - url: /(firebase-messaging-sw.js)
-  static_files: app/js/\1
-  upload: app/js/.*
+  static_files: static/js/\1
+  upload: static/js/.*
 - url: /(html|js|css|img)/(.*)
-  static_files: app/\1/\2
-  upload: app/(html|js|css|img)/(.*)
+  static_files: static/\1/\2
+  upload: static/(html|js|css|img)/(.*)
 - url: /.*
   script: auto
   secure: always
