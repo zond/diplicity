@@ -59,3 +59,4 @@ To run the tests
 ```dev_appserver.py --require_indexes --skip_sdk_update_check=true --datastore_path=autotest --clear_datastore=true --datastore_consistency_policy=consistent .```
 
 2. Run `go test -v` in the `diptest` directory.
+
