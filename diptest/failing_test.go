@@ -10,5 +10,5 @@ import (
 )
 
 func TestFailure(t *testing.T) {
-	t.Errorf("This test failed purposefully!!")
+	t.Errorf("This test failed purposefully!!!")
 }
