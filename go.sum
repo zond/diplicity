@@ -71,16 +71,10 @@ github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf h1:pvbZ0lM0XWPBqUKqFU8cma
 github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf/go.mod h1:RJID2RhlZKId02nZ62WenDCkgHFerpIOmW0iT7GKmXM=
 github.com/zond/enmime v0.6.1 h1:lcbbNT3HBwjkojO6iMn3ALb8GV/UNjsjVPV16/GwDjA=
 github.com/zond/enmime v0.6.1/go.mod h1:3uacyqzRb5132O86kr+W5lR7nOYVA/qJyFEv4tJtjP0=
-github.com/zond/go-fcm v0.0.0-20161229170158-f997f3228998 h1:i8ZYYzPq0GYtCB/Hob4WonXd8ZECPTVvupAxx9U6ywU=
-github.com/zond/go-fcm v0.0.0-20161229170158-f997f3228998/go.mod h1:arqRIY7fuGr7rKkMvEJfv8gH8uajNGyFj32iDUfvK2U=
 github.com/zond/go-fcm v0.1.0 h1:RyT5uTjW1TESB3Vw6HfcAMMI6pJ+E2NuR7zPiNmiado=
 github.com/zond/go-fcm v0.1.0/go.mod h1:R7RptOebtamEGi1Aw9rUpYaugf0UR7Wur0UbtO/07OI=
-github.com/zond/goaeoas v0.0.0-20200226153550-f651b86ea979 h1:zbw1xo7DeqaGmbH7Nd262MS/sbqh9nIy8pL6ACLbwEk=
-github.com/zond/goaeoas v0.0.0-20200226153550-f651b86ea979/go.mod h1:CX0uFMnMYghgA1miptURG3E7DMlhk9FRt9hbSwybe7k=
 github.com/zond/goaeoas v0.1.0 h1:9XQXsr0CNnkVfggr2JSXFOyD1lLve8Ij4+XImp8KCQk=
 github.com/zond/goaeoas v0.1.0/go.mod h1:PSb4WTE4g+9+oFLuDiEHReuP42A6+dAlIeS7mrB1gxI=
-github.com/zond/godip v0.0.0-20200227114548-15fb42a9ae8e h1:DULm3rzRBc67lNubx4kNpVAC8V5foVBeQCg1J8q496M=
-github.com/zond/godip v0.0.0-20200227114548-15fb42a9ae8e/go.mod h1:U6vi/uYM6PTn5sfEjKnKKKohXRs7zhzvd6JlcIB26Ao=
 github.com/zond/godip v0.1.1 h1:EGOGQDOo1aQbUcoD8DR8j1eRSCLofqkiNG+QPqkFe48=
 github.com/zond/godip v0.1.1/go.mod h1:U6vi/uYM6PTn5sfEjKnKKKohXRs7zhzvd6JlcIB26Ao=
 github.com/zond/replace v0.0.0-20180415193355-5a1dc330b27e/go.mod h1:J7mWP0y029F6sVX7sUb472GkhlBSg1u1W2T0yzU/HKg=
