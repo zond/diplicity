@@ -555,10 +555,10 @@ func (p *PhaseResolver) Act() error {
 	// Check if we can roll forward again, and potentially create new phase states.
 
 	// Prepare some data to collect.
-	allReady := true                    // All nations are ready to resolve the new phase as well.
-	soloWinner := variant.SoloWinner(s) // The nation, if any, reaching solo victory.
-	var soloWinnerUser string
-	quitters := map[godip.Nation]quitter{} // One per nation that wants to quit, with either dias or eliminated.
+	allReady := true                       // All nations are ready to resolve the new phase as well.
+	soloWinner := variant.SoloWinner(s)    // The nation, if any, reaching solo victory.
+	var soloWinnerUser string              // Will be set to the user of the soloWinner nation.
+	quitters := map[godip.Nation]quitter{} // One per nation that wants to quit, with either dias, eliminated, or nmr.
 	probationaries := []string{}           // One per user that's on probation.
 	newPhaseStates := PhaseStates{}        // The new phase states to save if we want to prepare resolution of a new phase.
 	oldPhaseResult := &PhaseResult{        // A result object for the old phase to simplify collecting user scoped stats.
@@ -724,8 +724,10 @@ func (p *PhaseResolver) Act() error {
 
 			switch state {
 			case diasState:
-				diasMembers = append(diasMembers, member.Nation)
-				diasUsers = append(diasUsers, member.User.Id)
+				if soloWinner == "" {
+					diasMembers = append(diasMembers, member.Nation)
+					diasUsers = append(diasUsers, member.User.Id)
+				}
 			case nmrState:
 				nmrMembers = append(nmrMembers, member.Nation)
 				nmrUsers = append(nmrUsers, member.User.Id)

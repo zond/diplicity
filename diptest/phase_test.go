@@ -9,12 +9,54 @@ import (
 )
 
 var (
-	startedGameDesc string
-	startedGames    []*Result
-	startedGameEnvs []*Env
-	startedGameNats []string
-	startedGameID   string
+	startedGameDesc     string
+	startedGames        []*Result
+	startedGameEnvs     []*Env
+	startedGameNats     []string
+	startedGameIdxByNat map[string]int
+	startedGameID       string
 )
+
+type memberOrders struct {
+	nat  string
+	ord  [][]string
+	dias bool
+}
+
+type orderSet []memberOrders
+
+func (set orderSet) execute(phaseOrdinal int) {
+	for _, member := range set {
+		gameIdx := startedGameIdxByNat[member.nat]
+		phase := startedGameEnvs[gameIdx].GetRoute("Phase.Load").RouteParams("game_id", startedGameID, "phase_ordinal", fmt.Sprint(phaseOrdinal)).Success()
+		for _, ord := range member.ord {
+			phase.Follow("create-order", "Links").Body(map[string]interface{}{
+				"Parts": ord,
+			}).Success()
+		}
+		if member.dias {
+			phase.Follow("phase-states", "Links").Success().
+				Find(phaseOrdinal, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"WantsDIAS": true,
+			}).Success()
+		}
+	}
+	for _, env := range startedGameEnvs {
+		WaitForEmptyQueue("game-asyncResolvePhase")
+		phase := env.GetRoute("Phase.Load").RouteParams("game_id", startedGameID, "phase_ordinal", fmt.Sprint(phaseOrdinal)).Success()
+		if !phase.GetValue("Properties", "Resolved").(bool) {
+			phase.Follow("phase-states", "Links").Success().
+				Find(phaseOrdinal, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"ReadyToResolve": true,
+			}).Success()
+		}
+	}
+	WaitForEmptyQueue("game-asyncResolvePhase")
+}
+
+type orderSets []orderSet
 
 // Not concurrency safe
 func withStartedGame(f func()) {
@@ -23,6 +65,10 @@ func withStartedGame(f func()) {
 
 // Not concurrency safe
 func withStartedGameOpts(conf func(m map[string]interface{}), f func()) {
+	withStartedGameOptsAndOrders(conf, nil, f)
+}
+
+func withStartedGameOptsAndOrders(conf func(m map[string]interface{}), orders orderSets, f func()) {
 	gameDesc := String("test-game")
 
 	envs := []*Env{
@@ -66,16 +112,23 @@ func withStartedGameOpts(conf func(m map[string]interface{}), f func()) {
 
 	startedGameNats = make([]string, len(envs))
 	startedGames = make([]*Result, len(envs))
+	startedGameIdxByNat = map[string]int{}
 	for i, env := range envs {
 		startedGames[i] = env.GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 		startedGameNats[i] = startedGames[i].Find(env.GetUID(), []string{"Properties", "Members"}, []string{"User", "Id"}).GetValue("Nation").(string)
+		startedGameIdxByNat[startedGameNats[i]] = i
 		startedGameID = startedGames[i].GetValue("Properties", "ID").(string)
 	}
 
-	startedGameDesc = gameDesc
 	startedGameEnvs = envs
+	startedGameDesc = gameDesc
+
+	for phaseOrdinalMinus1, set := range orders {
+		set.execute(phaseOrdinalMinus1 + 1)
+	}
+
 	f()
 }
 
@@ -89,6 +142,353 @@ func TestStartGame(t *testing.T) {
 		t.Run("TestReadyResolution", testReadyResolution)
 		t.Run("TestBanEfficacy", testBanEfficacy)
 		t.Run("TestMessageFlagging", testMessageFlagging)
+	})
+}
+
+var russianSoloOrders = orderSets{
+	{
+		{
+			nat: "Russia",
+			ord: [][]string{
+				{
+					"stp",
+					"Move",
+					"bot",
+				},
+				{
+					"sev",
+					"Move",
+					"bla",
+				},
+				{
+					"mos",
+					"Move",
+					"ukr",
+				},
+				{
+					"war",
+					"Move",
+					"gal",
+				},
+			},
+		},
+	},
+	{},
+	{
+		{
+			nat: "Russia",
+			ord: [][]string{
+				{
+					"bot",
+					"Move",
+					"swe",
+				},
+				{
+					"ukr",
+					"Move",
+					"rum",
+				},
+				{
+					"bla",
+					"Move",
+					"bul",
+				},
+			},
+		},
+	},
+	{},
+	{
+		{
+			nat: "Russia",
+			ord: [][]string{
+				{
+					"stp/nc",
+					"Build",
+					"Fleet",
+				},
+				{
+					"war",
+					"Build",
+					"Army",
+				},
+				{
+					"sev",
+					"Build",
+					"Army",
+				},
+			},
+		},
+	},
+	{
+		{
+			nat: "Russia",
+			ord: [][]string{
+				{
+					"swe",
+					"Move",
+					"den",
+				},
+				{
+					"stp",
+					"Move",
+					"nwy",
+				},
+				{
+					"war",
+					"Move",
+					"pru",
+				},
+				{
+					"gal",
+					"Move",
+					"bud",
+				},
+				{
+					"rum",
+					"Support",
+					"gal",
+					"bud",
+				},
+				{
+					"bul",
+					"Move",
+					"bla",
+				},
+				{
+					"sev",
+					"Move",
+					"arm",
+				},
+			},
+		},
+	},
+	{},
+	{
+		{
+			nat: "Russia",
+			ord: [][]string{
+				{
+					"rum",
+					"Move",
+					"ser",
+				},
+				{
+					"bla",
+					"Support",
+					"arm",
+					"ank",
+				},
+				{
+					"arm",
+					"Move",
+					"ank",
+				},
+			},
+		},
+	},
+	{},
+	{
+		{
+			nat: "Russia",
+			ord: [][]string{
+				{
+					"stp/nc",
+					"Build",
+					"Fleet",
+				},
+				{
+					"war",
+					"Build",
+					"Army",
+				},
+				{
+					"sev",
+					"Build",
+					"Army",
+				},
+				{
+					"mos",
+					"Build",
+					"Army",
+				},
+			},
+		},
+	},
+	{
+		{
+			nat: "Russia",
+			ord: [][]string{
+				{
+					"stp",
+					"Move",
+					"nwy",
+				},
+				{
+					"nwy",
+					"Move",
+					"nth",
+				},
+				{
+					"den",
+					"Move",
+					"bal",
+				},
+				{
+					"war",
+					"Move",
+					"gal",
+				},
+				{
+					"mos",
+					"Move",
+					"war",
+				},
+				{
+					"bud",
+					"Support",
+					"ser",
+					"tri",
+				},
+				{
+					"ser",
+					"Move",
+					"tri",
+				},
+				{
+					"sev",
+					"Move",
+					"rum",
+				},
+				{
+					"ank",
+					"Support",
+					"bla",
+					"con",
+				},
+				{
+					"bla",
+					"Move",
+					"con",
+				},
+			},
+		},
+	},
+	{},
+	{
+		{
+			nat: "Russia",
+			ord: [][]string{
+				{
+					"nwy",
+					"Move",
+					"nrg",
+				},
+				{
+					"bal",
+					"Support",
+					"pru",
+					"ber",
+				},
+				{
+					"pru",
+					"Move",
+					"ber",
+				},
+				{
+					"war",
+					"Move",
+					"sil",
+				},
+				{
+					"gal",
+					"Move",
+					"vie",
+				},
+				{
+					"bud",
+					"Support",
+					"gal",
+					"vie",
+				},
+				{
+					"rum",
+					"Move",
+					"ser",
+				},
+				{
+					"con",
+					"Support",
+					"ank",
+					"smy",
+				},
+				{
+					"ank",
+					"Move",
+					"smy",
+				},
+			},
+		},
+	},
+	{},
+	{},
+	{
+		{
+			nat: "Russia",
+			ord: [][]string{
+				{
+					"nrg",
+					"Move",
+					"edi",
+				},
+				{
+					"nth",
+					"Support",
+					"nrg",
+					"edi",
+				},
+				{
+					"bal",
+					"Move",
+					"kie",
+				},
+				{
+					"ber",
+					"Support",
+					"bal",
+					"kie",
+				},
+				{
+					"vie",
+					"Move",
+					"tyr",
+				},
+				{
+					"bud",
+					"Move",
+					"vie",
+				},
+				{
+					"con",
+					"Move",
+					"aeg",
+				},
+			},
+		},
+	},
+	{},
+}
+
+func TestSoloEnding(t *testing.T) {
+	withStartedGameOptsAndOrders(nil, russianSoloOrders, func() {
+		orderSet{
+			{
+				nat:  "England",
+				dias: true,
+			},
+		}.execute(len(russianSoloOrders) + 1)
+		game := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success()
+		game.AssertBoolEq(true, "Properties", "Finished")
+		game.Follow("game-result", "Links").Success().AssertNil("Properties", "DIASMembers").AssertEq("Russia", "Properties", "SoloWinnerMember")
 	})
 }
 

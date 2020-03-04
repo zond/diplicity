@@ -91,6 +91,7 @@ const (
 	ReScheduleRoute                 = "ReSchedule"
 	ReScheduleAllBrokenRoute        = "ReScheduleAllBroken"
 	ReScheduleAllRoute              = "ReScheduleAll"
+	RemoveDIASFromSoloGamesRoute    = "RemoveDIASFromSoloGamesRoute"
 )
 
 type userStatsHandler struct {
@@ -744,6 +745,54 @@ func handleReScheduleAll(w ResponseWriter, r Request) error {
 	return reScheduleAll(w, r, false)
 }
 
+func handleRemoveDIASFromSoloGames(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	gameResults := GameResults{}
+	ids, err := datastore.NewQuery(gameResultKind).GetAll(ctx, &gameResults)
+	if err != nil {
+		return err
+	}
+	weirdResults := 0
+	uidsToUpdate := []string{}
+	for idx := range gameResults {
+		gameResult := &gameResults[idx]
+		if len(gameResult.DIASMembers) > 0 && gameResult.SoloWinnerMember != "" {
+			weirdResults += 1
+			uidsToUpdate = append(uidsToUpdate, gameResult.DIASUsers...)
+			gameResult.DIASMembers = nil
+		}
+	}
+	log.Infof(ctx, "Found %v weird results with DIASMembers _and_ a SoloWinnerMember", weirdResults)
+	if _, err := datastore.PutMulti(ctx, ids, gameResults); err != nil {
+		return err
+	}
+	log.Infof(ctx, "Removed DIASMembers from %v results", weirdResults)
+	if weirdResults > 0 {
+		if err := UpdateUserStatsASAP(ctx, uidsToUpdate); err != nil {
+			return err
+		}
+		log.Infof(ctx, "Enqueued updating of user stats for %v users", len(uidsToUpdate))
+	}
+	return nil
+}
+
 func handleReSchedule(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -863,7 +912,6 @@ func ejectMember(ctx context.Context, gameID *datastore.Key, userId string) erro
 	log.Infof(ctx, "ejectMember(..., %v, %v): *** SUCCESS ***", gameID, userId)
 
 	return nil
-
 }
 
 func SetupRouter(r *mux.Router) {
@@ -875,6 +923,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
+	Handle(r, "/_remove-dias-from-solo-games", []string{"GET"}, RemoveDIASFromSoloGamesRoute, handleRemoveDIASFromSoloGames)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
