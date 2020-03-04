@@ -770,12 +770,14 @@ func handleRemoveDIASFromSoloGames(w ResponseWriter, r Request) error {
 		return err
 	}
 	weirdResults := 0
-	uidsToUpdate := []string{}
+	uidsToUpdateMap := map[string]bool{}
 	for idx := range gameResults {
 		gameResult := &gameResults[idx]
 		if len(gameResult.DIASMembers) > 0 && gameResult.SoloWinnerMember != "" {
 			weirdResults += 1
-			uidsToUpdate = append(uidsToUpdate, gameResult.DIASUsers...)
+			for _, diasUid := range gameResult.DIASUsers {
+				uidsToUpdateMap[diasUid] = true
+			}
 			gameResult.DIASMembers = nil
 		}
 	}
@@ -785,6 +787,10 @@ func handleRemoveDIASFromSoloGames(w ResponseWriter, r Request) error {
 	}
 	log.Infof(ctx, "Removed DIASMembers from %v results", weirdResults)
 	if weirdResults > 0 {
+		uidsToUpdate := make([]string, 0, len(uidsToUpdateMap))
+		for uidToUpdate := range uidsToUpdateMap {
+			uidsToUpdate = append(uidsToUpdate, uidToUpdate)
+		}
 		if err := UpdateUserStatsASAP(ctx, uidsToUpdate); err != nil {
 			return err
 		}
