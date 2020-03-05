@@ -19,6 +19,8 @@ jobs:
       id: go
     - name: Set up GoogleCloudPlatform
       uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+    - name: Extract GoogleCloudPlatform installation root
+      run: echo "::set-env name=GCLOUD_ROOT::$(gcloud info | grep 'Installation Root:' | sed -e 's/.*\[\([^]]\+\).*/\1/')"
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
     - name: Start test server
