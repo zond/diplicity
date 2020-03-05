@@ -17,9 +17,11 @@ jobs:
       with:
         go-version: 1.14
       id: go
-    - name: Install GoogleCloudPlatform
+    - name: Set up GoogleCloudPlatform
       uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
-    - name: Get dependencies
-      run: go mod download 
+    - name: Start test server
+      run: ${GITHUB_WORKSPACE}/diptest/start_test_server.sh
+    - name: Run tests
+      run: cd diptest && go test -v
