@@ -19,6 +19,8 @@ jobs:
       id: go
     - name: Set up GoogleCloudPlatform
       uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+    - name: Install App Engine Go
+      run: gcloud components install app-engine-go
     - name: Extract GoogleCloudPlatform installation root
       run: echo "::set-env name=GCLOUD_ROOT::$(gcloud info | grep 'Installation Root:' | sed -e 's/.*\[\([^]]\+\).*/\1/')"
     - name: Check out code into the Go module directory
