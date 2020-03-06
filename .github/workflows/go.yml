@@ -21,7 +21,7 @@ jobs:
       uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
       with:
         version: '252.0.0'
-    - name: Debug GoogleCloudPlatform
+    - name: Debug log GoogleCloudPlatform info
       run: gcloud info
     - name: Install App Engine Go
       run: gcloud components install app-engine-go
