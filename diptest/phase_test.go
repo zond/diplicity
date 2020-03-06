@@ -536,6 +536,8 @@ func TestTimeoutResolution(t *testing.T) {
 		})
 
 		t.Run("TestStagingGamePlayer0Gone", func(t *testing.T) {
+			WaitForEmptyQueue("game-ejectProbationaries")
+			WaitForEmptyQueue("game-ejectMember")
 			startedGameEnvs[0].GetRoute(game.ListOpenGamesRoute).Success().
 				AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 		})
