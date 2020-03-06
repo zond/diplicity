@@ -27,7 +27,7 @@ jobs:
       run: gcloud components install app-engine-go
     - name: Extract GoogleCloudPlatform installation root
       run: echo "::set-env name=GCLOUD_ROOT::$(gcloud info | grep 'Installation Root:' | sed -e 's/.*\[\([^]]\+\).*/\1/')"
-    - name: Check out code into the Go module directory
+    - name: Check out code
       uses: actions/checkout@v2
     - name: Start test server
       run: ${GITHUB_WORKSPACE}/diptest/start_test_server.sh
