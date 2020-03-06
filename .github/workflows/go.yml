@@ -19,6 +19,8 @@ jobs:
       id: go
     - name: Set up GoogleCloudPlatform
       uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+    - name: Debug GoogleCloudPlatform
+      run: gcloud info
     - name: Install App Engine Go
       run: gcloud components install app-engine-go
     - name: Extract GoogleCloudPlatform installation root
