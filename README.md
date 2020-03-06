@@ -1,3 +1,4 @@
+![Test diplicity](https://github.com/zond/diplicity/workflows/Test%20diplicity/badge.svg)
 
 # diplicity
 
