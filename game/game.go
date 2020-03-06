@@ -627,7 +627,7 @@ func (g *Game) Save(ctx context.Context) error {
 		timeLeft := time.Duration(float64(time.Nanosecond) * (emptySpots / rate))
 		g.StartETA = time.Now().Add(timeLeft)
 	} else {
-		g.StartETA = time.Now().Add(time.Hour * 24 * 90)
+		g.StartETA = time.Date(2525, time.January, 1, 0, 0, 0, 0, time.UTC)
 	}
 
 	var err error
