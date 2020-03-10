@@ -51,47 +51,48 @@ const (
 )
 
 const (
-	GetSWJSRoute                    = "GetSWJS"
-	GetMainJSRoute                  = "GetMainJS"
-	ConfigureRoute                  = "AuthConfigure"
-	IndexRoute                      = "Index"
-	ListOpenGamesRoute              = "ListOpenGames"
-	ListStartedGamesRoute           = "ListStartedGames"
-	ListFinishedGamesRoute          = "ListFinishedGames"
-	ListMyStagingGamesRoute         = "ListMyStagingGames"
-	ListMyStartedGamesRoute         = "ListMyStartedGames"
-	ListMyFinishedGamesRoute        = "ListMyFinishedGames"
-	ListOtherStagingGamesRoute      = "ListOtherStagingGames"
-	ListOtherStartedGamesRoute      = "ListOtherStartedGames"
-	ListOtherFinishedGamesRoute     = "ListOtherFinishedGames"
-	ListOrdersRoute                 = "ListOrders"
-	ListPhasesRoute                 = "ListPhases"
-	ListPhaseStatesRoute            = "ListPhaseStates"
-	ListGameStatesRoute             = "ListGameStates"
-	ListOptionsRoute                = "ListOptions"
-	ListChannelsRoute               = "ListChannels"
-	ListMessagesRoute               = "ListMessages"
-	ListBansRoute                   = "ListBans"
-	ListTopRatedPlayersRoute        = "ListTopRatedPlayers"
-	ListTopReliablePlayersRoute     = "ListTopReliablePlayers"
-	ListTopHatedPlayersRoute        = "ListTopHatedPlayers"
-	ListTopHaterPlayersRoute        = "ListTopHaterPlayers"
-	ListTopQuickPlayersRoute        = "ListTopQuickPlayers"
-	ListFlaggedMessagesRoute        = "ListFlaggedMessages"
-	DevResolvePhaseTimeoutRoute     = "DevResolvePhaseTimeout"
-	DevUserStatsUpdateRoute         = "DevUserStatsUpdate"
-	ReceiveMailRoute                = "ReceiveMail"
-	RenderPhaseMapRoute             = "RenderPhaseMap"
-	ReRateRoute                     = "ReRate"
-	GlobalStatsRoute                = "GlobalStats"
-	RssRoute                        = "Rss"
-	ResaveRoute                     = "Resave"
-	AllocateNationsRoute            = "AllocateNations"
-	ReapInactiveWaitingPlayersRoute = "ReapInactiveWaitingPlayersRoute"
-	ReScheduleRoute                 = "ReSchedule"
-	ReScheduleAllBrokenRoute        = "ReScheduleAllBroken"
-	ReScheduleAllRoute              = "ReScheduleAll"
-	RemoveDIASFromSoloGamesRoute    = "RemoveDIASFromSoloGamesRoute"
+	GetSWJSRoute                        = "GetSWJS"
+	GetMainJSRoute                      = "GetMainJS"
+	ConfigureRoute                      = "AuthConfigure"
+	IndexRoute                          = "Index"
+	ListOpenGamesRoute                  = "ListOpenGames"
+	ListStartedGamesRoute               = "ListStartedGames"
+	ListFinishedGamesRoute              = "ListFinishedGames"
+	ListMyStagingGamesRoute             = "ListMyStagingGames"
+	ListMyStartedGamesRoute             = "ListMyStartedGames"
+	ListMyFinishedGamesRoute            = "ListMyFinishedGames"
+	ListOtherStagingGamesRoute          = "ListOtherStagingGames"
+	ListOtherStartedGamesRoute          = "ListOtherStartedGames"
+	ListOtherFinishedGamesRoute         = "ListOtherFinishedGames"
+	ListOrdersRoute                     = "ListOrders"
+	ListPhasesRoute                     = "ListPhases"
+	ListPhaseStatesRoute                = "ListPhaseStates"
+	ListGameStatesRoute                 = "ListGameStates"
+	ListOptionsRoute                    = "ListOptions"
+	ListChannelsRoute                   = "ListChannels"
+	ListMessagesRoute                   = "ListMessages"
+	ListBansRoute                       = "ListBans"
+	ListTopRatedPlayersRoute            = "ListTopRatedPlayers"
+	ListTopReliablePlayersRoute         = "ListTopReliablePlayers"
+	ListTopHatedPlayersRoute            = "ListTopHatedPlayers"
+	ListTopHaterPlayersRoute            = "ListTopHaterPlayers"
+	ListTopQuickPlayersRoute            = "ListTopQuickPlayers"
+	ListFlaggedMessagesRoute            = "ListFlaggedMessages"
+	DevResolvePhaseTimeoutRoute         = "DevResolvePhaseTimeout"
+	DevUserStatsUpdateRoute             = "DevUserStatsUpdate"
+	ReceiveMailRoute                    = "ReceiveMail"
+	RenderPhaseMapRoute                 = "RenderPhaseMap"
+	ReRateRoute                         = "ReRate"
+	GlobalStatsRoute                    = "GlobalStats"
+	RssRoute                            = "Rss"
+	ResaveRoute                         = "Resave"
+	AllocateNationsRoute                = "AllocateNations"
+	ReapInactiveWaitingPlayersRoute     = "ReapInactiveWaitingPlayersRoute"
+	TestReapInactiveWaitingPlayersRoute = "TestReapInactiveWaitingPlayersRoute"
+	ReScheduleRoute                     = "ReSchedule"
+	ReScheduleAllBrokenRoute            = "ReScheduleAllBroken"
+	ReScheduleAllRoute                  = "ReScheduleAll"
+	RemoveDIASFromSoloGamesRoute        = "RemoveDIASFromSoloGamesRoute"
 )
 
 type userStatsHandler struct {
@@ -846,6 +847,13 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func handleTestReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
+	if !appengine.IsDevAppServer() {
+		return HTTPErr{"unauthorized", http.StatusForbidden}
+	}
+	return handleReapInactiveWaitingPlayers(w, r)
+}
+
 func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -923,6 +931,7 @@ func ejectMember(ctx context.Context, gameID *datastore.Key, userId string) erro
 func SetupRouter(r *mux.Router) {
 	router = r
 	Handle(r, "/_reap-inactive-waiting-players", []string{"GET"}, ReapInactiveWaitingPlayersRoute, handleReapInactiveWaitingPlayers)
+	Handle(r, "/_test_reap-inactive-waiting-players", []string{"GET"}, TestReapInactiveWaitingPlayersRoute, handleTestReapInactiveWaitingPlayers)
 	Handle(r, "/_re-save", []string{"GET"}, ResaveRoute, handleResave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
