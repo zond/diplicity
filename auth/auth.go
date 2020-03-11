@@ -76,6 +76,7 @@ func init() {
 			},
 		},
 	}
+	CORSAllowHeaders = append(CORSAllowHeaders, "X-Diplicity-API-Level")
 }
 
 func APILevel(r Request) int {
