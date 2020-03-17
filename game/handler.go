@@ -848,15 +848,16 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 	idsToUpdate := []string{}
 	for i := 0; i < 50 && err == nil; i++ {
 		id, err := iterator.Next(nil)
+		log.Infof(ctx, "Next produced %v, %v", id, err)
 		if err == nil {
 			idsToUpdate = append(idsToUpdate, id.StringID())
 		}
 	}
+	log.Infof(ctx, "Found %+v, %v", idsToUpdate, err)
 	if err != nil && err != datastore.Done {
 		log.Errorf(ctx, "Unable to iterate to next user stat: %v", err)
 		return err
 	}
-	log.Infof(ctx, "Found %+v", idsToUpdate)
 	if len(idsToUpdate) > 0 {
 		if err := UpdateUserStatsASAP(ctx, idsToUpdate); err != nil {
 			log.Errorf(ctx, "Unable to enqueue user stat update: %v", err)
