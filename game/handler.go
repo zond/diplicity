@@ -24,10 +24,11 @@ import (
 )
 
 var (
-	router              = mux.NewRouter()
-	resaveFunc          *DelayFunc
-	ejectMemberFunc     *DelayFunc
-	containerGenerators = map[string]func() interface{}{
+	router                   = mux.NewRouter()
+	resaveFunc               *DelayFunc
+	ejectMemberFunc          *DelayFunc
+	recalculateDIASUsersFunc *DelayFunc
+	containerGenerators      = map[string]func() interface{}{
 		gameKind:        func() interface{} { return &Game{} },
 		gameResultKind:  func() interface{} { return &GameResult{} },
 		phaseResultKind: func() interface{} { return &PhaseResult{} },
@@ -39,6 +40,7 @@ var (
 func init() {
 	resaveFunc = NewDelayFunc("game-resave", resave)
 	ejectMemberFunc = NewDelayFunc("game-ejectMember", ejectMember)
+	recalculateDIASUsersFunc = NewDelayFunc("", recalculateDIASUsers)
 	AllocationResource = &Resource{
 		Create:      createAllocation,
 		RenderLinks: true,
@@ -93,6 +95,7 @@ const (
 	ReScheduleAllBrokenRoute            = "ReScheduleAllBroken"
 	ReScheduleAllRoute                  = "ReScheduleAll"
 	RemoveDIASFromSoloGamesRoute        = "RemoveDIASFromSoloGamesRoute"
+	ReComputeAllDIASUsersRoute          = "ReComputeAllDIASUsers"
 )
 
 type userStatsHandler struct {
@@ -800,6 +803,78 @@ func handleRemoveDIASFromSoloGames(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func diasUsersQuery() *datastore.Query {
+	return datastore.NewQuery(userStatsKind).Filter("DIASGames>", 0).KeysOnly()
+}
+
+func handleReComputeAllDIASUsers(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	cursor, err := diasUsersQuery().Run(ctx).Cursor()
+	if err != nil {
+		return err
+	}
+
+	return recalculateDIASUsersFunc.EnqueueIn(ctx, 0, cursor.String())
+}
+
+func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
+	log.Infof(ctx, "recalculateDIASUsers(..., %#v) called", encodedCursor)
+
+	cursor, err := datastore.DecodeCursor(encodedCursor)
+	if err != nil {
+		log.Errorf(ctx, "Unable to decode cursor %#v: %v", encodedCursor, err)
+		return err
+	}
+
+	iterator := diasUsersQuery().Start(cursor).Run(ctx)
+
+	idsToUpdate := []string{}
+	for i := 0; i < 50 && err == nil; i++ {
+		id, err := iterator.Next(nil)
+		if err == nil {
+			idsToUpdate = append(idsToUpdate, id.StringID())
+		}
+	}
+	if err != nil && err != datastore.Done {
+		log.Errorf(ctx, "Unable to iterate to next user stat: %v", err)
+		return err
+	}
+	if err := UpdateUserStatsASAP(ctx, idsToUpdate); err != nil {
+		log.Errorf(ctx, "Unable to enqueue user stat update: %v", err)
+		return err
+	}
+	if err == nil {
+		cursor, err = iterator.Cursor()
+		if err != nil {
+			log.Errorf(ctx, "Unable to encode new cursor: %v", err)
+			return err
+		}
+		if err := recalculateDIASUsersFunc.EnqueueIn(ctx, 0, cursor.String()); err != nil {
+			log.Errorf(ctx, "Unable to enqueue for new cursor: %v", err)
+			return err
+		}
+	}
+	log.Infof(ctx, "recalculateDIASUsers(..., %#v) done", encodedCursor)
+	return nil
+}
+
 func handleReSchedule(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -939,6 +1014,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
 	Handle(r, "/_remove-dias-from-solo-games", []string{"GET"}, RemoveDIASFromSoloGamesRoute, handleRemoveDIASFromSoloGames)
+	Handle(r, "/_re-compute-all-dias-users", []string{"GET"}, ReComputeAllDIASUsersRoute, handleReComputeAllDIASUsers)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
