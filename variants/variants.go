@@ -48,6 +48,7 @@ const (
 	ListVariantsRoute   = "ListVariants"
 	VariantStartRoute   = "StartVariant"
 	VariantResolveRoute = "ResolveVariant"
+	VariantUnitsRoute   = "VariantUnits"
 	VariantMapRoute     = "VariantMap"
 	RenderMapRoute      = "RenderMap"
 )
@@ -122,7 +123,7 @@ type Variant struct {
 }
 
 func (rv *Variant) Item(r Request) *Item {
-	return NewItem(rv).SetName(rv.Name).AddLink(r.NewLink(VariantResource.Link("self", Load, []string{"variant_name", rv.Name}))).AddLink(r.NewLink(Link{
+	item := NewItem(rv).SetName(rv.Name).AddLink(r.NewLink(VariantResource.Link("self", Load, []string{"variant_name", rv.Name}))).AddLink(r.NewLink(Link{
 		Rel:         "start-state",
 		Route:       VariantStartRoute,
 		RouteParams: []string{"name", rv.Name},
@@ -137,6 +138,14 @@ func (rv *Variant) Item(r Request) *Item {
 		Route:       VariantMapRoute,
 		RouteParams: []string{"name", rv.Variant.Name},
 	}))
+	for unitName := range rv.SVGUnits {
+		item.AddLink(r.NewLink(Link{
+			Rel:         fmt.Sprintf("unit-%v", unitName),
+			Route:       VariantUnitsRoute,
+			RouteParams: []string{"variant_name", rv.Name, "unit_name", string(unitName)},
+		}))
+	}
+	return item
 }
 
 func loadVariant(w ResponseWriter, r Request) (*Variant, error) {
@@ -195,6 +204,37 @@ func listVariants(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func variantUnits(w ResponseWriter, r Request) error {
+	variantName := r.Vars()["variant_name"]
+	variant, found := variants.Variants[variantName]
+	if !found {
+		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), http.StatusNotFound}
+	}
+
+	unitName := r.Vars()["unit_name"]
+	unitFunc, found := variant.SVGUnits[godip.UnitType(unitName)]
+	if !found {
+		return HTTPErr{fmt.Sprintf("Unit %q not found in variant %q", unitName, variantName), http.StatusNotFound}
+	}
+
+	b, err := unitFunc()
+	if err != nil {
+		return err
+	}
+
+	etag := variant.SVGVersion
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Etag", etag)
+	w.Header().Set("Cache-Control", "max-age=3600") // 1 hour
+	if match := r.Req().Header.Get("If-None-Match"); match != "" && strings.Contains(match, etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return nil
+	}
+
+	_, err = w.Write(b)
+	return err
+}
+
 func variantMap(w ResponseWriter, r Request) error {
 	variantName := r.Vars()["name"]
 	variant, found := variants.Variants[variantName]
@@ -226,5 +266,6 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Variant/{name}/Start", []string{"GET"}, VariantStartRoute, startVariant)
 	Handle(r, "/Variant/{name}/Resolve", []string{"POST"}, VariantResolveRoute, resolveVariant)
 	Handle(r, "/Variant/{name}/Map.svg", []string{"GET"}, VariantMapRoute, variantMap)
+	Handle(r, "/Variant/{variant_name}/Units/{unit_name}.svg", []string{"GET"}, VariantUnitsRoute, variantUnits)
 	Handle(r, "/Variant/{name}/Render", []string{"GET"}, RenderMapRoute, handleRenderMap)
 }
