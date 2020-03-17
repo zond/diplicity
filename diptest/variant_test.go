@@ -10,6 +10,8 @@ import (
 	"github.com/zond/diplicity/variants"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants/youngstownredux"
+
+	gvars "github.com/zond/godip/variants"
 )
 
 func TestColorParsing(t *testing.T) {
@@ -83,4 +85,13 @@ func TestVariantVisibility(t *testing.T) {
 		"api-level": []string{"0"},
 	}).Success().
 		AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+}
+
+func TestLoadSingleVariant(t *testing.T) {
+	e := NewEnv()
+	for n := range gvars.Variants {
+		e.GetRoute("Variant.Load").RouteParams("variant_name", n).Success().
+			Find(n, []string{"Properties", "Name"})
+	}
+
 }

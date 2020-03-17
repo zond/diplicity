@@ -40,6 +40,8 @@ var (
 		hundred.HundredVariant.Name:                           2,
 		youngstownredux.YoungstownReduxVariant.Name:           1,
 	}
+
+	VariantResource *Resource
 )
 
 const (
@@ -56,6 +58,18 @@ func init() {
 			auth.HTMLAPILevel = launchLevel
 		}
 	}
+
+	VariantResource = &Resource{
+		Load:     loadVariant,
+		FullPath: "/Variant/{variant_name}",
+		Listers: []Lister{
+			{
+				Path:    "/Variants",
+				Route:   ListVariantsRoute,
+				Handler: listVariants,
+			},
+		},
+	}
 }
 
 type RenderPhase struct {
@@ -67,9 +81,9 @@ type RenderPhase struct {
 	Map    string
 }
 
-type RenderVariants map[string]RenderVariant
+type Variants map[string]Variant
 
-func (rv RenderVariants) Item(r Request) *Item {
+func (rv Variants) Item(r Request) *Item {
 	vItems := make(List, 0, len(rv))
 	for _, v := range rv {
 		cpy := v
@@ -99,7 +113,7 @@ func (rv RenderVariants) Item(r Request) *Item {
 	return rvItem
 }
 
-type RenderVariant struct {
+type Variant struct {
 	vrt.Variant
 	// OrderTypes are the types of orders this variant has.
 	OrderTypes []godip.OrderType
@@ -107,8 +121,8 @@ type RenderVariant struct {
 	Graph      godip.Graph
 }
 
-func (rv *RenderVariant) Item(r Request) *Item {
-	return NewItem(rv).SetName(rv.Name).AddLink(r.NewLink(Link{
+func (rv *Variant) Item(r Request) *Item {
+	return NewItem(rv).SetName(rv.Name).AddLink(r.NewLink(VariantResource.Link("self", Load, []string{"variant_name", rv.Name}))).AddLink(r.NewLink(Link{
 		Rel:         "start-state",
 		Route:       VariantStartRoute,
 		RouteParams: []string{"name", rv.Name},
@@ -125,9 +139,32 @@ func (rv *RenderVariant) Item(r Request) *Item {
 	}))
 }
 
+func loadVariant(w ResponseWriter, r Request) (*Variant, error) {
+	if v, found := variants.Variants[r.Vars()["variant_name"]]; found {
+		s, err := v.Start()
+		if err != nil {
+			return nil, err
+		}
+		p := s.Phase()
+		return &Variant{
+			Variant:    v,
+			OrderTypes: v.Parser.OrderTypes(),
+			Start: RenderPhase{
+				Year:   p.Year(),
+				Season: p.Season(),
+				Type:   p.Type(),
+				SCs:    s.SupplyCenters(),
+				Units:  s.Units(),
+			},
+			Graph: v.Graph(),
+		}, nil
+	}
+	return nil, HTTPErr{fmt.Sprintf("Variant %#v not found", r.Values()["variant_name"]), http.StatusNotFound}
+}
+
 func listVariants(w ResponseWriter, r Request) error {
 	apiLevel := auth.APILevel(r)
-	renderVariants := RenderVariants{}
+	renderVariants := Variants{}
 	for k, v := range variants.Variants {
 		// If the scheduled launch level for this variant is less than the API level of the client,
 		// just don't list it.
@@ -141,7 +178,7 @@ func listVariants(w ResponseWriter, r Request) error {
 			return err
 		}
 		p := s.Phase()
-		renderVariants[k] = RenderVariant{
+		renderVariants[k] = Variant{
 			Variant:    v,
 			OrderTypes: v.Parser.OrderTypes(),
 			Start: RenderPhase{
@@ -185,7 +222,7 @@ func variantMap(w ResponseWriter, r Request) error {
 
 func SetupRouter(r *mux.Router) {
 	router = r
-	Handle(r, "/Variants", []string{"GET"}, ListVariantsRoute, listVariants)
+	HandleResource(r, VariantResource)
 	Handle(r, "/Variant/{name}/Start", []string{"GET"}, VariantStartRoute, startVariant)
 	Handle(r, "/Variant/{name}/Resolve", []string{"POST"}, VariantResolveRoute, resolveVariant)
 	Handle(r, "/Variant/{name}/Map.svg", []string{"GET"}, VariantMapRoute, variantMap)
