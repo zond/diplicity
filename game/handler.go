@@ -847,7 +847,8 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 
 	idsToUpdate := []string{}
 	for i := 0; i < 50 && err == nil; i++ {
-		id, err := iterator.Next(nil)
+		var id *datastore.Key
+		id, err = iterator.Next(nil)
 		log.Infof(ctx, "Next produced %v, %v", id, err)
 		if err == nil {
 			idsToUpdate = append(idsToUpdate, id.StringID())
