@@ -856,9 +856,12 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 		log.Errorf(ctx, "Unable to iterate to next user stat: %v", err)
 		return err
 	}
-	if err := UpdateUserStatsASAP(ctx, idsToUpdate); err != nil {
-		log.Errorf(ctx, "Unable to enqueue user stat update: %v", err)
-		return err
+	log.Infof(ctx, "Found %+v", idsToUpdate)
+	if len(idsToUpdate) > 0 {
+		if err := UpdateUserStatsASAP(ctx, idsToUpdate); err != nil {
+			log.Errorf(ctx, "Unable to enqueue user stat update: %v", err)
+			return err
+		}
 	}
 	if err == nil {
 		cursor, err = iterator.Cursor()
