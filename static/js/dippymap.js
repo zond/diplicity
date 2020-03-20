@@ -138,6 +138,12 @@ function dippyMap(container) {
 		}
 		copy.setAttribute("transform", "translate(" + x + "," + y + ")");
 		el.appendChild(copy);
+		function clickHandler(e) {
+			handler(province);
+			e.preventDefault();
+			e.stopPropagation();
+		};
+		$(copy).bind('click', clickHandler);
 		function touchstartHandler(e) {
 			var touchendHandler = null;
 			var touchmoveHandler = null;
@@ -164,6 +170,7 @@ function dippyMap(container) {
 					that.unhighlightProvince(province); 
 				}
 				$(copy).unbind('touchstart', touchstartHandler);
+				$(copy).unbind('click', clickHandler);
 			});
 		}
 	};
