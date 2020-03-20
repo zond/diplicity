@@ -163,7 +163,7 @@ function dippyMap(container) {
 				if (!nohighlight) {
 					that.unhighlightProvince(province); 
 				}
-				$(copy).unbind('click', touchstartHandler);
+				$(copy).unbind('touchstart', touchstartHandler);
 			});
 		}
 	};
