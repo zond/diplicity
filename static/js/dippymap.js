@@ -140,8 +140,6 @@ function dippyMap(container) {
 		el.appendChild(copy);
 		function clickHandler(e) {
 			handler(province);
-			e.preventDefault();
-			e.stopPropagation();
 		};
 		$(copy).bind('click', clickHandler);
 		function touchstartHandler(e) {
@@ -153,8 +151,6 @@ function dippyMap(container) {
 			};
 			touchendHandler = function(e) {
 				handler(province);
-				e.preventDefault();
-				e.stopPropagation();
 				unregisterTouchHandlers();
 			};
 			$(copy).bind('touchend', touchendHandler);
