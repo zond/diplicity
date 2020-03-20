@@ -49,6 +49,7 @@ const (
 	VariantStartRoute   = "StartVariant"
 	VariantResolveRoute = "ResolveVariant"
 	VariantUnitsRoute   = "VariantUnits"
+	VariantFlagsRoute   = "VariantFlags"
 	VariantMapRoute     = "VariantMap"
 	RenderMapRoute      = "RenderMap"
 )
@@ -204,6 +205,37 @@ func listVariants(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func variantFlags(w ResponseWriter, r Request) error {
+	variantName := r.Vars()["variant_name"]
+	variant, found := variants.Variants[variantName]
+	if !found {
+		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), http.StatusNotFound}
+	}
+
+	nationName := r.Vars()["nation_name"]
+	nationFunc, found := variant.SVGFlags[godip.Nation(nationName)]
+	if !found {
+		return HTTPErr{fmt.Sprintf("Flag for nation %q not found in variant %q", nationName, variantName), http.StatusNotFound}
+	}
+
+	b, err := nationFunc()
+	if err != nil {
+		return err
+	}
+
+	etag := variant.SVGVersion
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Etag", etag)
+	w.Header().Set("Cache-Control", "max-age=3600") // 1 hour
+	if match := r.Req().Header.Get("If-None-Match"); match != "" && strings.Contains(match, etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return nil
+	}
+
+	_, err = w.Write(b)
+	return err
+}
+
 func variantUnits(w ResponseWriter, r Request) error {
 	variantName := r.Vars()["variant_name"]
 	variant, found := variants.Variants[variantName]
@@ -267,5 +299,6 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Variant/{name}/Resolve", []string{"POST"}, VariantResolveRoute, resolveVariant)
 	Handle(r, "/Variant/{name}/Map.svg", []string{"GET"}, VariantMapRoute, variantMap)
 	Handle(r, "/Variant/{variant_name}/Units/{unit_name}.svg", []string{"GET"}, VariantUnitsRoute, variantUnits)
+	Handle(r, "/Variant/{variant_name}/Flags/{nation_name}.svg", []string{"GET"}, VariantFlagsRoute, variantFlags)
 	Handle(r, "/Variant/{name}/Render", []string{"GET"}, RenderMapRoute, handleRenderMap)
 }
