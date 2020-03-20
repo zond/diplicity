@@ -138,15 +138,18 @@ function dippyMap(container) {
 		}
 		copy.setAttribute("transform", "translate(" + x + "," + y + ")");
 		el.appendChild(copy);
-		$(copy).bind('click', function() {
+		var handlerWrapper = function(e) {
 			handler(province);
-		});
+			e.preventDefault();
+			e.stopPropagation();
+		};
+		$(copy).bind('click', handlerWrapper);
 		if (!permanent) {
 			clickListenerRemovers.push(function() {
 				if (!nohighlight) {
 					that.unhighlightProvince(province); 
 				}
-				$(copy).unbind('click', handler);
+				$(copy).unbind('click', handlerWrapper);
 			});
 		}
 	};
