@@ -138,18 +138,32 @@ function dippyMap(container) {
 		}
 		copy.setAttribute("transform", "translate(" + x + "," + y + ")");
 		el.appendChild(copy);
-		var handlerWrapper = function(e) {
-			handler(province);
-			e.preventDefault();
-			e.stopPropagation();
+		function touchstartHandler(e) {
+			var touchendHandler = null;
+			var touchmoveHandler = null;
+			function unregisterTouchHandlers() {
+				$(copy).unbind('touchend', touchendHandler);
+				$(copy).unbind('touchmove', touchmoveHandler);
+			};
+			touchendHandler = function(e) {
+				handler(province);
+				e.preventDefault();
+				e.stopPropagation();
+				unregisterTouchHandlers();
+			};
+			$(copy).bind('touchend', touchendHandler);
+			touchmoveHandler = function(e) {
+				unregisterTouchHandlers();
+			};
+			$(copy).bind('touchmove', touchmoveHandler);
 		};
-		$(copy).bind('click', handlerWrapper);
+		$(copy).bind('touchstart', touchstartHandler);
 		if (!permanent) {
 			clickListenerRemovers.push(function() {
 				if (!nohighlight) {
 					that.unhighlightProvince(province); 
 				}
-				$(copy).unbind('click', handlerWrapper);
+				$(copy).unbind('click', touchstartHandler);
 			});
 		}
 	};
