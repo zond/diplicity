@@ -138,7 +138,7 @@ function dippyMap(container) {
 		}
 		copy.setAttribute("transform", "translate(" + x + "," + y + ")");
 		el.appendChild(copy);
-		if (!options.touch) {
+		if (!(options || {}).touch) {
 			function clickHandler(e) {
 				handler(province);
 			};
@@ -168,7 +168,7 @@ function dippyMap(container) {
 				if (!nohighlight) {
 					that.unhighlightProvince(province); 
 				}
-				if (options.touch) {
+				if ((options || {}).touch) {
 					$(copy).unbind('touchstart', touchstartHandler);
 				} else {
 					$(copy).unbind('click', clickHandler);
