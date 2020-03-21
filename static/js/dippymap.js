@@ -138,35 +138,41 @@ function dippyMap(container) {
 		}
 		copy.setAttribute("transform", "translate(" + x + "," + y + ")");
 		el.appendChild(copy);
-		function clickHandler(e) {
-			handler(province);
-		};
-		$(copy).bind('click', clickHandler);
-		function touchstartHandler(e) {
-			var touchendHandler = null;
-			var touchmoveHandler = null;
-			function unregisterTouchHandlers() {
-				$(copy).unbind('touchend', touchendHandler);
-				$(copy).unbind('touchmove', touchmoveHandler);
-			};
-			touchendHandler = function(e) {
+		if (!options.touch) {
+			function clickHandler(e) {
 				handler(province);
-				unregisterTouchHandlers();
 			};
-			$(copy).bind('touchend', touchendHandler);
-			touchmoveHandler = function(e) {
-				unregisterTouchHandlers();
+			$(copy).bind('click', clickHandler);
+		} else {
+			function touchstartHandler(e) {
+				var touchendHandler = null;
+				var touchmoveHandler = null;
+				function unregisterTouchHandlers() {
+					$(copy).unbind('touchend', touchendHandler);
+					$(copy).unbind('touchmove', touchmoveHandler);
+				};
+				touchendHandler = function(e) {
+					handler(province);
+					unregisterTouchHandlers();
+				};
+				$(copy).bind('touchend', touchendHandler);
+				touchmoveHandler = function(e) {
+					unregisterTouchHandlers();
+				};
+				$(copy).bind('touchmove', touchmoveHandler);
 			};
-			$(copy).bind('touchmove', touchmoveHandler);
-		};
-		$(copy).bind('touchstart', touchstartHandler);
+			$(copy).bind('touchstart', touchstartHandler);
+		}
 		if (!permanent) {
 			clickListenerRemovers.push(function() {
 				if (!nohighlight) {
 					that.unhighlightProvince(province); 
 				}
-				$(copy).unbind('touchstart', touchstartHandler);
-				$(copy).unbind('click', clickHandler);
+				if (options.touch) {
+					$(copy).unbind('touchstart', touchstartHandler);
+				} else {
+					$(copy).unbind('click', clickHandler);
+				}
 			});
 		}
 	};
