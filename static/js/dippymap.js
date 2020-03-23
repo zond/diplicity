@@ -304,6 +304,12 @@ function dippyMap(container) {
 			}
 		}
 	};
+	that.removeUnits = function(layer) {
+		if (typeof layer === 'undefined') {
+			layer = '#units';
+		}
+		$(el).find(layer).empty()
+	};
 	that.addUnit = function(sourceId, province, color, dislodged, build, layer) {
 		if (typeof layer === 'undefined') {
 			layer = '#units';
