@@ -146,6 +146,13 @@ func (rv *Variant) Item(r Request) *Item {
 			RouteParams: []string{"variant_name", rv.Name, "unit_name", string(unitName)},
 		}))
 	}
+	for nationName := range rv.SVGFlags {
+		item.AddLink(r.NewLink(Link{
+			Rel:         fmt.Sprintf("flag-%v", nationName),
+			Route:       VariantFlagsRoute,
+			RouteParams: []string{"variant_name", rv.Name, "nation_name", string(nationName)},
+		}))
+	}
 	return item
 }
 
