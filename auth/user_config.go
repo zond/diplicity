@@ -209,7 +209,7 @@ func (u *UserConfig) Item(r Request) *Item {
 				"A note field, which the server will populate with the reason the token was disabled.",
 				"An app field, which the app populating the token can use to identify tokens belonging to it to avoid removing/updating tokens belonging to other apps.",
 				"Two template fields, one for phase and one for message notifications.",
-				"Each token also has a `ReplaceToken` defined by the client. Defining a `ReplaceToken` other than the empty strings allows the client to replace the `Value` in the token without requiring a regular authentication token.",
+				"Each token also has a `ReplaceToken` defined by the client. Defining a `ReplaceToken` other than the empty string allows the client to replace the `Value` in the token without requiring a regular authentication token.",
 			},
 			[]string{
 				"ReplaceToken",
