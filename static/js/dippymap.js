@@ -1,4 +1,4 @@
-/function dippyMap(container) {
+function dippyMap(container) {
 	var that = this;
 	var el = null;
 	var SVG = "http://www.w3.org/2000/svg";
