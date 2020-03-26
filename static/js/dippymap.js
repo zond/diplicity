@@ -56,7 +56,7 @@ function dippyMap(container) {
 		var y = Number(match[2]);
 		var parentTransform = center.parent().attr("transform");
 		if (parentTransform != null) {
-			var transMatch = /^translate\(([\d.-]+),\s*([\d.-]+)\)$/.exec(parentTransform);
+			var transMatch = /^translate\(([\d.-eE]+),\s*([\d.-eE]+)\)$/.exec(parentTransform);
 			x += Number(transMatch[1]) - 1.5;
 			y += Number(transMatch[2]) - 2;
 		}
@@ -130,7 +130,7 @@ function dippyMap(container) {
 		while (curr != null && curr.getAttribute != null) {
 			var trans = curr.getAttribute("transform");
 			if (trans != null) {
-				var transMatch = /^translate\(([\d.-]+),\s*([\d.-]+)\)$/.exec(trans);
+				var transMatch = /^translate\(([\d.-eE]+),\s*([\d.-eE]+)\)$/.exec(trans);
 				x += Number(transMatch[1]);
 				y += Number(transMatch[2]);
 			}
