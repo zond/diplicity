@@ -265,23 +265,25 @@ function dippyMap(container) {
 			handler(province);
 		}
 		$(copy).bind("click", clickHandler);
-		function touchstartHandler(e) {
-			e.preventDefault();
-			var touchendHandler = null;
-			var touchmoveHandler = null;
-			function unregisterTouchHandlers() {
-				$(copy).unbind("touchend", touchendHandler);
-				$(copy).unbind("touchmove", touchmoveHandler);
+		if ((options || {}).touch) {
+			function touchstartHandler(e) {
+				e.preventDefault();
+				var touchendHandler = null;
+				var touchmoveHandler = null;
+				function unregisterTouchHandlers() {
+					$(copy).unbind("touchend", touchendHandler);
+					$(copy).unbind("touchmove", touchmoveHandler);
+				}
+				touchendHandler = function(e) {
+					handler(province);
+					unregisterTouchHandlers();
+				};
+				$(copy).bind("touchend", touchendHandler);
+				touchmoveHandler = function(e) {
+					unregisterTouchHandlers();
+				};
+				$(copy).bind("touchmove", touchmoveHandler);
 			}
-			touchendHandler = function(e) {
-				handler(province);
-				unregisterTouchHandlers();
-			};
-			$(copy).bind("touchend", touchendHandler);
-			touchmoveHandler = function(e) {
-				unregisterTouchHandlers();
-			};
-			$(copy).bind("touchmove", touchmoveHandler);
 		}
 		$(copy).bind("touchstart", touchstartHandler);
 		if (!permanent) {
@@ -289,7 +291,9 @@ function dippyMap(container) {
 				if (!nohighlight) {
 					that.unhighlightProvince(province);
 				}
-				$(copy).unbind("touchstart", touchstartHandler);
+				if ((option || {}).touch) {
+					$(copy).unbind("touchstart", touchstartHandler);
+				}
 				$(copy).unbind("click", clickHandler);
 			});
 		}
