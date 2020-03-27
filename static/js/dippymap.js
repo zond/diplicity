@@ -291,7 +291,7 @@ function dippyMap(container) {
 				if (!nohighlight) {
 					that.unhighlightProvince(province);
 				}
-				if ((option || {}).touch) {
+				if ((options || {}).touch) {
 					$(copy).unbind("touchstart", touchstartHandler);
 				}
 				$(copy).unbind("click", clickHandler);
