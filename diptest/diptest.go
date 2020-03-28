@@ -190,6 +190,14 @@ type Req struct {
 	body        []byte
 }
 
+func (e *Env) PostRoute(route string) *Req {
+	return &Req{
+		env:    e,
+		route:  route,
+		method: "POST",
+	}
+}
+
 func (e *Env) PutRoute(route string) *Req {
 	return &Req{
 		env:    e,

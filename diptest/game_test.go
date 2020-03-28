@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -572,6 +573,284 @@ func TestIndexCreation(t *testing.T) {
 	}
 }
 
+func testGameListFilters(t *testing.T, private bool) {
+	gameDesc := String("test-game")
+	env := NewEnv().SetUID(String("fake"))
+	env.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").Body(map[string]interface{}{
+		"Variant":            "Classical",
+		"NoMerge":            true,
+		"Desc":               gameDesc,
+		"MaxHated":           10,
+		"MaxHater":           10,
+		"MinReliability":     10,
+		"MinQuickness":       10,
+		"MinRating":          10,
+		"MaxRating":          100,
+		"PhaseLengthMinutes": 60,
+	}).Failure()
+	env.PutRoute(game.DevUserStatsUpdateRoute).RouteParams("user_id", env.GetUID()).Body(map[string]interface{}{
+		"UserId":      env.GetUID(),
+		"Reliability": 10,
+		"Quickness":   10,
+		"Hated":       0,
+		"Hater":       0,
+		"Glicko": &game.Glicko{
+			PracticalRating: 20,
+		},
+	}).Success()
+	gameURLString := env.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").Body(map[string]interface{}{
+		"Variant":            "Classical",
+		"NoMerge":            true,
+		"Private":            private,
+		"Desc":               gameDesc,
+		"MaxHated":           10,
+		"MaxHater":           10,
+		"MinReliability":     10,
+		"MinQuickness":       10,
+		"MinRating":          10,
+		"MaxRating":          100,
+		"PhaseLengthMinutes": time.Duration(60),
+	}).Success().
+		AssertEq(gameDesc, "Properties", "Desc").
+		Find("self", []string{"Links"}, []string{"Rel"}).GetValue("URL").(string)
+	gameURL, err := url.Parse(gameURLString)
+	if err != nil {
+		panic(err)
+	}
+	gameURL.RawQuery = ""
+	gameID := regexp.MustCompile(".*/Game/([^/]+).*").FindStringSubmatch(gameURL.String())[1]
+
+	env2 := NewEnv().SetUID(String("fake"))
+
+	env2.GetRoute(game.IndexRoute).Success().
+		Follow("open-games", "Links").Success().
+		AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	if private {
+		env2.GetURL(gameURL.String()).Success().
+			AssertNil("Properties", "FailedRequirements").
+			Follow("join", "Links").Body(map[string]string{}).Success()
+	} else {
+		gameResp := env2.GetURL(gameURL.String()).Success()
+		gameResp.
+			AssertLen(1, "Properties", "FailedRequirements")
+		gameResp.Find("MinRating", []string{"Properties", "FailedRequirements"}, nil)
+		gameResp.AssertNotFind("join", []string{"Links"}, []string{"Rel"})
+
+		env2.PostRoute("Member.Create").RouteParams("game_id", gameID).Body(map[string]string{}).Failure()
+
+		env2.PutRoute(game.DevUserStatsUpdateRoute).RouteParams("user_id", env2.GetUID()).Body(map[string]interface{}{
+			"UserId":      env.GetUID(),
+			"Reliability": 10,
+			"Quickness":   10,
+			"Hated":       0,
+			"Hater":       0,
+			"Glicko": &game.Glicko{
+				PracticalRating: 20,
+			},
+		}).Success()
+
+		env2.GetRoute(game.IndexRoute).Success().
+			Follow("open-games", "Links").Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env2.GetURL(gameURL.String()).Success().
+			AssertNil("Properties", "FailedRequirements").
+			Find("join", []string{"Links"}, []string{"Rel"})
+
+		for _, f := range []filter{
+			{
+				"conference-chat-disabled",
+				"false",
+				true,
+			},
+			{
+				"conference-chat-disabled",
+				"true",
+				false,
+			},
+			{
+				"group-chat-disabled",
+				"false",
+				true,
+			},
+			{
+				"group-chat-disabled",
+				"true",
+				false,
+			},
+			{
+				"private-chat-disabled",
+				"false",
+				true,
+			},
+			{
+				"private-chat-disabled",
+				"true",
+				false,
+			},
+			{
+				"phase-length-minutes",
+				"60:60",
+				true,
+			},
+			{
+				"phase-length-minutes",
+				"60:",
+				true,
+			},
+			{
+				"phase-length-minutes",
+				"61:",
+				false,
+			},
+			{
+				"phase-length-minutes",
+				":60",
+				true,
+			},
+			{
+				"phase-length-minutes",
+				":59",
+				false,
+			},
+			{
+				"phase-length-minutes",
+				"61:1000",
+				false,
+			},
+			{
+				"phase-length-minutes",
+				"0:59",
+				false,
+			},
+			{
+				"nation-allocation",
+				"1",
+				false,
+			},
+			{
+				"only-private",
+				"true",
+				false,
+			},
+			{
+				"variant",
+				"Classical",
+				true,
+			},
+			{
+				"variant",
+				"blapp",
+				false,
+			},
+			{
+				"min-reliability",
+				"5:15",
+				true,
+			},
+			{
+				"min-reliability",
+				"0:5",
+				false,
+			},
+			{
+				"min-reliability",
+				"15:20",
+				false,
+			},
+			{
+				"min-quickness",
+				"5:15",
+				true,
+			},
+			{
+				"min-quickness",
+				"0:5",
+				false,
+			},
+			{
+				"min-quickness",
+				"15:20",
+				false,
+			},
+			{
+				"min-rating",
+				"5:15",
+				true,
+			},
+			{
+				"min-rating",
+				"0:5",
+				false,
+			},
+			{
+				"min-rating",
+				"15:20",
+				false,
+			},
+			{
+				"max-rating",
+				"95:115",
+				true,
+			},
+			{
+				"max-rating",
+				"10:15",
+				false,
+			},
+			{
+				"max-rating",
+				"125:130",
+				false,
+			},
+			{
+				"max-hater",
+				"5:15",
+				true,
+			},
+			{
+				"max-hater",
+				"0:5",
+				false,
+			},
+			{
+				"max-hater",
+				"15:25",
+				false,
+			},
+			{
+				"max-hated",
+				"5:15",
+				true,
+			},
+			{
+				"max-hated",
+				"0:5",
+				false,
+			},
+			{
+				"max-hated",
+				"15:25",
+				false,
+			},
+		} {
+			res := env2.GetRoute(game.ListOpenGamesRoute).QueryParams(url.Values{
+				f.name: []string{f.value},
+			}).Success()
+			if f.wantFind {
+				res.Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			} else {
+				res.AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			}
+		}
+
+		env2.GetURL(gameURL.String()).Success().Follow("join", "Links").Body(map[string]string{}).Success()
+	}
+}
+
 func TestGameListFilters(t *testing.T) {
 	gameDesc := String("test-game")
 	env := NewEnv().SetUID(String("fake"))
@@ -618,6 +897,7 @@ func TestGameListFilters(t *testing.T) {
 		panic(err)
 	}
 	gameURL.RawQuery = ""
+	gameID := regexp.MustCompile(".*/Game/([^/]+).*").FindStringSubmatch(gameURL.String())[1]
 
 	env2 := NewEnv().SetUID(String("fake"))
 
@@ -625,9 +905,13 @@ func TestGameListFilters(t *testing.T) {
 		Follow("open-games", "Links").Success().
 		AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
-	env2.GetURL(gameURL.String()).Success().
-		AssertLen(1, "Properties", "FailedRequirements").
-		Find("MinRating", []string{"Properties", "FailedRequirements"}, nil)
+	gameResp := env2.GetURL(gameURL.String()).Success()
+	gameResp.
+		AssertLen(1, "Properties", "FailedRequirements")
+	gameResp.Find("MinRating", []string{"Properties", "FailedRequirements"}, nil)
+	gameResp.AssertNotFind("join", []string{"Links"}, []string{"Rel"})
+
+	env2.PostRoute("Member.Create").RouteParams("game_id", gameID).Body(map[string]string{}).Failure()
 
 	env2.PutRoute(game.DevUserStatsUpdateRoute).RouteParams("user_id", env2.GetUID()).Body(map[string]interface{}{
 		"UserId":      env.GetUID(),
@@ -645,7 +929,8 @@ func TestGameListFilters(t *testing.T) {
 		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
 	env2.GetURL(gameURL.String()).Success().
-		AssertNil("Properties", "FailedRequirements")
+		AssertNil("Properties", "FailedRequirements").
+		Find("join", []string{"Links"}, []string{"Rel"})
 
 	for _, f := range []filter{
 		{
@@ -833,6 +1118,9 @@ func TestGameListFilters(t *testing.T) {
 			res.AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 		}
 	}
+
+	env2.GetURL(gameURL.String()).Success().Follow("join", "Links").Body(map[string]string{}).Success()
+
 }
 
 type filter struct {
