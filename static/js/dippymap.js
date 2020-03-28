@@ -115,7 +115,7 @@ function dippyMap(container) {
 		"#FFFF00",
 		"#000000"
 	];
-	that.contrastNeutral = "#ffffff";
+	that.contrastNeutral = "#f4d7b5";
 	that.Poi = function(x, y) {
 		this.x = x;
 		this.y = y;
