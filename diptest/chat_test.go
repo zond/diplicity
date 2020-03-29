@@ -266,6 +266,28 @@ func TestDisabledChats(t *testing.T) {
 			})
 		})
 	})
+	t.Run("AllChats", func(t *testing.T) {
+		t.Run("Disabled", func(t *testing.T) {
+			withStartedGameOpts(func(opts map[string]interface{}) {
+				opts["DisablePrivateChat"] = true
+				opts["DisableGroupChat"] = true
+				opts["DisableConferenceChat"] = true
+			}, func() {
+				for idx := range startedGameEnvs {
+					for _, nat := range startedGameNats {
+						natMember := startedGames[idx].Find(nat, []string{"Properties", "Members"}, []string{"Nation"})
+						if nat == startedGameNats[idx] {
+							natMember.Find(startedGameEnvs[idx].GetUID(), []string{"User", "Id"})
+						} else {
+							natMember.Find("Anonymous", []string{"User", "Name"})
+							natMember.Find("", []string{"User", "Email"})
+							natMember.Find("", []string{"User", "Id"})
+						}
+					}
+				}
+			})
+		})
+	})
 }
 
 func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {

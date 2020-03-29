@@ -349,7 +349,7 @@ func (g *Games) RemoveBanned(ctx context.Context, uid string) ([][]Ban, error) {
 func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit int, name string, desc []string, route string) *Item {
 	gameItems := make(List, len(g))
 	for i := range g {
-		g[i].Redact(user)
+		g[i].Redact(user, r)
 		gameItems[i] = g[i].Item(r)
 	}
 	gamesItem := NewItem(gameItems).SetName(name).SetDesc([][]string{
@@ -756,10 +756,20 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	return game, nil
 }
 
-func (g *Game) Redact(viewer *auth.User) {
+func (g *Game) Redact(viewer *auth.User, r Request) {
 	_, isMember := g.GetMemberByUserId(viewer.Id)
-	for index := range g.Members {
-		g.Members[index].Redact(viewer, isMember, g.Started)
+	if !g.Finished && g.DisablePrivateChat && g.DisableGroupChat && g.DisableConferenceChat {
+		for index := range g.Members {
+			if g.Members[index].User.Id == viewer.Id {
+				g.Members[index].Redact(viewer, isMember, g.Started)
+			} else {
+				g.Members[index].Anonymize(r)
+			}
+		}
+	} else {
+		for index := range g.Members {
+			g.Members[index].Redact(viewer, isMember, g.Started)
+		}
 	}
 }
 
@@ -1001,7 +1011,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 		game.NewestPhaseMeta[i].Refresh()
 	}
 
-	game.Redact(user)
+	game.Redact(user, r)
 
 	game.Refresh()
 
