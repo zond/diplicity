@@ -94,11 +94,12 @@ func withStartedGameOptsAndOrders(conf func(m map[string]interface{}), orders or
 		Follow("create-game", "Links").
 		Body(opts).Success().
 		AssertEq(gameDesc, "Properties", "Desc")
+	gameID := envs[0].GetRoute(game.IndexRoute).Success().
+		Follow("my-staging-games", "Links").Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).GetValue("Properties", "ID").(string)
 
 	for _, env := range envs[1:] {
-		env.GetRoute(game.IndexRoute).Success().
-			Follow("open-games", "Links").Success().
-			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+		env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 			Follow("join", "Links").Body(map[string]interface{}{}).Success()
 	}
 
