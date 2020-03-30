@@ -851,6 +851,77 @@ func testGameListFilters(t *testing.T, private bool) {
 	}
 }
 
+func TestAnonymousGames(t *testing.T) {
+	t.Run("PrivateGames", func(t *testing.T) {
+		t.Run("Anonymous", func(t *testing.T) {
+			withStartedGameOpts(func(opts map[string]interface{}) {
+				opts["Private"] = true
+				opts["Anonymous"] = true
+			}, func() {
+				for idx := range startedGameEnvs {
+					for _, nat := range startedGameNats {
+						natMember := startedGames[idx].Find(nat, []string{"Properties", "Members"}, []string{"Nation"})
+						if nat == startedGameNats[idx] {
+							natMember.Find(startedGameEnvs[idx].GetUID(), []string{"User", "Id"})
+						} else {
+							natMember.Find("Anonymous", []string{"User", "Name"})
+							natMember.Find("", []string{"User", "Email"})
+							natMember.Find("", []string{"User", "Id"})
+						}
+					}
+				}
+			})
+		})
+		t.Run("NotAnonymous", func(t *testing.T) {
+			withStartedGameOpts(func(opts map[string]interface{}) {
+				opts["Private"] = true
+				opts["Anonymous"] = false
+				opts["DisablePrivateChat"] = true
+				opts["DisableGroupChat"] = true
+				opts["DisableConferenceChat"] = true
+			}, func() {
+				for idx := range startedGameEnvs {
+					for otherIdx, nat := range startedGameNats {
+						natMember := startedGames[idx].Find(nat, []string{"Properties", "Members"}, []string{"Nation"})
+						natMember.Find(startedGameEnvs[otherIdx].GetUID(), []string{"User", "Id"})
+						natMember.Find("Fakey Fakeson", []string{"User", "Name"})
+					}
+				}
+			})
+		})
+	})
+	t.Run("PublicGames", func(t *testing.T) {
+		t.Run("Anonymous", func(t *testing.T) {
+			withStartedGameOpts(func(opts map[string]interface{}) {
+				opts["Private"] = false
+				opts["Anonymous"] = true
+			}, func() {
+				for idx := range startedGameEnvs {
+					for otherIdx, nat := range startedGameNats {
+						natMember := startedGames[idx].Find(nat, []string{"Properties", "Members"}, []string{"Nation"})
+						natMember.Find(startedGameEnvs[otherIdx].GetUID(), []string{"User", "Id"})
+						natMember.Find("Fakey Fakeson", []string{"User", "Name"})
+					}
+				}
+			})
+		})
+		t.Run("NotAnonymous", func(t *testing.T) {
+			withStartedGameOpts(func(opts map[string]interface{}) {
+				opts["Private"] = false
+				opts["Anonymous"] = false
+			}, func() {
+				for idx := range startedGameEnvs {
+					for otherIdx, nat := range startedGameNats {
+						natMember := startedGames[idx].Find(nat, []string{"Properties", "Members"}, []string{"Nation"})
+						natMember.Find(startedGameEnvs[otherIdx].GetUID(), []string{"User", "Id"})
+						natMember.Find("Fakey Fakeson", []string{"User", "Name"})
+					}
+				}
+			})
+		})
+	})
+}
+
 func TestGameListFilters(t *testing.T) {
 	gameDesc := String("test-game")
 	env := NewEnv().SetUID(String("fake"))

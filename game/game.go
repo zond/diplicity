@@ -411,6 +411,7 @@ type Game struct {
 	DisableGroupChat      bool             `methods:"POST"`
 	DisablePrivateChat    bool             `methods:"POST"`
 	NationAllocation      AllocationMethod `methods:"POST"`
+	Anonymous             bool             `methods:"POST"`
 
 	NMembers int
 	Members  Members
@@ -480,6 +481,9 @@ func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
 		return false
 	}
 	if g.NationAllocation != o.NationAllocation {
+		return false
+	}
+	if g.Anonymous != o.Anonymous {
 		return false
 	}
 	if g.NMembers+o.NMembers > len(variants.Variants[g.Variant].Nations) {
@@ -659,6 +663,7 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 		Filter("DisableGroupChat=", game.DisableGroupChat).
 		Filter("DisablePrivateChat=", game.DisablePrivateChat).
 		Filter("NationAllocation=", game.NationAllocation).
+		Filter("Anonymous=", game.Anonymous).
 		GetAll(ctx, &games)
 	if err != nil {
 		return nil, err
@@ -758,7 +763,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 
 func (g *Game) Redact(viewer *auth.User, r Request) {
 	_, isMember := g.GetMemberByUserId(viewer.Id)
-	if !g.Finished && g.DisablePrivateChat && g.DisableGroupChat && g.DisableConferenceChat {
+	if !g.Finished && ((g.Private && g.Anonymous) || (!g.Private && g.DisablePrivateChat && g.DisableGroupChat && g.DisableConferenceChat)) {
 		for index := range g.Members {
 			if g.Members[index].User.Id == viewer.Id {
 				g.Members[index].Redact(viewer, isMember, g.Started)
