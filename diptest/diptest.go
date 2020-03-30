@@ -372,6 +372,7 @@ func (r *Result) find(match interface{}, paths [][]string) (*Result, error) {
 	for _, obj := range ary {
 		cpy := *r
 		cpy.Body = obj
+		cpy.BodyBytes = nil
 		subR, err := cpy.find(match, paths[1:])
 		if err == nil {
 			return subR, nil
