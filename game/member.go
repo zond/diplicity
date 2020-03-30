@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
@@ -56,6 +57,25 @@ func (m Member) Preferences() godip.Nations {
 
 func (m *Member) Item(r Request) *Item {
 	return NewItem(m).SetName(m.User.Name)
+}
+
+func (m *Member) Anonymize(r Request) {
+	m.GameAlias = ""
+	m.NationPreferences = ""
+	m.UnreadMessages = 0
+	m.NewestPhaseState = PhaseState{}
+	m.User.Email = ""
+	m.User.FamilyName = "John"
+	m.User.GivenName = "Doe"
+	m.User.Gender = ""
+	m.User.Hd = ""
+	m.User.Id = ""
+	m.User.Link = ""
+	m.User.Locale = ""
+	m.User.Name = "Anonymous"
+	m.User.Picture = DefaultScheme + "://" + r.Req().URL.Host + "/img/anon.png"
+	m.User.VerifiedEmail = false
+	m.User.ValidUntil = time.Time{}
 }
 
 func (m *Member) Redact(viewer *auth.User, isMember bool, started bool) {

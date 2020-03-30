@@ -851,6 +851,106 @@ func testGameListFilters(t *testing.T, private bool) {
 	}
 }
 
+func verifyAnonymous() {
+	for idx := range startedGameEnvs {
+		for _, nat := range startedGameNats {
+			natMember := startedGames[idx].Find(nat, []string{"Properties", "Members"}, []string{"Nation"})
+			if nat == startedGameNats[idx] {
+				natMember.Find(startedGameEnvs[idx].GetUID(), []string{"User", "Id"})
+			} else {
+				natMember.Find("Anonymous", []string{"User", "Name"})
+				natMember.Find("", []string{"User", "Email"})
+				natMember.Find("", []string{"User", "Id"})
+			}
+		}
+	}
+}
+
+func verifyNotAnonymous() {
+	for idx := range startedGameEnvs {
+		for otherIdx, nat := range startedGameNats {
+			natMember := startedGames[idx].Find(nat, []string{"Properties", "Members"}, []string{"Nation"})
+			natMember.Find(startedGameEnvs[otherIdx].GetUID(), []string{"User", "Id"})
+			natMember.Find("Fakey Fakeson", []string{"User", "Name"})
+		}
+	}
+}
+
+func TestAnonymousGames(t *testing.T) {
+	t.Run("PrivateGames", func(t *testing.T) {
+		t.Run("NotGunboat", func(t *testing.T) {
+			t.Run("Anonymous", func(t *testing.T) {
+				withStartedGameOpts(func(opts map[string]interface{}) {
+					opts["Private"] = true
+					opts["Anonymous"] = true
+				}, verifyAnonymous)
+			})
+			t.Run("NotAnonymous", func(t *testing.T) {
+				withStartedGameOpts(func(opts map[string]interface{}) {
+					opts["Private"] = true
+					opts["Anonymous"] = false
+				}, verifyNotAnonymous)
+			})
+		})
+		t.Run("Gunboat", func(t *testing.T) {
+			t.Run("Anonymous", func(t *testing.T) {
+				withStartedGameOpts(func(opts map[string]interface{}) {
+					opts["Private"] = true
+					opts["Anonymous"] = true
+					opts["DisablePrivateChat"] = true
+					opts["DisableGroupChat"] = true
+					opts["DisableConferenceChat"] = true
+				}, verifyAnonymous)
+			})
+			t.Run("NotAnonymous", func(t *testing.T) {
+				withStartedGameOpts(func(opts map[string]interface{}) {
+					opts["Private"] = true
+					opts["Anonymous"] = false
+					opts["DisablePrivateChat"] = true
+					opts["DisableGroupChat"] = true
+					opts["DisableConferenceChat"] = true
+				}, verifyNotAnonymous)
+			})
+		})
+	})
+	t.Run("PublicGames", func(t *testing.T) {
+		t.Run("NotGunboat", func(t *testing.T) {
+			t.Run("Anonymous", func(t *testing.T) {
+				withStartedGameOpts(func(opts map[string]interface{}) {
+					opts["Private"] = false
+					opts["Anonymous"] = true
+				}, verifyNotAnonymous)
+			})
+			t.Run("NotAnonymous", func(t *testing.T) {
+				withStartedGameOpts(func(opts map[string]interface{}) {
+					opts["Private"] = false
+					opts["Anonymous"] = false
+				}, verifyNotAnonymous)
+			})
+		})
+		t.Run("Gunboat", func(t *testing.T) {
+			t.Run("Anonymous", func(t *testing.T) {
+				withStartedGameOpts(func(opts map[string]interface{}) {
+					opts["Private"] = false
+					opts["Anonymous"] = true
+					opts["DisablePrivateChat"] = true
+					opts["DisableGroupChat"] = true
+					opts["DisableConferenceChat"] = true
+				}, verifyAnonymous)
+			})
+			t.Run("NotAnonymous", func(t *testing.T) {
+				withStartedGameOpts(func(opts map[string]interface{}) {
+					opts["Private"] = false
+					opts["Anonymous"] = false
+					opts["DisablePrivateChat"] = true
+					opts["DisableGroupChat"] = true
+					opts["DisableConferenceChat"] = true
+				}, verifyAnonymous)
+			})
+		})
+	})
+}
+
 func TestGameListFilters(t *testing.T) {
 	gameDesc := String("test-game")
 	env := NewEnv().SetUID(String("fake"))
