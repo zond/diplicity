@@ -65,15 +65,15 @@ func (m *Member) Anonymize(r Request) {
 	m.UnreadMessages = 0
 	m.NewestPhaseState = PhaseState{}
 	m.User.Email = ""
-	m.User.FamilyName = "John"
-	m.User.GivenName = "Doe"
+	m.User.FamilyName = "Doe"
+	m.User.GivenName = "John"
 	m.User.Gender = ""
 	m.User.Hd = ""
 	m.User.Id = ""
 	m.User.Link = ""
 	m.User.Locale = ""
 	m.User.Name = "Anonymous"
-	m.User.Picture = DefaultScheme + "://" + r.Req().URL.Host + "/img/anon.png"
+	m.User.Picture = DefaultScheme + "://" + r.Req().Host + "/img/anon.png"
 	m.User.VerifiedEmail = false
 	m.User.ValidUntil = time.Time{}
 }
