@@ -1028,9 +1028,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 	game.ActiveBans = activeBans[0]
 
 	filtered = Games{*game}
-	if !game.Private {
-		game.FailedRequirements = filtered.RemoveFiltered(userStats)[0]
-	}
+	game.FailedRequirements = filtered.RemoveFiltered(userStats)[0]
 
 	return game, nil
 }

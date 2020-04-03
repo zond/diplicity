@@ -276,19 +276,18 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 	if len(filterList) == 0 {
 		return nil, HTTPErr{"banned from this game", http.StatusForbidden}
 	}
-	if !game.Private {
-		userStats := &UserStats{}
-		if err := datastore.Get(ctx, UserStatsID(ctx, user.Id), userStats); err == datastore.ErrNoSuchEntity {
-			userStats.UserId = user.Id
-		} else if err != nil {
-			return nil, err
-		}
-		if failedRequirements := filterList.RemoveFiltered(userStats); len(failedRequirements[0]) > 0 {
-			return nil, HTTPErr{fmt.Sprintf("Can't join game, failed requirements: %+v", failedRequirements[0]), http.StatusPreconditionFailed}
-		}
-		if len(filterList) == 0 {
-			return nil, HTTPErr{"filtered from this game", http.StatusForbidden}
-		}
+
+	userStats := &UserStats{}
+	if err := datastore.Get(ctx, UserStatsID(ctx, user.Id), userStats); err == datastore.ErrNoSuchEntity {
+		userStats.UserId = user.Id
+	} else if err != nil {
+		return nil, err
+	}
+	if failedRequirements := filterList.RemoveFiltered(userStats); len(failedRequirements[0]) > 0 {
+		return nil, HTTPErr{fmt.Sprintf("Can't join game, failed requirements: %+v", failedRequirements[0]), http.StatusPreconditionFailed}
+	}
+	if len(filterList) == 0 {
+		return nil, HTTPErr{"filtered from this game", http.StatusForbidden}
 	}
 
 	member := &Member{}
