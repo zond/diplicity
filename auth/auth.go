@@ -576,9 +576,25 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			renderMessage(w, "Approval requested", fmt.Sprintf(`%s wants to act on your behalf on %s. Is this OK? Your decision will be remembered.</br>
-<form method="GET" action="%s"><input type="hidden" name="state" value="%s"><input type="submit" value="Yes"/></form>
-<form method="GET" action="%s"><input type="submit" value="No"/></form>`, strippedRedirectURL.String(), requestedURL.String(), approveURL.String(), cipher, redirectURL.String()))
+			renderMessage(w, "Approval requested", fmt.Sprintf(`
+      <span class="title">Play Diplomacy on the Diplicity server?</span>
+      <span class="messagetext">You just logged in to a Diplomacy game for the first time. Welcome!
+        <br /><br />
+        Your game uses the Diplicity server, and to prevent cheating, needs your
+        permission to play for you. Are you okay to use game
+        <u>%s</u> to play diplomacy?
+	  </span>
+
+      <div class="buttonlayout">
+        <form method="GET" action="%s">
+		  <input class="pure-material-button-text" style="align-self:flex-start" type="submit" value="Cancel"/>
+		</form>
+        <form method="GET" action="%s">
+	   	  <input type="hidden" name="state" value="%s">
+		  <input class="pure-material-button-text" style="align-self:flex-start" type="submit" value="Yes, I want to play"/>
+		</form>
+      </div>
+`, strippedRedirectURL.String(), redirectURL.String(), approveURL.String(), cipher))
 			return
 		} else if err != nil {
 			log.Errorf(ctx, "Unable to load approved redirect URL for %+v: %v", approvedURL, err)
@@ -846,65 +862,12 @@ func handleApproveRedirect(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func renderMessage(w http.ResponseWriter, title, msg string) {
+func renderMessage(w http.ResponseWriter, title, msg string) error {
 	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
-	fmt.Fprintf(w, `
-<html>
-<head>
-<title>%s</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<style>
-form {
-	display: inline;
-	margin: 0px;
-	padding: 0px;
-}
-.bubble {
-	position: relative;
-	padding: 15px;
-	margin: 1em 0 3em;
-	color: #000;
-	background: #f3961c;
-	background: -webkit-gradient(linear, 0 0, 0 100%%, from(#f9d835), to(#f3961c));
-	background: -moz-linear-gradient(#f9d835, #f3961c);
-	background: -o-linear-gradient(#f9d835, #f3961c);
-	background: linear-gradient(#f9d835, #f3961c);
-	-webkit-border-radius: 10px;
-	-moz-border-radius: 10px;
-	border-radius: 10px;
-	margin-left: 50px;
-	background: #f3961c;
-	bottom: -30px;
-}
-.bubble:after {
-	content: "";
-	position: absolute;
-	bottom: -15px;
-	left: -48px;
-	border-width: 15px 15px 0;
-	border-style: solid;
-	border-color: #f3961c transparent;
-	display: block;
-	width: 0;
-	top: auto;
-	bottom: 12px;
-	border-width: 10px 50px 10px 0;
-	border-color: transparent #f3961c;
-}
-</style>
-</head>
-<body>
-<table><tr>
-<td>
-<img width="100%%" src="/img/otto.png">
-</td>
-<td valign="bottom">
-<div class="bubble">%s</div>
-</td>
-</tr></table>
-</body>
-</html>
-`, title, msg)
+	return messageTemplate.Execute(w, map[string]string{
+		"Title":   title,
+		"Message": msg,
+	})
 }
 
 func unsubscribe(w ResponseWriter, r Request) error {
@@ -964,7 +927,7 @@ func unsubscribe(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	renderMessage(w, "Unsubscribed", fmt.Sprintf("%v has been unsubscribed from diplicity mail.", user.Name))
+	renderMessage(w, "Unsubscribed", fmt.Sprintf("<span class='messagetext'>%v has been unsubscribed from diplicity mail.</span>", user.Name))
 
 	return nil
 }
