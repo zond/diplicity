@@ -587,11 +587,11 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 
       <div class="buttonlayout">
         <form method="GET" action="%s">
-		  <input class="pure-material-button-text" style="align-self:flex-start" type="submit" value="Cancel"/>
-		</form>
-        <form method="GET" action="%s">
 	   	  <input type="hidden" name="state" value="%s">
 		  <input class="pure-material-button-text" style="align-self:flex-start" type="submit" value="Yes, I want to play"/>
+		</form>
+		 <form method="GET" action="%s">
+		  <input class="pure-material-button-text" style="align-self:flex-start" type="submit" value="Cancel"/>
 		</form>
       </div>
 `, strippedRedirectURL.String(), redirectURL.String(), approveURL.String(), cipher))
