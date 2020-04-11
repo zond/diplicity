@@ -575,7 +575,7 @@ type Message struct {
 	Age            time.Duration `datastore:"-" ticker:"true"`
 }
 
-func (m *Message) NotifyRecipients(ctx context.Context, host string, channel *Channel, game *Game) error {
+func (m *Message) NotifyRecipients(ctx context.Context, host string, game *Game) error {
 	// Build a slice of game state IDs.
 	stateIDs := []*datastore.Key{}
 	for _, nat := range m.ChannelMembers {
@@ -647,10 +647,6 @@ func (m *Message) Item(r Request) *Item {
 }
 
 func createMessageHelper(ctx context.Context, r Request, message *Message) error {
-	if strings.TrimSpace(message.Body) == "" {
-		return HTTPErr{"can not create empty messages", http.StatusBadRequest}
-	}
-
 	message.CreatedAt = time.Now()
 	sort.Sort(message.ChannelMembers)
 
@@ -676,30 +672,19 @@ func createMessageHelper(ctx context.Context, r Request, message *Message) error
 			}
 		}
 		game.ID = message.GameID
-		if !game.Started {
-			return HTTPErr{"game not yet started", http.StatusBadRequest}
-		}
-		if !game.Finished {
-			if game.DisablePrivateChat && len(message.ChannelMembers) == 2 {
-				return HTTPErr{"private chat disabled", http.StatusBadRequest}
-			}
-			if game.DisableGroupChat && len(message.ChannelMembers) > 2 && len(message.ChannelMembers) < len(variants.Variants[game.Variant].Nations) {
-				return HTTPErr{"group chat disabled", http.StatusBadRequest}
-			}
-			if game.DisableConferenceChat && len(message.ChannelMembers) == len(variants.Variants[game.Variant].Nations) {
-				return HTTPErr{"conference chat disabled", http.StatusBadRequest}
-			}
-		}
-		if message.ID, err = datastore.Put(ctx, datastore.NewIncompleteKey(ctx, messageKind, channelID), message); err != nil {
-			return err
-		}
 		channel.NMessages += 1
 		channel.LatestMessage = *message
-		if _, err = datastore.Put(ctx, channelID, channel); err != nil {
+		ids, err := datastore.PutMulti(
+			ctx,
+			[]*datastore.Key{channelID, datastore.NewIncompleteKey(ctx, messageKind, channelID)},
+			[]interface{}{channel, message},
+		)
+		if err != nil {
 			return err
 		}
+		message.ID = ids[1]
 
-		return message.NotifyRecipients(ctx, r.Req().Host, channel, game)
+		return message.NotifyRecipients(ctx, r.Req().Host, game)
 	}, &datastore.TransactionOptions{XG: true})
 }
 
@@ -733,24 +718,55 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 		return nil, err
 	}
 
-	if !message.ChannelMembers.Includes(member.Nation) {
-		return nil, HTTPErr{"can only send messages to member channels", http.StatusForbidden}
-	}
-
-	for _, channelMember := range message.ChannelMembers {
-		if !Nations(variants.Variants[game.Variant].Nations).Includes(channelMember) {
-			return nil, HTTPErr{"unknown channel member", http.StatusBadRequest}
-		}
-	}
-
 	message.GameID = gameID
 	message.Sender = member.Nation
+
+	if err := validateMessage(ctx, message); err != nil {
+		return nil, err
+	}
 
 	if err := createMessageHelper(ctx, r, message); err != nil {
 		return nil, err
 	}
 
 	return message, nil
+}
+
+func validateMessage(ctx context.Context, message *Message) error {
+	if strings.TrimSpace(message.Body) == "" {
+		return HTTPErr{"can not create empty messages", http.StatusBadRequest}
+	}
+
+	if !message.ChannelMembers.Includes(message.Sender) {
+		return HTTPErr{"can only send messages to member channels", http.StatusForbidden}
+	}
+
+	game := &Game{}
+	if err := datastore.Get(ctx, message.GameID, game); err != nil {
+		return err
+	}
+	if !game.Started {
+		return HTTPErr{"game not yet started", http.StatusBadRequest}
+	}
+	if !game.Finished {
+		if game.DisablePrivateChat && len(message.ChannelMembers) == 2 {
+			return HTTPErr{"private chat disabled", http.StatusBadRequest}
+		}
+		if game.DisableGroupChat && len(message.ChannelMembers) > 2 && len(message.ChannelMembers) < len(variants.Variants[game.Variant].Nations) {
+			return HTTPErr{"group chat disabled", http.StatusBadRequest}
+		}
+		if game.DisableConferenceChat && len(message.ChannelMembers) == len(variants.Variants[game.Variant].Nations) {
+			return HTTPErr{"conference chat disabled", http.StatusBadRequest}
+		}
+	}
+
+	for _, channelMember := range message.ChannelMembers {
+		if !Nations(variants.Variants[game.Variant].Nations).Includes(channelMember) {
+			return HTTPErr{"unknown channel member", http.StatusBadRequest}
+		}
+	}
+
+	return nil
 }
 
 func publicChannel(variant string) Nations {
@@ -1183,13 +1199,13 @@ func receiveMail(w ResponseWriter, r Request) error {
 		Body:           strings.Join(okLines, "\n"),
 	}
 
-	if strings.TrimSpace(newMessage.Body) == "" {
-		e := "Unable to send empty message."
+	log.Infof(ctx, "Received %v via email", PP(newMessage))
+
+	if err := validateMessage(ctx, newMessage); err != nil {
+		e := fmt.Sprintf("Unable to create message %+v: %v", newMessage, err)
 		log.Errorf(ctx, e)
 		return sendEmailError(ctx, from, e)
 	}
-
-	log.Infof(ctx, "Received %v via email", PP(newMessage))
 
 	return createMessageHelper(ctx, r, newMessage)
 }

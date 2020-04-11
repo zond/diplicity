@@ -50,6 +50,7 @@ func init() {
 const (
 	maxLimit                    = 128
 	MAX_STAGING_GAME_INACTIVITY = 30 * 24 * time.Hour
+	DiplicitySender             = "Diplicity"
 )
 
 const (
@@ -96,6 +97,7 @@ const (
 	ReScheduleAllRoute                  = "ReScheduleAll"
 	RemoveDIASFromSoloGamesRoute        = "RemoveDIASFromSoloGamesRoute"
 	ReComputeAllDIASUsersRoute          = "ReComputeAllDIASUsers"
+	SendSystemMessageRoute              = "SendSystemMessage"
 )
 
 type userStatsHandler struct {
@@ -880,6 +882,49 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 	return nil
 }
 
+func handleSendSystemMessage(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return err
+	}
+	game := &Game{}
+	if err := datastore.Get(ctx, gameID, game); err != nil {
+		return err
+	}
+
+	recipient := r.Vars()["recipient"]
+	if !Nations(dipVariants.Variants[game.Variant].Nations).Includes(godip.Nation(recipient)) {
+		return HTTPErr{"unknown recipient", http.StatusNotFound}
+	}
+
+	newMessage := &Message{
+		GameID:         gameID,
+		ChannelMembers: Nations{godip.Nation(recipient), DiplicitySender},
+		Sender:         DiplicitySender,
+		Body:           r.Req().FormValue("body"),
+	}
+
+	return createMessageHelper(ctx, r, newMessage)
+}
+
 func handleReSchedule(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1019,6 +1064,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
 	Handle(r, "/_remove-dias-from-solo-games", []string{"GET"}, RemoveDIASFromSoloGamesRoute, handleRemoveDIASFromSoloGames)
+	Handle(r, "/Game/{game_id}/Channels/{recipient}/_system-message", []string{"POST"}, SendSystemMessageRoute, handleSendSystemMessage)
 	Handle(r, "/_re-compute-all-dias-users", []string{"GET"}, ReComputeAllDIASUsersRoute, handleReComputeAllDIASUsers)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
