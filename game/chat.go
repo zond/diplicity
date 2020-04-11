@@ -480,6 +480,7 @@ type Channel struct {
 	Members        Nations
 	NMessages      int
 	NMessagesSince NMessagesSince `datastore:"-"`
+	LatestMessage  time.Time
 }
 
 type SeenMarker struct {
@@ -535,12 +536,34 @@ func (c *Channel) CountSince(ctx context.Context, since time.Time) error {
 	if err != nil {
 		return err
 	}
-	count, err := datastore.NewQuery(messageKind).Ancestor(channelID).Filter("CreatedAt>", since).Count(ctx)
-	if err != nil {
-		return err
+	errors := make(chan error)
+	go func() {
+		count, err := datastore.NewQuery(messageKind).Ancestor(channelID).Filter("CreatedAt>", since).Count(ctx)
+		if err != nil {
+			errors <- err
+			return
+		}
+		c.NMessagesSince.Since = since
+		c.NMessagesSince.NMessages = count
+		errors <- nil
+	}()
+	go func() {
+		latest := Messages{}
+		_, err := datastore.NewQuery(messageKind).Ancestor(channelID).Order("-CreatedAt").Limit(1).GetAll(ctx, &latest)
+		if err != nil {
+			errors <- err
+			return
+		}
+		if len(latest) > 0 {
+			c.LatestMessage = latest[0].CreatedAt
+		}
+		errors <- nil
+	}()
+	err1 := <-errors
+	err2 := <-errors
+	if err1 != nil || err2 != nil {
+		return fmt.Errorf("When counting messages in channel: %v, %v", err1, err2)
 	}
-	c.NMessagesSince.Since = since
-	c.NMessagesSince.NMessages = count
 	return nil
 }
 
