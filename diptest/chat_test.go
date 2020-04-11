@@ -126,31 +126,30 @@ func testChat(t *testing.T) {
 	})
 
 	t.Run("TestNMessages", func(t *testing.T) {
-		oldLatestMessageTime := startedGames[0].Follow("channels", "Links").Success().
+		oldLatestMessage := startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"}).
 			AssertEq(1.0, "Properties", "NMessages").
 			AssertEq(0.0, "Properties", "NMessagesSince", "NMessages").
-			GetValue("Properties", "LatestMessage").(string)
+			GetValue("Properties", "LatestMessage").(map[string]interface{})
 		bdy := String("body")
 		newMess := startedGames[1].Follow("channels", "Links").Success().
 			Follow("message", "Links").Body(map[string]interface{}{
 			"Body":           bdy,
 			"ChannelMembers": members,
-		}).Success()
+		}).Success().GetValue("Properties").(map[string]interface{})
 		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
 			AssertEq(float64(0), "UnreadMessages")
-		latestMessageTime := startedGames[0].Follow("channels", "Links").Success().
+		latestMessage := startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"}).
-			GetValue("Properties", "LatestMessage").(string)
-		if latestMessageTime == oldLatestMessageTime {
-			t.Errorf("Got LatestMessage %v, wanted something different from %v", latestMessageTime, oldLatestMessageTime)
+			GetValue("Properties", "LatestMessage").(map[string]interface{})
+		if latestMessage["Body"].(string) == oldLatestMessage["Body"].(string) {
+			t.Errorf("Got LatestMessage %+v, wanted something different from %+v", latestMessage, oldLatestMessage)
 		}
-		newMessCreatedAt := newMess.GetValue("Properties", "CreatedAt").(string)
-		if latestMessageTime[:len("2020-04-11T06:50:35.09194")] != newMessCreatedAt[:len("2020-04-11T06:50:35.09194")] {
-			t.Errorf("Got LatestMessage %v, wanted %v", latestMessageTime, newMessCreatedAt)
+		if latestMessage["Body"].(string) != newMess["Body"].(string) {
+			t.Errorf("Got LatestMessage %+v, wanted %v", latestMessage, newMess)
 		}
 		startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"}).

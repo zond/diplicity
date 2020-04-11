@@ -480,7 +480,7 @@ type Channel struct {
 	Members        Nations
 	NMessages      int
 	NMessagesSince NMessagesSince `datastore:"-"`
-	LatestMessage  time.Time
+	LatestMessage  Message
 }
 
 type SeenMarker struct {
@@ -555,7 +555,7 @@ func (c *Channel) CountSince(ctx context.Context, since time.Time) error {
 			return
 		}
 		if len(latest) > 0 {
-			c.LatestMessage = latest[0].CreatedAt
+			c.LatestMessage = latest[0]
 		}
 		errors <- nil
 	}()
