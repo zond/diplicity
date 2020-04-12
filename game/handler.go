@@ -25,6 +25,7 @@ import (
 
 var (
 	router                   = mux.NewRouter()
+	reScoreFunc              *DelayFunc
 	resaveFunc               *DelayFunc
 	ejectMemberFunc          *DelayFunc
 	recalculateDIASUsersFunc *DelayFunc
@@ -39,6 +40,7 @@ var (
 
 func init() {
 	resaveFunc = NewDelayFunc("game-resave", resave)
+	reScoreFunc = NewDelayFunc("game-reScore", reScore)
 	ejectMemberFunc = NewDelayFunc("game-ejectMember", ejectMember)
 	recalculateDIASUsersFunc = NewDelayFunc("", recalculateDIASUsers)
 	AllocationResource = &Resource{
@@ -85,6 +87,7 @@ const (
 	DevUserStatsUpdateRoute             = "DevUserStatsUpdate"
 	ReceiveMailRoute                    = "ReceiveMail"
 	RenderPhaseMapRoute                 = "RenderPhaseMap"
+	ReScoreRoute                        = "ReScore"
 	ReRateRoute                         = "ReRate"
 	GlobalStatsRoute                    = "GlobalStats"
 	RssRoute                            = "Rss"
@@ -588,6 +591,42 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func reScore(ctx context.Context, counter int, cursorString string) error {
+	log.Infof(ctx, "reScore(..., %v, %q)", counter, cursorString)
+
+	q := datastore.NewQuery(gameResultKind)
+	if cursorString != "" {
+		cursor, err := datastore.DecodeCursor(cursorString)
+		if err != nil {
+			return err
+		}
+		q = q.Start(cursor)
+	}
+	iterator := q.Run(ctx)
+
+	gameResult := &GameResult{}
+	if _, err := iterator.Next(gameResult); err == datastore.Done {
+		log.Infof(ctx, "reScore(..., %v, %q) is DONE", counter, cursorString)
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	gameResult.AssignScores()
+
+	if err := gameResult.Save(ctx); err != nil {
+		return err
+	}
+
+	cursor, err := iterator.Cursor()
+	if err != nil {
+		return err
+	}
+	reScoreFunc.EnqueueIn(ctx, 0, counter+1, cursor.String())
+
+	return nil
+}
+
 func resave(ctx context.Context, kind string, counter int, cursorString string) error {
 	log.Infof(ctx, "resave(..., %q, %v, %q)", kind, counter, cursorString)
 
@@ -657,6 +696,30 @@ func resave(ctx context.Context, kind string, counter int, cursorString string) 
 	} else if err != datastore.Done {
 		return err
 	}
+
+	return nil
+}
+
+func handleReScore(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	reScoreFunc.EnqueueIn(ctx, 0, 0, "")
 
 	return nil
 }
@@ -1060,6 +1123,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-save", []string{"GET"}, ResaveRoute, handleResave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
+	Handle(r, "/_re-score", []string{"GET"}, ReScoreRoute, handleReScore)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
