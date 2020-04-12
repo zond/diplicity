@@ -85,21 +85,23 @@ func (g *GameResult) AssignScores() {
 		tributeSum := 0.0
 		topperNations := map[godip.Nation]bool{}
 		for i := range g.Scores {
-			survivalPart := 66.0 / float64(survivors)
-			scPart := scorePerSC * float64(g.Scores[i].SCs)
-			g.Scores[i].Explanation = fmt.Sprintf("Survival:%v\nSupply centers:%v\n", survivalPart, scPart)
-			g.Scores[i].Score = scPart + survivalPart
-			if g.Scores[i].SCs == topperSize {
-				topperNations[g.Scores[i].Member] = true
-			} else {
-				if g.Scores[i].Score > float64(tributePerSurvivor) {
-					tributeSum += float64(tributePerSurvivor)
-					g.Scores[i].Explanation += fmt.Sprintf("Tribute:%v", tributePerSurvivor)
-					g.Scores[i].Score -= float64(tributePerSurvivor)
+			if g.Scores[i].SCs > 0 {
+				survivalPart := 66.0 / float64(survivors)
+				scPart := scorePerSC * float64(g.Scores[i].SCs)
+				g.Scores[i].Explanation = fmt.Sprintf("Survival:%v\nSupply centers:%v\n", survivalPart, scPart)
+				g.Scores[i].Score = scPart + survivalPart
+				if g.Scores[i].SCs == topperSize {
+					topperNations[g.Scores[i].Member] = true
 				} else {
-					tributeSum += g.Scores[i].Score
-					g.Scores[i].Explanation += fmt.Sprintf("Tribute:%v", g.Scores[i].Score)
-					g.Scores[i].Score = 0
+					if g.Scores[i].Score > float64(tributePerSurvivor) {
+						tributeSum += float64(tributePerSurvivor)
+						g.Scores[i].Explanation += fmt.Sprintf("Tribute:%v", tributePerSurvivor)
+						g.Scores[i].Score -= float64(tributePerSurvivor)
+					} else {
+						tributeSum += g.Scores[i].Score
+						g.Scores[i].Explanation += fmt.Sprintf("Tribute:%v", g.Scores[i].Score)
+						g.Scores[i].Score = 0
+					}
 				}
 			}
 		}
