@@ -34,6 +34,7 @@ var (
 	asyncResolvePhaseFunc             *DelayFunc
 	timeoutResolvePhaseFunc           *DelayFunc
 	planPhaseTimeoutFunc              *DelayFunc
+	sendPhaseDeadlineWarningFunc      *DelayFunc
 	sendPhaseNotificationsToUsersFunc *DelayFunc
 	sendPhaseNotificationsToFCMFunc   *DelayFunc
 	sendPhaseNotificationsToMailFunc  *DelayFunc
@@ -49,6 +50,7 @@ func init() {
 	sendPhaseNotificationsToMailFunc = NewDelayFunc("game-sendPhaseNotificationsToMail", sendPhaseNotificationsToMail)
 	ejectProbationariesFunc = NewDelayFunc("game-ejectProbationaries", ejectProbationaries)
 	planPhaseTimeoutFunc = NewDelayFunc("game-planPhaseTimeout", planPhaseTimeout)
+	sendPhaseDeadlineWarningFunc = NewDelayFunc("game-sendPhaseDeadlineWarning", sendPhaseDeadlineWarning)
 
 	PhaseResource = &Resource{
 		Load:     loadPhase,
@@ -379,6 +381,49 @@ func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdina
 	return resolvePhaseHelper(ctx, gameID, phaseOrdinal, true)
 }
 
+func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, nation string) error {
+	log.Infof(ctx, "sendPhaseDeadlineWarning(..., %v, %v, %v)", gameID, phaseOrdinal, nation)
+
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		log.Errorf(ctx, "PhaseID(..., %v, %v): %v, %v; fix the PhaseID func", gameID, phaseOrdinal, phaseID, err)
+		return err
+	}
+
+	game := &Game{}
+	phase := &Phase{}
+	keys := []*datastore.Key{gameID, phaseID}
+	values := []interface{}{game, phase}
+	if err := datastore.GetMulti(ctx, keys, values); err != nil {
+		log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, values, err)
+		return err
+	}
+
+	member, found := game.GetMemberByNation(godip.Nation(nation))
+	if !found {
+		log.Errorf(ctx, "game.GetMemberByNation(%v): %v, %v; wtf?", nation, member, found)
+		return nil
+	}
+
+	if !game.Finished && !phase.Resolved && !member.NewestPhaseState.ReadyToResolve {
+		newMessage := &Message{
+			GameID:         gameID,
+			ChannelMembers: Nations{godip.Nation(nation), DiplicitySender},
+			Sender:         DiplicitySender,
+			Body: fmt.Sprintf(
+				"This is a reminder that the current phase will resolve in %v (at %v), and you haven't declared that you are ready for the next phase. If you don't declare ready you will lose Quickness score. If you don't declare ready and don't provide any orders you will lose Reliability score.",
+				phase.DeadlineAt.Sub(time.Now()),
+				phase.DeadlineAt),
+		}
+		if err := createMessageHelper(ctx, phase.Host, newMessage); err != nil {
+			log.Errorf(ctx, "createMessageHelper(..., %v, %+v): %v; fix it?", phase.Host, newMessage, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
 func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
 	log.Infof(ctx, "planPhaseTimeout(..., %v, %v)", gameID, phaseOrdinal)
 
@@ -400,6 +445,27 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 	if err := timeoutResolvePhaseFunc.EnqueueAt(ctx, phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal); err != nil {
 		log.Errorf(ctx, "timeoutResolvePhaseFunc.EnqueueAt(..., %v, %v, %v): %v; hope taskqueues get fixed", phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal)
 		return err
+	}
+
+	userConfigKeys := make([]*datastore.Key, len(game.Members))
+	for idx := range userConfigKeys {
+		userConfigKeys[idx] = auth.UserConfigID(ctx, auth.UserID(ctx, game.Members[idx].User.Id))
+	}
+	userConfigs := make([]auth.UserConfig, len(game.Members))
+	if err := datastore.GetMulti(ctx, userConfigKeys, userConfigs); err != nil {
+		log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", userConfigKeys, userConfigs, err)
+		return err
+	}
+
+	for idx, userConfig := range userConfigs {
+		if userConfig.PhaseDeadlineWarningMinutesAhead > 0 {
+			sendAt := phase.DeadlineAt.Add(-time.Minute * time.Duration(userConfig.PhaseDeadlineWarningMinutesAhead))
+			if sendAt.After(time.Now()) {
+				if err := sendPhaseDeadlineWarningFunc.EnqueueAt(ctx, sendAt, gameID, phase.PhaseOrdinal, game.Members[idx].Nation); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	return nil

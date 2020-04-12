@@ -646,7 +646,7 @@ func (m *Message) Item(r Request) *Item {
 	return NewItem(m).SetName(string(m.Sender))
 }
 
-func createMessageHelper(ctx context.Context, r Request, message *Message) error {
+func createMessageHelper(ctx context.Context, host string, message *Message) error {
 	message.CreatedAt = time.Now()
 	sort.Sort(message.ChannelMembers)
 
@@ -684,7 +684,7 @@ func createMessageHelper(ctx context.Context, r Request, message *Message) error
 		}
 		message.ID = ids[1]
 
-		return message.NotifyRecipients(ctx, r.Req().Host, game)
+		return message.NotifyRecipients(ctx, host, game)
 	}, &datastore.TransactionOptions{XG: true})
 }
 
@@ -725,7 +725,7 @@ func createMessage(w ResponseWriter, r Request) (*Message, error) {
 		return nil, err
 	}
 
-	if err := createMessageHelper(ctx, r, message); err != nil {
+	if err := createMessageHelper(ctx, r.Req().Host, message); err != nil {
 		return nil, err
 	}
 
@@ -1207,5 +1207,5 @@ func receiveMail(w ResponseWriter, r Request) error {
 		return sendEmailError(ctx, from, e)
 	}
 
-	return createMessageHelper(ctx, r, newMessage)
+	return createMessageHelper(ctx, r.Req().Host, newMessage)
 }

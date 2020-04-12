@@ -1,4 +1,6 @@
 queue:
+    - name: game-sendPhaseDeadlineWarning
+      rate: 500/s
     - name: game-planPhaseTimeout
       rate: 500/s
     - name: game-ejectMember

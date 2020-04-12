@@ -981,7 +981,7 @@ func handleSendSystemMessage(w ResponseWriter, r Request) error {
 		Body:           r.Req().FormValue("body"),
 	}
 
-	return createMessageHelper(ctx, r, newMessage)
+	return createMessageHelper(ctx, r.Req().Host, newMessage)
 }
 
 func handleReSchedule(w ResponseWriter, r Request) error {
