@@ -121,7 +121,7 @@ func (g *GameResult) AssignScores() {
 	for i := range g.Scores {
 		sum += g.Scores[i].Score
 	}
-	if int(sum*10000) != 1000000 {
+	if int(sum*100) != 10000 {
 		panic(fmt.Errorf("Tribute algorithm not implemented correctly, wanted sum of scores to be 100, but got %v: %+v", sum, g.Scores))
 	}
 }
