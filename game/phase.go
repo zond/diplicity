@@ -33,6 +33,7 @@ import (
 var (
 	asyncResolvePhaseFunc             *DelayFunc
 	timeoutResolvePhaseFunc           *DelayFunc
+	planPhaseTimeoutFunc              *DelayFunc
 	sendPhaseNotificationsToUsersFunc *DelayFunc
 	sendPhaseNotificationsToFCMFunc   *DelayFunc
 	sendPhaseNotificationsToMailFunc  *DelayFunc
@@ -47,6 +48,7 @@ func init() {
 	sendPhaseNotificationsToFCMFunc = NewDelayFunc("game-sendPhaseNotificationsToFCM", sendPhaseNotificationsToFCM)
 	sendPhaseNotificationsToMailFunc = NewDelayFunc("game-sendPhaseNotificationsToMail", sendPhaseNotificationsToMail)
 	ejectProbationariesFunc = NewDelayFunc("game-ejectProbationaries", ejectProbationaries)
+	planPhaseTimeoutFunc = NewDelayFunc("game-planPhaseTimeout", planPhaseTimeout)
 
 	PhaseResource = &Resource{
 		Load:     loadPhase,
@@ -375,6 +377,28 @@ func asyncResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal 
 
 func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
 	return resolvePhaseHelper(ctx, gameID, phaseOrdinal, true)
+}
+
+func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
+	log.Infof(ctx, "planPhaseTimeout(..., %v, %v)", gameID, phaseOrdinal)
+
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		log.Errorf(ctx, "PhaseID(..., %v, %v): %v, %v; fix the PhaseID func", gameID, phaseOrdinal, phaseID, err)
+		return err
+	}
+
+	game := &Game{}
+	phase := &Phase{}
+	keys := []*datastore.Key{gameID, phaseID}
+	values := []interface{}{game, phase}
+	ids, err := datastore.GetMulti(ctx, keys, values)
+	if err != nil {
+		log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, values, err)
+		return err
+	}
+
+	return timeoutResolvePhaseFunc.EnqueueAt(ctx, p.DeadlineAt, p.GameID, p.PhaseOrdinal)
 }
 
 func resolvePhaseHelper(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, timeoutTriggered bool) error {
@@ -1182,7 +1206,7 @@ func (p *Phase) Item(r Request) *Item {
 }
 
 func (p *Phase) ScheduleResolution(ctx context.Context) error {
-	return timeoutResolvePhaseFunc.EnqueueAt(ctx, p.DeadlineAt, p.GameID, p.PhaseOrdinal)
+	return planPhaseTimeoutFunc.EnqueueIn(ctx, 0, p.GameID, p.PhaseOrdinal)
 }
 
 func PhaseID(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) (*datastore.Key, error) {

@@ -172,10 +172,11 @@ func (m *MailConfig) Validate() error {
 }
 
 type UserConfig struct {
-	UserId     string
-	FCMTokens  []FCMToken `methods:"PUT"`
-	MailConfig MailConfig `methods:"PUT"`
-	Colors     []string   `methods:"PUT"`
+	UserId                           string
+	FCMTokens                        []FCMToken `methods:"PUT"`
+	MailConfig                       MailConfig `methods:"PUT"`
+	Colors                           []string   `methods:"PUT"`
+	PhaseDeadlineWarningMinutesAhead int        `methods:"PUT"`
 }
 
 var UserConfigResource = &Resource{
