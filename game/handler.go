@@ -622,9 +622,7 @@ func reScore(ctx context.Context, counter int, cursorString string) error {
 	if err != nil {
 		return err
 	}
-	reScoreFunc.EnqueueIn(ctx, 0, counter+1, cursor.String())
-
-	return nil
+	return reScoreFunc.EnqueueIn(ctx, 0, counter+1, cursor.String())
 }
 
 func resave(ctx context.Context, kind string, counter int, cursorString string) error {
@@ -692,7 +690,9 @@ func resave(ctx context.Context, kind string, counter int, cursorString string) 
 		if err != nil {
 			return err
 		}
-		resaveFunc.EnqueueIn(ctx, 0, kind, counter, cursor.String())
+		if err := resaveFunc.EnqueueIn(ctx, 0, kind, counter, cursor.String()); err != nil {
+			return err
+		}
 	} else if err != datastore.Done {
 		return err
 	}
@@ -719,9 +719,7 @@ func handleReScore(w ResponseWriter, r Request) error {
 		}
 	}
 
-	reScoreFunc.EnqueueIn(ctx, 0, 0, "")
-
-	return nil
+	return reScoreFunc.EnqueueIn(ctx, 0, 0, "")
 }
 
 func handleResave(w ResponseWriter, r Request) error {
@@ -750,9 +748,7 @@ func handleResave(w ResponseWriter, r Request) error {
 		return fmt.Errorf("Kind %q not supported by resave", kind)
 	}
 
-	resaveFunc.EnqueueIn(ctx, 0, kind, 0, "")
-
-	return nil
+	return resaveFunc.EnqueueIn(ctx, 0, kind, 0, "")
 }
 
 func reScheduleAll(w ResponseWriter, r Request, onlyBroken bool) error {
@@ -1093,7 +1089,9 @@ func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
 		for _, member := range game.Members {
 			if userMap[member.User.Id].ValidUntil.Before(minValidUntil) {
 				log.Infof(ctx, "%q has ValidUntil older than %v, ejecting from %v (%v)", member.User.Email, minValidUntil, game.ID, game.Desc)
-				ejectMemberFunc.EnqueueIn(ctx, 0, game.ID, member.User.Id)
+				if err := ejectMemberFunc.EnqueueIn(ctx, 0, game.ID, member.User.Id); err != nil {
+					return err
+				}
 				count++
 			}
 		}

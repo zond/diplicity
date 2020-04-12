@@ -392,13 +392,17 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 	phase := &Phase{}
 	keys := []*datastore.Key{gameID, phaseID}
 	values := []interface{}{game, phase}
-	ids, err := datastore.GetMulti(ctx, keys, values)
-	if err != nil {
+	if err := datastore.GetMulti(ctx, keys, values); err != nil {
 		log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, values, err)
 		return err
 	}
 
-	return timeoutResolvePhaseFunc.EnqueueAt(ctx, p.DeadlineAt, p.GameID, p.PhaseOrdinal)
+	if err := timeoutResolvePhaseFunc.EnqueueAt(ctx, phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal); err != nil {
+		log.Errorf(ctx, "timeoutResolvePhaseFunc.EnqueueAt(..., %v, %v, %v): %v; hope taskqueues get fixed", phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal)
+		return err
+	}
+
+	return nil
 }
 
 func resolvePhaseHelper(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, timeoutTriggered bool) error {
