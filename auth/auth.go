@@ -594,7 +594,7 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		  <input class="pure-material-button-text" style="align-self:flex-start" type="submit" value="Cancel"/>
 		</form>
       </div>
-`, strippedRedirectURL.String(), redirectURL.String(), approveURL.String(), cipher))
+`, strippedRedirectURL.String(), approveURL.String(), cipher, redirectURL.String()))
 			return
 		} else if err != nil {
 			log.Errorf(ctx, "Unable to load approved redirect URL for %+v: %v", approvedURL, err)
