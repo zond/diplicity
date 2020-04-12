@@ -580,8 +580,8 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
       <span class="title">Play Diplomacy on the Diplicity server?</span>
       <span class="messagetext">You just logged in to a Diplomacy game for the first time. Welcome!
         <br /><br />
-        Your game uses the Diplicity server, and to prevent cheating, needs your
-        permission to play for you. Are you okay to use game
+        The game uses the Diplicity server, and to prevent cheating it needs your
+        permission to play for you. Are you okay to use the web site
         <u>%s</u> to play diplomacy?
 	  </span>
 
