@@ -30,7 +30,6 @@ function dippyMap(container) {
 	"#80E27E",
 	"#A98274",
 	"#CFCFCF",
-	"#FAD09F",
 	"#FF34FF",
 	"#1CE6FF",
 	"#FFDBE5",
