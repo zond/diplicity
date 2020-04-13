@@ -446,6 +446,7 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 		log.Errorf(ctx, "timeoutResolvePhaseFunc.EnqueueAt(..., %v, %v, %v): %v; hope taskqueues get fixed", phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal)
 		return err
 	}
+	log.Infof(ctx, "Successfully scheduled phase resolution at %v", phase.DeadlineAt)
 
 	userConfigKeys := make([]*datastore.Key, len(game.Members))
 	for idx := range userConfigKeys {
@@ -471,9 +472,15 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 			sendAt := phase.DeadlineAt.Add(-time.Minute * time.Duration(userConfig.PhaseDeadlineWarningMinutesAhead))
 			if sendAt.After(time.Now()) {
 				if err := sendPhaseDeadlineWarningFunc.EnqueueAt(ctx, sendAt, gameID, phase.PhaseOrdinal, game.Members[idx].Nation); err != nil {
+					log.Errorf(ctx, "sendPhaseDeadlineWarningFunc.EnqueueAt(..., %v, %v, %v): %v; hope taskqueues get fixed", sendAt, gameID, phase.PhaseOrdinal, err)
 					return err
 				}
+				log.Infof(ctx, "Successfully scheduled phase deadline warning for %+v at %v", game.Members[idx], sendAt)
+			} else {
+				log.Infof(ctx, "User %+v wants phase deadline warning at %v??", game.Members[idx], sendAt)
 			}
+		} else {
+			log.Infof(ctx, "User %+v doesn't want phase deadline warning", game.Members[idx])
 		}
 	}
 
