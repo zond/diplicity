@@ -453,8 +453,17 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 	}
 	userConfigs := make([]auth.UserConfig, len(game.Members))
 	if err := datastore.GetMulti(ctx, userConfigKeys, userConfigs); err != nil {
-		log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", userConfigKeys, userConfigs, err)
-		return err
+		if merr, ok := err.(appengine.MultiError); ok {
+			for _, serr := range merr {
+				if serr != datastore.ErrNoSuchEntity {
+					log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", userConfigKeys, userConfigs, err)
+					return err
+				}
+			}
+		} else {
+			log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", userConfigKeys, userConfigs, err)
+			return err
+		}
 	}
 
 	for idx, userConfig := range userConfigs {
