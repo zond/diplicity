@@ -500,6 +500,7 @@ func TestSoloEnding(t *testing.T) {
 		g.Follow("game-result", "Links").Success().AssertNil("Properties", "DIASMembers").AssertEq("Russia", "Properties", "SoloWinnerMember")
 		WaitForEmptyQueue("game-reRateTrueSkills")
 		WaitForEmptyQueue("game-updateUserStats")
+		WaitForEmptyQueue("game-updateUserStat")
 		for idx, env := range startedGameEnvs {
 			wantedScore := 0.0
 			wantedRating := 10.0
