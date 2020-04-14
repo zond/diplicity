@@ -114,6 +114,7 @@ func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 
 	gameResult := &GameResult{}
 	seenUserIds := map[string]time.Time{}
+	var err error
 	for _, err = iterator.Next(gameResult); err == nil; _, err = iterator.Next(gameResult) {
 		userIds := []string{}
 		for _, score := range gameResult.Scores {
