@@ -16,7 +16,7 @@ require (
 	github.com/sendgrid/smtpapi-go v0.6.0 // indirect
 	github.com/zond/enmime v0.6.1
 	github.com/zond/go-fcm v0.1.0
-	github.com/zond/goaeoas v0.1.3
+	github.com/zond/goaeoas v0.1.4
 	github.com/zond/godip v0.1.23
 	golang.org/x/crypto v0.0.0-20200221231518-2aa609cf4a9d
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
