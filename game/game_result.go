@@ -91,7 +91,7 @@ func (g *GameResult) TrueSkillRate(ctx context.Context) error {
 	if err := datastore.DeleteMulti(ctx, oldTrueSkillIDs); err != nil {
 		if merr, ok := err.(appengine.MultiError); ok {
 			for _, serr := range merr {
-				if serr != datastore.ErrNoSuchEntity {
+				if serr != nil && serr != datastore.ErrNoSuchEntity {
 					return err
 				}
 			}
