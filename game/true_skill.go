@@ -150,7 +150,7 @@ func reRateTrueSkills(ctx context.Context, counter int, cursorString string, onl
 		return err
 	}
 
-	return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, counter+1, cursor.String())
+	return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, counter+1, cursor.String(), onlyUnrated)
 }
 
 func handleReRateTrueSkills(w ResponseWriter, r Request) error {
