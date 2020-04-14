@@ -2,14 +2,14 @@ queue:
     - name: game-reRateTrueSkills
       rate: 1/s
     - name: game-sendPhaseDeadlineWarning
-      rate: 10/s
+      rate: 500/s
     - name: game-planPhaseTimeout
-      rate: 10/s
+      rate: 500/s
     - name: game-ejectMember
-      rate: 10/s
+      rate: 500/s
     - name: game-reScore
       rate: 10/s
-    - name: game-resave
+    - name: game-reSave
       rate: 10/s
     - name: game-updateGlickos
       rate: 10/s
@@ -18,7 +18,7 @@ queue:
     - name: game-updateUserStats
       rate: 10/s
     - name: game-updateUserStat
-      rate: 10/s
+      rate: 500/s
     - name: game-timeoutResolvePhase
       rate: 10/s
     - name: game-asyncStartGame
@@ -26,20 +26,20 @@ queue:
     - name: game-asyncResolvePhase
       rate: 10/s
     - name: game-fcmSendToTokens
-      rate: 10/s
+      rate: 500/s
     - name: game-manageFCMTokens
-      rate: 10/s
+      rate: 500/s
     - name: game-sendPhaseNotificationsToUsers
       rate: 10/s
     - name: game-sendPhaseNotificationsToFCM
       rate: 10/s
     - name: game-sendPhaseNotificationsToMail
-      rate: 10/s
+      rate: 500/s
     - name: game-sendMsgNotificationsToUsers
       rate: 10/s
     - name: game-sendMsgNotificationsToFCM
       rate: 10/s
     - name: game-sendMsgNotificationsToMail
-      rate: 10/s
+      rate: 500/s
     - name: game-ejectProbationaries
-      rate: 10/s
+      rate: 500/s

@@ -26,7 +26,7 @@ import (
 var (
 	router                   = mux.NewRouter()
 	reScoreFunc              *DelayFunc
-	resaveFunc               *DelayFunc
+	reSaveFunc               *DelayFunc
 	ejectMemberFunc          *DelayFunc
 	recalculateDIASUsersFunc *DelayFunc
 	containerGenerators      = map[string]func() interface{}{
@@ -39,7 +39,7 @@ var (
 )
 
 func init() {
-	resaveFunc = NewDelayFunc("game-resave", resave)
+	reSaveFunc = NewDelayFunc("game-reSave", reSave)
 	reScoreFunc = NewDelayFunc("game-reScore", reScore)
 	ejectMemberFunc = NewDelayFunc("game-ejectMember", ejectMember)
 	recalculateDIASUsersFunc = NewDelayFunc("", recalculateDIASUsers)
@@ -93,7 +93,7 @@ const (
 	DeleteTrueSkillsRoute               = "DeleteTrueSkills"
 	GlobalStatsRoute                    = "GlobalStats"
 	RssRoute                            = "Rss"
-	ResaveRoute                         = "Resave"
+	ReSaveRoute                         = "ReSave"
 	AllocateNationsRoute                = "AllocateNations"
 	ReapInactiveWaitingPlayersRoute     = "ReapInactiveWaitingPlayersRoute"
 	TestReapInactiveWaitingPlayersRoute = "TestReapInactiveWaitingPlayersRoute"
@@ -627,12 +627,12 @@ func reScore(ctx context.Context, counter int, cursorString string) error {
 	return reScoreFunc.EnqueueIn(ctx, 0, counter+1, cursor.String())
 }
 
-func resave(ctx context.Context, kind string, counter int, cursorString string) error {
-	log.Infof(ctx, "resave(..., %q, %v, %q)", kind, counter, cursorString)
+func reSave(ctx context.Context, kind string, counter int, cursorString string) error {
+	log.Infof(ctx, "reSave(..., %q, %v, %q)", kind, counter, cursorString)
 
 	containerGenerator, found := containerGenerators[kind]
 	if !found {
-		return fmt.Errorf("Kind %q not supported by resave", kind)
+		return fmt.Errorf("Kind %q not supported by reSave", kind)
 	}
 
 	batchSize := 20
@@ -692,7 +692,7 @@ func resave(ctx context.Context, kind string, counter int, cursorString string) 
 		if err != nil {
 			return err
 		}
-		if err := resaveFunc.EnqueueIn(ctx, 0, kind, counter, cursor.String()); err != nil {
+		if err := reSave.EnqueueIn(ctx, 0, kind, counter, cursor.String()); err != nil {
 			return err
 		}
 	} else if err != datastore.Done {
@@ -724,7 +724,7 @@ func handleReScore(w ResponseWriter, r Request) error {
 	return reScoreFunc.EnqueueIn(ctx, 0, 0, "")
 }
 
-func handleResave(w ResponseWriter, r Request) error {
+func handleReSave(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
 	if !appengine.IsDevAppServer() {
@@ -747,10 +747,10 @@ func handleResave(w ResponseWriter, r Request) error {
 
 	_, found := containerGenerators[kind]
 	if !found {
-		return fmt.Errorf("Kind %q not supported by resave", kind)
+		return fmt.Errorf("Kind %q not supported by reSave", kind)
 	}
 
-	return resaveFunc.EnqueueIn(ctx, 0, kind, 0, "")
+	return reSaveFunc.EnqueueIn(ctx, 0, kind, 0, "")
 }
 
 func reScheduleAll(w ResponseWriter, r Request, onlyBroken bool) error {
@@ -1120,7 +1120,7 @@ func SetupRouter(r *mux.Router) {
 	router = r
 	Handle(r, "/_reap-inactive-waiting-players", []string{"GET"}, ReapInactiveWaitingPlayersRoute, handleReapInactiveWaitingPlayers)
 	Handle(r, "/_test_reap-inactive-waiting-players", []string{"GET"}, TestReapInactiveWaitingPlayersRoute, handleTestReapInactiveWaitingPlayers)
-	Handle(r, "/_re-save", []string{"GET"}, ResaveRoute, handleResave)
+	Handle(r, "/_re-save", []string{"GET"}, ReSaveRoute, handleReSave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate-glickos", []string{"GET"}, ReRateGlickosRoute, handleReRateGlickos)
 	Handle(r, "/_delete-true-skills", []string{"GET"}, DeleteTrueSkillsRoute, handleDeleteTrueSkills)
