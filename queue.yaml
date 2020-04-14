@@ -1,4 +1,6 @@
 queue:
+    - name: game-reRateTrueSkills
+      rate: 1/s
     - name: game-sendPhaseDeadlineWarning
       rate: 500/s
     - name: game-planPhaseTimeout

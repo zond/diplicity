@@ -959,7 +959,11 @@ func (p *PhaseResolver) Act() error {
 
 		if !p.Game.Private {
 			if err := UpdateGlickosASAP(p.Context); err != nil {
-				log.Errorf(p.Context, "Unable to enqueue updating of ratings: %v; hope datastore gets fixed", err)
+				log.Errorf(p.Context, "Unable to enqueue updating of Glicko ratings: %v; hope datastore gets fixed", err)
+				return err
+			}
+			if err := UpdateTrueSkillsASAP(p.Context); err != nil {
+				log.Errorf(p.Context, "Unable to enqueue updating of TrueSkill ratings: %v; hope datastore gets fixed", err)
 				return err
 			}
 		}

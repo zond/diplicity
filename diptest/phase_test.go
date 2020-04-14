@@ -498,7 +498,7 @@ func TestSoloEnding(t *testing.T) {
 		g := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success()
 		g.AssertBoolEq(true, "Properties", "Finished")
 		g.Follow("game-result", "Links").Success().AssertNil("Properties", "DIASMembers").AssertEq("Russia", "Properties", "SoloWinnerMember")
-		startedGameEnvs[0].GetRoute(game.TestTrueSkillRateGameResultsRoute).Success()
+		WaitForEmptyQueue("game-reRateTrueSkills")
 		WaitForEmptyQueue("game-updateUserStats")
 		for idx, env := range startedGameEnvs {
 			wantedScore := 0.0
@@ -587,7 +587,6 @@ func TestDIASEnding(t *testing.T) {
 		})
 
 		t.Run("VerifyStatsChanged", func(t *testing.T) {
-			startedGameEnvs[0].GetRoute(game.TestTrueSkillRateGameResultsRoute).Success()
 			WaitForEmptyQueue("game-updateUserStats")
 			statsAfter := startedGameEnvs[0].GetRoute("UserStats.Load").RouteParams("user_id", startedGameEnvs[0].GetUID()).Success().
 				GetValue("Properties").(map[string]interface{})

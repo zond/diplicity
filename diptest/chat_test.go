@@ -319,7 +319,7 @@ func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 			Follow("messages", "Links").Success().
 			Find(msg, []string{"Properties"}, []string{"Properties", "Body"})
 
-		startedGameEnvs[0].GetRoute(game.TestTrueSkillRateGameResultsRoute).Success()
+		WaitForEmptyQueue("game-reRateTrueSkills")
 		WaitForEmptyQueue("game-updateUserStats")
 		for idx, env := range startedGameEnvs {
 			wantedScore := 14.0

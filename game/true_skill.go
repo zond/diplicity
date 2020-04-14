@@ -20,6 +20,14 @@ const (
 	trueSkillKind = "TrueSkill"
 )
 
+var (
+	reRateTrueSkillsFunc *DelayFunc
+)
+
+func init() {
+	reRateTrueSkillsFunc = NewDelayFunc("game-reRateTrueSkills", reRateTrueSkills)
+}
+
 type TrueSkill struct {
 	GameID    *datastore.Key
 	UserId    string
@@ -89,6 +97,62 @@ func handleDeleteTrueSkills(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func UpdateTrueSkillsASAP(ctx context.Context) error {
+	if appengine.IsDevAppServer() {
+		return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, 0, "", true)
+	}
+	return reRateTrueSkillsFunc.EnqueueIn(ctx, time.Second*10, 0, "", true)
+}
+
+func reRateTrueSkills(ctx context.Context, counter int, cursorString string, onlyUnrated bool) error {
+	log.Infof(ctx, "reRateTrueSkills(..., %v, %v, %v)", counter, cursorString, onlyUnrated)
+
+	query := datastore.NewQuery(gameResultKind).Filter("Private=", false).Order("CreatedAt")
+	if onlyUnrated {
+		query = query.Filter("TrueSkillRated=", false)
+	}
+	if cursorString != "" {
+		cursor, err := datastore.DecodeCursor(cursorString)
+		if err != nil {
+			return err
+		}
+		query = query.Start(cursor)
+	}
+
+	iterator := query.Run(ctx)
+	gameResult := &GameResult{}
+	if _, err := iterator.Next(gameResult); err != nil {
+		if err == datastore.Done {
+			log.Infof(ctx, "reRateTrueSkills(..., %v, %v, %v) is DONE", counter, cursorString, onlyUnrated)
+			return nil
+		}
+		log.Errorf(ctx, "iterator.Next(%v): %v", gameResult, err)
+		return err
+	}
+
+	if err := gameResult.TrueSkillRate(ctx, onlyUnrated); err != nil {
+		return err
+	}
+	log.Infof(ctx, "reRateTrueSkills(..., %v, %v, %v): Successfully rated %+v", counter, cursorString, onlyUnrated, gameResult)
+
+	userIds := []string{}
+	for _, score := range gameResult.Scores {
+		userIds = append(userIds, score.UserId)
+	}
+	if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
+		return err
+	}
+	log.Infof(ctx, "reRateTrueSkills(..., %v, %v, %v): Successfully scheduled %+v for stats update", counter, cursorString, onlyUnrated, userIds)
+
+	cursor, err := iterator.Cursor()
+	if err != nil {
+		log.Errorf(ctx, "reRateTrueSkills(..., %v, %v, %v): iterator.Cursor(): %v", counter, cursorString, onlyUnrated, err)
+		return err
+	}
+
+	return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, counter+1, cursor.String())
+}
+
 func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -110,38 +174,5 @@ func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 		}
 	}
 
-	iterator := datastore.NewQuery(gameResultKind).Filter("Private=", false).Order("CreatedAt").Run(ctx)
-
-	gameResult := &GameResult{}
-	seenUserIds := map[string]time.Time{}
-	var err error
-	for _, err = iterator.Next(gameResult); err == nil; _, err = iterator.Next(gameResult) {
-		userIds := []string{}
-		for _, score := range gameResult.Scores {
-			userIds = append(userIds, score.UserId)
-			at, seen := seenUserIds[score.UserId]
-			earliestEventualConsistency := at.Add(2 * time.Second)
-			if seen && earliestEventualConsistency.After(time.Now()) {
-				waitTime := earliestEventualConsistency.Sub(time.Now())
-				log.Infof(ctx, "handleReRateTrueSkills(..., ...): Waiting %v for %v to get a consistent state", waitTime, score.UserId)
-				time.Sleep(waitTime)
-			}
-			seenUserIds[score.UserId] = time.Now()
-		}
-		if err = gameResult.TrueSkillRate(ctx, false); err != nil {
-			return err
-		}
-		log.Infof(ctx, "handleReRateTrueSkills(..., ...): Successfully rated %+v", gameResult)
-		if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
-			return err
-		}
-		log.Infof(ctx, "handleReRateTrueSkills(..., ...): Successfully scheduled %+v for stats update", userIds)
-	}
-
-	if err == datastore.Done {
-		log.Infof(ctx, "handleTrueSkillRateGameResults(..., ...) is DONE")
-		return nil
-	}
-
-	return err
+	return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, 0, "", false)
 }
