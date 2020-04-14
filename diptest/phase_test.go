@@ -587,6 +587,7 @@ func TestDIASEnding(t *testing.T) {
 		})
 
 		t.Run("VerifyStatsChanged", func(t *testing.T) {
+			startedGameEnvs[0].GetRoute(game.TestTrueSkillRateGameResultsRoute).Success()
 			WaitForEmptyQueue("game-updateUserStats")
 			statsAfter := startedGameEnvs[0].GetRoute("UserStats.Load").RouteParams("user_id", startedGameEnvs[0].GetUID()).Success().
 				GetValue("Properties").(map[string]interface{})
