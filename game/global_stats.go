@@ -41,7 +41,8 @@ func bumpUserStatsHistograms(userStats UserStats, m map[string]Histogram) {
 	bumpNamedHistogram("NonOwnedBans", userStats.SharedBans-userStats.OwnedBans, m)
 	bumpNamedHistogram("Hated", int(userStats.Hated), m)
 	bumpNamedHistogram("Hater", int(userStats.Hater), m)
-	bumpNamedHistogram("Rating", int(userStats.Glicko.PracticalRating), m)
+	bumpNamedHistogram("GlickoRating", int(userStats.Glicko.Rating), m)
+	bumpNamedHistogram("TrueSkillRating", int(userStats.TrueSkill.Rating), m)
 }
 
 func newHist(desc string) Histogram {
@@ -68,7 +69,8 @@ func newUserStatsHistograms(userDesc string) map[string]Histogram {
 		"NonOwnedBans":    newHist(fmt.Sprintf("Number of bans involving but not created by %s (number of users banned user)", userDesc)),
 		"Hater":           newHist(fmt.Sprintf("Hater [OwnedBans / (StartedGames + 1)] attribute of %s", userDesc)),
 		"Hated":           newHist(fmt.Sprintf("Hated [(SharedBans - OwnedBans) / (StartedGames + 1)] attribute of %s", userDesc)),
-		"Rating":          newHist(fmt.Sprintf("Rating [an ELO variant called Glicko] of %s", userDesc)),
+		"GlickoRating":    newHist(fmt.Sprintf("GlickoRating of %s", userDesc)),
+		"TrueSkillRating": newHist(fmt.Sprintf("TrueSkillRating of %s", userDesc)),
 	}
 }
 
@@ -90,6 +92,7 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 			"StartedAtDaysAgo":   newHist("Days ago active games were started"),
 			"NewestPhaseOrdinal": newHist("Number of generated phases for active games"),
 			"Private":            newHist("Distribution of private vs public games"),
+			"Anonymous":          newHist("Distribution of anonymous vs non-anonymous"),
 			"ConferenceChat":     newHist("Distribution of games with vs without conference chat"),
 			"GroupChat":          newHist("Distribution of games with vs without group chat"),
 			"PrivateChat":        newHist("Distribution of games with vs without private chat"),
@@ -121,6 +124,7 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 		bumpNamedHistogram("CreatedAtDaysAgo", int(time.Now().Sub(game.CreatedAt)/(time.Hour*24)), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("StartedAtDaysAgo", int(time.Now().Sub(game.StartedAt)/(time.Hour*24)), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("Private", fmt.Sprint(game.Private), globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("Anonymous", fmt.Sprint(game.Anonymous), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("ConferenceChat", fmt.Sprint(!game.DisableConferenceChat), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("GroupChat", fmt.Sprint(!game.DisableGroupChat), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("PrivateChat", fmt.Sprint(!game.DisablePrivateChat), globalStats.ActiveGameHistograms)

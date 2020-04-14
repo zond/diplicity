@@ -1,27 +1,30 @@
 runtime: go111
 automatic_scaling:
-  max_idle_instances: 1
-  max_concurrent_requests: 100
+    max_idle_instances: 1
+    max_concurrent_requests: 100
 
 inbound_services:
-- mail
+    - mail
 
 handlers:
-- url: /_reap-inactive-waiting-players
-  script: auto
-  login: admin
-- url: /_ah/queue/go/delay
-  script: auto
-  login: admin
-- url: /(favicon.ico)
-  static_files: static/img/\1
-  upload: static/img/.*
-- url: /(firebase-messaging-sw.js)
-  static_files: static/js/\1
-  upload: static/js/.*
-- url: /(html|js|css|img)/(.*)
-  static_files: static/\1/\2
-  upload: static/(html|js|css|img)/(.*)
-- url: /.*
-  script: auto
-  secure: always
+    - url: /_reap-inactive-waiting-players
+      script: auto
+      login: admin
+    - url: /_true-skill-rate-game-results
+      script: auto
+      login: admin
+    - url: /_ah/queue/go/delay
+      script: auto
+      login: admin
+    - url: /(favicon.ico)
+      static_files: static/img/\1
+      upload: static/img/.*
+    - url: /(firebase-messaging-sw.js)
+      static_files: static/js/\1
+      upload: static/js/.*
+    - url: /(html|js|css|img)/(.*)
+      static_files: static/\1/\2
+      upload: static/(html|js|css|img)/(.*)
+    - url: /.*
+      script: auto
+      secure: always

@@ -1,6 +1,7 @@
 package diptest
 
 import (
+	"math"
 	"sort"
 	"strings"
 	"testing"
@@ -317,6 +318,25 @@ func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 			Find(1, []string{"Properties"}, []string{"Properties", "NMessages"}).
 			Follow("messages", "Links").Success().
 			Find(msg, []string{"Properties"}, []string{"Properties", "Body"})
+
+		startedGameEnvs[0].GetRoute(game.TestTrueSkillRateGameResultsRoute).Success()
+		WaitForEmptyQueue("game-updateUserStats")
+		for idx, env := range startedGameEnvs {
+			wantedScore := 14.0
+			wantedRating := 10.0
+			if startedGameNats[idx] == "Russia" {
+				wantedScore = 16.0
+				wantedRating = 12.0
+			}
+			if foundScore := env.GetRoute("GameResult.Load").RouteParams("game_id", startedGameID).Success().
+				Find(env.GetUID(), []string{"Properties", "Scores"}, []string{"UserId"}).GetValue("Score").(float64); math.Round(foundScore) != wantedScore {
+				t.Errorf("Got score %v for %v, wanted %v", foundScore, startedGameNats[idx], wantedScore)
+			}
+			if foundRating := env.GetRoute("UserStats.Load").RouteParams("user_id", env.GetUID()).Success().
+				GetValue("Properties", "TrueSkill", "Rating").(float64); math.Round(foundRating) != wantedRating {
+				t.Errorf("Got rating %v for %v, wanted %v", foundRating, startedGameNats[idx], wantedRating)
+			}
+		}
 
 	})
 }

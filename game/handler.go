@@ -94,7 +94,9 @@ const (
 	ResaveRoute                         = "Resave"
 	AllocateNationsRoute                = "AllocateNations"
 	ReapInactiveWaitingPlayersRoute     = "ReapInactiveWaitingPlayersRoute"
+	TrueSkillRateGameResultsRoute       = "TrueSkillRateGameResults"
 	TestReapInactiveWaitingPlayersRoute = "TestReapInactiveWaitingPlayersRoute"
+	TestTrueSkillRateGameResultsRoute   = "TestTrueSkillRateGameResults"
 	ReScheduleRoute                     = "ReSchedule"
 	ReScheduleAllBrokenRoute            = "ReScheduleAllBroken"
 	ReScheduleAllRoute                  = "ReScheduleAll"
@@ -1031,11 +1033,41 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func handleTestTrueSkillRateGameResults(w ResponseWriter, r Request) error {
+	if !appengine.IsDevAppServer() {
+		return HTTPErr{"unauthorized", http.StatusForbidden}
+	}
+	return handleTrueSkillRateGameResults(w, r)
+}
+
 func handleTestReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
 	if !appengine.IsDevAppServer() {
 		return HTTPErr{"unauthorized", http.StatusForbidden}
 	}
 	return handleReapInactiveWaitingPlayers(w, r)
+}
+
+func handleTrueSkillRateGameResults(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	log.Infof(ctx, "handleTrueSkillRateGameResults(..., ...)")
+
+	iterator := datastore.NewQuery(gameResultKind).Filter("Private=", false).Filter("TrueSkillRated=", false).Order("CreatedAt").Run(ctx)
+
+	gameResult := &GameResult{}
+	var err error
+	for _, err = iterator.Next(gameResult); err == nil; _, err = iterator.Next(gameResult) {
+		if err = gameResult.TrueSkillRate(ctx); err != nil {
+			return err
+		}
+		log.Infof(ctx, "Successfully rated %+v", gameResult)
+	}
+	if err == datastore.Done {
+		log.Infof(ctx, "handleTrueSkillRateGameResults(..., ...) is DONE")
+		return nil
+	}
+
+	return err
 }
 
 func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
@@ -1117,7 +1149,9 @@ func ejectMember(ctx context.Context, gameID *datastore.Key, userId string) erro
 func SetupRouter(r *mux.Router) {
 	router = r
 	Handle(r, "/_reap-inactive-waiting-players", []string{"GET"}, ReapInactiveWaitingPlayersRoute, handleReapInactiveWaitingPlayers)
+	Handle(r, "/_true-skill-rate-game-results", []string{"GET"}, TrueSkillRateGameResultsRoute, handleTrueSkillRateGameResults)
 	Handle(r, "/_test_reap-inactive-waiting-players", []string{"GET"}, TestReapInactiveWaitingPlayersRoute, handleTestReapInactiveWaitingPlayers)
+	Handle(r, "/_test_true-skill-rate-game-results", []string{"GET"}, TestTrueSkillRateGameResultsRoute, handleTestTrueSkillRateGameResults)
 	Handle(r, "/_re-save", []string{"GET"}, ResaveRoute, handleResave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)

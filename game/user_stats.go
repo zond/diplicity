@@ -98,6 +98,12 @@ func updateUserStat(ctx context.Context, userId string) error {
 		return err
 	}
 	userStats.Glicko = *latestGlicko
+	latestTrueSkill, err := GetTrueSkill(ctx, userId)
+	if err != nil {
+		log.Errorf(ctx, "Unable to get latest TrueSkill for %q: %v; fix GetTrueSkill", userId, err)
+		return err
+	}
+	userStats.TrueSkill = *latestTrueSkill
 	user := &auth.User{}
 	if err := datastore.Get(ctx, auth.UserID(ctx, userId), user); err != nil {
 		log.Errorf(ctx, "Unable to load user for %q: %v; hope datastore gets fixed", userId, err)
@@ -195,8 +201,22 @@ type UserStats struct {
 
 	PrivateStats UserStatsNumbers
 
-	Glicko Glicko
-	User   auth.User
+	Glicko    Glicko
+	TrueSkill TrueSkill
+
+	User auth.User
+}
+
+func (u *UserStats) Load(props []datastore.Property) error {
+	err := datastore.LoadStruct(u, props)
+	if _, is := err.(*datastore.ErrFieldMismatch); is {
+		err = nil
+	}
+	return err
+}
+
+func (u *UserStats) Save() ([]datastore.Property, error) {
+	return datastore.SaveStruct(u)
 }
 
 func devUserStatsUpdate(w ResponseWriter, r Request) error {

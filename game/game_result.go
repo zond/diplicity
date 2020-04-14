@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"time"
 
+	"github.com/mafredri/go-trueskill"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 )
@@ -30,20 +33,111 @@ type GameScore struct {
 type GameResults []GameResult
 
 type GameResult struct {
-	GameID            *datastore.Key
-	SoloWinnerMember  godip.Nation
-	SoloWinnerUser    string
-	DIASMembers       []godip.Nation
-	DIASUsers         []string
-	NMRMembers        []godip.Nation
-	NMRUsers          []string
-	EliminatedMembers []godip.Nation
-	EliminatedUsers   []string
-	AllUsers          []string
-	Scores            []GameScore
-	Rated             bool
-	Private           bool
-	CreatedAt         time.Time
+	GameID               *datastore.Key
+	SoloWinnerMember     godip.Nation
+	SoloWinnerUser       string
+	DIASMembers          []godip.Nation
+	DIASUsers            []string
+	NMRMembers           []godip.Nation
+	NMRUsers             []string
+	EliminatedMembers    []godip.Nation
+	EliminatedUsers      []string
+	AllUsers             []string
+	Scores               []GameScore
+	Rated                bool
+	TrueSkillRated       bool
+	TrueSkillProbability float64
+	Private              bool
+	CreatedAt            time.Time
+}
+
+type player struct {
+	userId string
+	score  GameScore
+	player trueskill.Player
+}
+
+type players []player
+
+func (p players) Less(i, j int) bool {
+	return p[i].score.Score > p[j].score.Score
+}
+
+func (p players) Len() int {
+	return len(p)
+}
+
+func (p players) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+func (g *GameResult) TrueSkillRate(ctx context.Context) error {
+	if g.TrueSkillRated {
+		return nil
+	}
+
+	players := make(players, len(g.Scores))
+	for idx := range players {
+		trueSkill, err := GetTrueSkill(ctx, g.Scores[idx].UserId)
+		if err != nil {
+			return err
+		}
+		players[idx] = player{
+			userId: g.Scores[idx].UserId,
+			score:  g.Scores[idx],
+			player: trueskill.NewPlayer(trueSkill.Mu, trueSkill.Sigma),
+		}
+	}
+
+	sort.Sort(players)
+
+	draws := make([]bool, len(players)-1)
+	for idx := range players[:len(players)-1] {
+		draws[idx] = players[idx].score.Score == players[idx+1].score.Score
+	}
+
+	tsPlayers := make([]trueskill.Player, len(players))
+	for idx := range players {
+		tsPlayers[idx] = players[idx].player
+	}
+	ts := trueskill.New()
+	newTSPlayers, prob := ts.AdjustSkillsWithDraws(tsPlayers, draws)
+	log.Infof(ctx, "AdjustSkillsWithDraws(%+v, %+v): %+v", tsPlayers, draws, newTSPlayers)
+
+	newTrueSkills := make([]TrueSkill, len(players))
+	newTrueSkillIDs := make([]*datastore.Key, len(players))
+	userIds := make([]string, len(players))
+	var err error
+	for idx := range players {
+		userIds[idx] = players[idx].userId
+		newTrueSkills[idx] = TrueSkill{
+			GameID:    g.GameID,
+			UserId:    players[idx].userId,
+			CreatedAt: time.Now(),
+			Member:    players[idx].score.Member,
+			Mu:        newTSPlayers[idx].Mu(),
+			Sigma:     newTSPlayers[idx].Sigma(),
+			Rating:    ts.TrueSkill(newTSPlayers[idx]),
+		}
+		if newTrueSkillIDs[idx], err = newTrueSkills[idx].ID(ctx); err != nil {
+			return err
+		}
+	}
+
+	if _, err := datastore.PutMulti(ctx, newTrueSkillIDs, newTrueSkills); err != nil {
+		return err
+	}
+
+	if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
+		return err
+	}
+
+	g.TrueSkillProbability = prob
+	g.TrueSkillRated = true
+
+	_, err = datastore.Put(ctx, g.ID(ctx), g)
+
+	return err
 }
 
 // AssignScores uses http://windycityweasels.org/tribute-scoring-system/

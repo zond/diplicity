@@ -2,6 +2,7 @@ package diptest
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/kr/pretty"
@@ -33,6 +34,7 @@ func (set orderSet) execute(phaseOrdinal int) {
 			phase.Follow("create-order", "Links").Body(map[string]interface{}{
 				"Parts": ord,
 			}).Success()
+			fmt.Printf("o")
 		}
 		if member.dias {
 			phase.Follow("phase-states", "Links").Success().
@@ -126,8 +128,14 @@ func withStartedGameOptsAndOrders(conf func(m map[string]interface{}), orders or
 	startedGameEnvs = envs
 	startedGameDesc = gameDesc
 
+	executed := false
 	for phaseOrdinalMinus1, set := range orders {
 		set.execute(phaseOrdinalMinus1 + 1)
+		fmt.Print("p")
+		executed = true
+	}
+	if executed {
+		fmt.Println()
 	}
 
 	f()
@@ -487,9 +495,26 @@ func TestSoloEnding(t *testing.T) {
 				dias: true,
 			},
 		}.execute(len(russianSoloOrders) + 1)
-		game := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success()
-		game.AssertBoolEq(true, "Properties", "Finished")
-		game.Follow("game-result", "Links").Success().AssertNil("Properties", "DIASMembers").AssertEq("Russia", "Properties", "SoloWinnerMember")
+		g := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success()
+		g.AssertBoolEq(true, "Properties", "Finished")
+		g.Follow("game-result", "Links").Success().AssertNil("Properties", "DIASMembers").AssertEq("Russia", "Properties", "SoloWinnerMember")
+		startedGameEnvs[0].GetRoute(game.TestTrueSkillRateGameResultsRoute).Success()
+		WaitForEmptyQueue("game-updateUserStats")
+		for idx, env := range startedGameEnvs {
+			wantedScore := 0.0
+			wantedRating := 10.0
+			if startedGameNats[idx] == "Russia" {
+				wantedScore = 100
+				wantedRating = 12.0
+			}
+			env.GetRoute("GameResult.Load").RouteParams("game_id", startedGameID).Success().
+				Find(env.GetUID(), []string{"Properties", "Scores"}, []string{"UserId"}).
+				AssertEq(wantedScore, "Score")
+			if foundRating := env.GetRoute("UserStats.Load").RouteParams("user_id", env.GetUID()).Success().
+				GetValue("Properties", "TrueSkill", "Rating").(float64); math.Round(foundRating) != wantedRating {
+				t.Errorf("Got rating %v for %v, wanted %v", foundRating, startedGameNats[idx], wantedRating)
+			}
+		}
 	})
 }
 
