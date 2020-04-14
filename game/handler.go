@@ -692,7 +692,7 @@ func reSave(ctx context.Context, kind string, counter int, cursorString string) 
 		if err != nil {
 			return err
 		}
-		if err := reSave.EnqueueIn(ctx, 0, kind, counter, cursor.String()); err != nil {
+		if err := reSaveFunc.EnqueueIn(ctx, 0, kind, counter, cursor.String()); err != nil {
 			return err
 		}
 	} else if err != datastore.Done {
