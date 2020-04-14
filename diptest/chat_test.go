@@ -321,6 +321,7 @@ func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 
 		WaitForEmptyQueue("game-reRateTrueSkills")
 		WaitForEmptyQueue("game-updateUserStats")
+    WaitForEmptyQueue("game-updateUserStat")
 		for idx, env := range startedGameEnvs {
 			wantedScore := 14.0
 			wantedRating := 10.0
