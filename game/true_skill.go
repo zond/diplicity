@@ -91,7 +91,9 @@ func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 	gameResult := &GameResult{}
 	seenUserIds := map[string]time.Time{}
 	for _, err = iterator.Next(gameResult); err == nil; _, err = iterator.Next(gameResult) {
+		userIds := []string{}
 		for _, score := range gameResult.Scores {
+			userIds = append(userIds, score.UserId)
 			at, seen := seenUserIds[score.UserId]
 			earliestEventualConsistency := at.Add(2 * time.Second)
 			if seen && earliestEventualConsistency.After(time.Now()) {
@@ -105,6 +107,10 @@ func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 			return err
 		}
 		log.Infof(ctx, "Successfully rated %+v", gameResult)
+		if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
+			return err
+		}
+		log.Infof(ctx, "Successfully scheduled %+v for stats update", userIds)
 	}
 
 	if err == datastore.Done {
