@@ -481,7 +481,7 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 		if userConfig.PhaseDeadlineWarningMinutesAhead > 0 {
 			sendAt := phase.DeadlineAt.Add(-time.Minute * time.Duration(userConfig.PhaseDeadlineWarningMinutesAhead))
 			if sendAt.After(time.Now()) {
-				if err := sendPhaseDeadlineWarningFunc.EnqueueAt(ctx, sendAt, gameID, phase.PhaseOrdinal, game.Members[idx].Nation); err != nil {
+				if err := sendPhaseDeadlineWarningFunc.EnqueueAt(ctx, sendAt, gameID, phase.PhaseOrdinal, string(game.Members[idx].Nation)); err != nil {
 					log.Errorf(ctx, "sendPhaseDeadlineWarningFunc.EnqueueAt(..., %v, %v, %v): %v; hope taskqueues get fixed", sendAt, gameID, phase.PhaseOrdinal, err)
 					return err
 				}
