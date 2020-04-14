@@ -344,20 +344,30 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datas
 	return nil
 }
 
-func sendPhaseNotificationsToUsers(ctx context.Context, host string, gameID *datastore.Key, phaseOrdinal int64, uids []string) error {
-	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %v, %v, %+v)", host, gameID, phaseOrdinal, uids)
+func sendPhaseNotificationsToUsers(ctx context.Context, host string, gameID *datastore.Key, phaseOrdinal int64, origUids []string) error {
+	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %v, %v, %+v)", host, gameID, phaseOrdinal, origUids)
 
+	if len(origUids) == 0 {
+		log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %v, %v, %+v) *** NO UIDS ***", host, gameID, phaseOrdinal, origUids)
+		return nil
+	}
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, uids[0], map[string]struct{}{}); err != nil {
-			log.Errorf(ctx, "Unable to enqueue sending to %q: %v; hope datastore gets fixed", uids[0], err)
-			return err
+		uids := make([]string, len(origUids))
+		copy(uids, origUids)
+		for i := 0; i < 2 && len(uids) > 0; i++ {
+			nextUid := uids[0]
+			uids = uids[1:]
+			if err := sendPhaseNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, nextUid, map[string]struct{}{}); err != nil {
+				log.Errorf(ctx, "Unable to enqueue sending to %q: %v; hope datastore gets fixed", nextUid, err)
+				return err
+			}
+			if err := sendPhaseNotificationsToMailFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, nextUid); err != nil {
+				log.Errorf(ctx, "Unable to enqueue sending mail to %q: %v; hope datastore gets fixed", nextUid, err)
+				return err
+			}
 		}
-		if err := sendPhaseNotificationsToMailFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, uids[0]); err != nil {
-			log.Errorf(ctx, "Unable to enqueue sending mail to %q: %v; hope datastore gets fixed", uids[0], err)
-			return err
-		}
-		if len(uids) > 1 {
-			if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, uids[1:]); err != nil {
+		if len(uids) > 0 {
+			if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, gameID, phaseOrdinal, uids); err != nil {
 				log.Errorf(ctx, "Unable to enqueue sending to rest: %v; hope datastore gets fixed", err)
 				return err
 			}
@@ -368,7 +378,7 @@ func sendPhaseNotificationsToUsers(ctx context.Context, host string, gameID *dat
 		return err
 	}
 
-	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %v, %v, %+v) *** SUCCESS ***", host, gameID, phaseOrdinal, uids)
+	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %v, %v, %+v) *** SUCCESS ***", host, gameID, phaseOrdinal, origUids)
 
 	return nil
 }

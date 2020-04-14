@@ -120,29 +120,37 @@ func updateUserStat(ctx context.Context, userId string) error {
 	return nil
 }
 
-func updateUserStats(ctx context.Context, uids []string) error {
-	log.Infof(ctx, "updateUserStats(..., %v)", PP(uids))
+func updateUserStats(ctx context.Context, origUids []string) error {
+	log.Infof(ctx, "updateUserStats(..., %v)", PP(origUids))
 
-	if len(uids) > 0 {
-		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-			if err := updateUserStatFunc.EnqueueIn(ctx, 0, uids[0]); err != nil {
+	if len(origUids) == 0 {
+		log.Infof(ctx, "updateUserStats(..., %v) *** NO UIDS ***", PP(origUids))
+		return nil
+	}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		uids := make([]string, len(origUids))
+		copy(uids, origUids)
+		for i := 0; i < 4 && len(uids) > 0; i++ {
+			nextUid := uids[0]
+			uids = uids[1:]
+			if err := updateUserStatFunc.EnqueueIn(ctx, 0, nextUid); err != nil {
 				log.Errorf(ctx, "Unable to enqueue updating first stat: %v; hope datastore gets fixed", err)
 				return err
 			}
-			if len(uids) > 1 {
-				if err := UpdateUserStatsFunc.EnqueueIn(ctx, 0, uids[1:]); err != nil {
-					log.Errorf(ctx, "Unable to enqueue updating rest: %v; hope datastore gets fixed", err)
-					return err
-				}
-			}
-			return nil
-		}, &datastore.TransactionOptions{XG: true}); err != nil {
-			log.Errorf(ctx, "Unable to commit update tx: %v", err)
-			return err
 		}
+		if len(uids) > 0 {
+			if err := UpdateUserStatsFunc.EnqueueIn(ctx, 0, uids); err != nil {
+				log.Errorf(ctx, "Unable to enqueue updating rest: %v; hope datastore gets fixed", err)
+				return err
+			}
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: true}); err != nil {
+		log.Errorf(ctx, "Unable to commit update tx: %v", err)
+		return err
 	}
 
-	log.Infof(ctx, "updateUserStats(..., %v) *** SUCCESS ***", PP(uids))
+	log.Infof(ctx, "updateUserStats(..., %v) *** SUCCESS ***", PP(origUids))
 
 	return nil
 }
