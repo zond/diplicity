@@ -461,7 +461,7 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 					return err
 				}
 			}
-		} else {
+		} else if err != datastore.ErrNoSuchEntity {
 			log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", userConfigKeys, userConfigs, err)
 			return err
 		}
