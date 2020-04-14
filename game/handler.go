@@ -1054,9 +1054,18 @@ func handleTrueSkillRateGameResults(w ResponseWriter, r Request) error {
 
 	iterator := datastore.NewQuery(gameResultKind).Filter("Private=", false).Filter("TrueSkillRated=", false).Order("CreatedAt").Run(ctx)
 
+	seenUserIds := map[string]time.Time{}
 	gameResult := &GameResult{}
 	var err error
 	for _, err = iterator.Next(gameResult); err == nil; _, err = iterator.Next(gameResult) {
+		for _, score := range gameResult.Scores {
+			at, seen := seenUserIds[score.UserId]
+			earliestEventualConsistency := at.Add(2 * time.Second)
+			if seen && earliestEventualConsistency.After(time.Now()) {
+				time.Sleep(earliestEventualConsistency.Sub(time.Now()))
+			}
+			seenUserIds[score.UserId] = time.Now()
+		}
 		if err = gameResult.TrueSkillRate(ctx); err != nil {
 			return err
 		}

@@ -52,7 +52,6 @@ type GameResult struct {
 }
 
 type player struct {
-	userId string
 	score  GameScore
 	player trueskill.Player
 }
@@ -71,11 +70,37 @@ func (p players) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
+// TrueSkillRate must be idempotent, because it gets called every n minutes by a cron job,
+// and can't run inside a transaction since it updates too many users in large games.
 func (g *GameResult) TrueSkillRate(ctx context.Context) error {
+	// Last action of the func is to store this GameResult with TrueSkillRated = rue, to avoid
+	// repetition.
 	if g.TrueSkillRated {
 		return nil
 	}
 
+	// To make it idempotent even if some TrueSkills have been stored, we delete any
+	// that exist when we start.
+	oldTrueSkillIDs := make([]*datastore.Key, len(g.Scores))
+	var err error
+	for idx := range g.Scores {
+		if oldTrueSkillIDs[idx], err = (&TrueSkill{GameID: g.GameID, UserId: g.Scores[idx].UserId}).ID(ctx); err != nil {
+			return err
+		}
+	}
+	if err := datastore.DeleteMulti(ctx, oldTrueSkillIDs); err != nil {
+		if merr, ok := err.(appengine.MultiError); ok {
+			for _, serr := range merr {
+				if serr != datastore.ErrNoSuchEntity {
+					return err
+				}
+			}
+		} else {
+			return err
+		}
+	}
+
+	// We make a slice of players, consisting of GameScores and TrueSkill players.
 	players := make(players, len(g.Scores))
 	for idx := range players {
 		trueSkill, err := GetTrueSkill(ctx, g.Scores[idx].UserId)
@@ -83,19 +108,23 @@ func (g *GameResult) TrueSkillRate(ctx context.Context) error {
 			return err
 		}
 		players[idx] = player{
-			userId: g.Scores[idx].UserId,
 			score:  g.Scores[idx],
 			player: trueskill.NewPlayer(trueSkill.Mu, trueSkill.Sigma),
 		}
 	}
 
+	// Sort them to get highest scores first.
 	sort.Sort(players)
 
+	// Define the relationship between each player on the leaderboard by creating
+	// a slice of draw bools, where a draw means this player and the next had the
+	// same score.
 	draws := make([]bool, len(players)-1)
 	for idx := range players[:len(players)-1] {
 		draws[idx] = players[idx].score.Score == players[idx+1].score.Score
 	}
 
+	// Update the players using TrueSkill.
 	tsPlayers := make([]trueskill.Player, len(players))
 	for idx := range players {
 		tsPlayers[idx] = players[idx].player
@@ -104,15 +133,15 @@ func (g *GameResult) TrueSkillRate(ctx context.Context) error {
 	newTSPlayers, prob := ts.AdjustSkillsWithDraws(tsPlayers, draws)
 	log.Infof(ctx, "AdjustSkillsWithDraws(%+v, %+v): %+v", tsPlayers, draws, newTSPlayers)
 
+	// Create new TrueSkill entities for this game.
 	newTrueSkills := make([]TrueSkill, len(players))
 	newTrueSkillIDs := make([]*datastore.Key, len(players))
 	userIds := make([]string, len(players))
-	var err error
 	for idx := range players {
-		userIds[idx] = players[idx].userId
+		userIds[idx] = players[idx].score.UserId
 		newTrueSkills[idx] = TrueSkill{
 			GameID:    g.GameID,
-			UserId:    players[idx].userId,
+			UserId:    players[idx].score.UserId,
 			CreatedAt: time.Now(),
 			Member:    players[idx].score.Member,
 			Mu:        newTSPlayers[idx].Mu(),
@@ -128,10 +157,12 @@ func (g *GameResult) TrueSkillRate(ctx context.Context) error {
 		return err
 	}
 
+	// Schedule UserStats updates for all users in the game, to let them see their new ratings.
 	if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
 		return err
 	}
 
+	// Save the probability of this outcome, along with the fact that we are now rated.
 	g.TrueSkillProbability = prob
 	g.TrueSkillRated = true
 
