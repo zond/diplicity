@@ -84,7 +84,7 @@ func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 	if err := datastore.DeleteMulti(ctx, trueSkillIDs); err != nil {
 		return err
 	}
-	log.Infof(ctx, "Deleted %v TrueSkills", len(trueSkillIDs))
+	log.Infof(ctx, "handleReRateTrueSkills(..., ...): Deleted %v TrueSkills", len(trueSkillIDs))
 
 	iterator := datastore.NewQuery(gameResultKind).Filter("Private=", false).Order("CreatedAt").Run(ctx)
 
@@ -98,7 +98,7 @@ func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 			earliestEventualConsistency := at.Add(2 * time.Second)
 			if seen && earliestEventualConsistency.After(time.Now()) {
 				waitTime := earliestEventualConsistency.Sub(time.Now())
-				log.Infof(ctx, "Waiting %v for %v to get a consistent state", waitTime, score.UserId)
+				log.Infof(ctx, "handleReRateTrueSkills(..., ...): Waiting %v for %v to get a consistent state", waitTime, score.UserId)
 				time.Sleep(waitTime)
 			}
 			seenUserIds[score.UserId] = time.Now()
@@ -106,11 +106,11 @@ func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 		if err = gameResult.TrueSkillRate(ctx, false); err != nil {
 			return err
 		}
-		log.Infof(ctx, "Successfully rated %+v", gameResult)
+		log.Infof(ctx, "handleReRateTrueSkills(..., ...): Successfully rated %+v", gameResult)
 		if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
 			return err
 		}
-		log.Infof(ctx, "Successfully scheduled %+v for stats update", userIds)
+		log.Infof(ctx, "handleReRateTrueSkills(..., ...): Successfully scheduled %+v for stats update", userIds)
 	}
 
 	if err == datastore.Done {
