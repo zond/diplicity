@@ -120,7 +120,7 @@ type Variant struct {
 	// OrderTypes are the types of orders this variant has.
 	OrderTypes []godip.OrderType
 	Start      RenderPhase
-	Graph      godip.Graph
+	Graph      godip.Graph `skip:"yes"`
 }
 
 func (rv *Variant) Item(r Request) *Item {
