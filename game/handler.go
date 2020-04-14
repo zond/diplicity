@@ -88,7 +88,8 @@ const (
 	ReceiveMailRoute                    = "ReceiveMail"
 	RenderPhaseMapRoute                 = "RenderPhaseMap"
 	ReScoreRoute                        = "ReScore"
-	ReRateRoute                         = "ReRate"
+	ReRateGlickosRoute                  = "ReRateGlickos"
+	ReRateTrueSkillsRoute               = "ReRateTrueSkills"
 	GlobalStatsRoute                    = "GlobalStats"
 	RssRoute                            = "Rss"
 	ResaveRoute                         = "Resave"
@@ -1066,7 +1067,7 @@ func handleTrueSkillRateGameResults(w ResponseWriter, r Request) error {
 			}
 			seenUserIds[score.UserId] = time.Now()
 		}
-		if err = gameResult.TrueSkillRate(ctx); err != nil {
+		if err = gameResult.TrueSkillRate(ctx, true); err != nil {
 			return err
 		}
 		log.Infof(ctx, "Successfully rated %+v", gameResult)
@@ -1163,7 +1164,8 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_test_true-skill-rate-game-results", []string{"GET"}, TestTrueSkillRateGameResultsRoute, handleTestTrueSkillRateGameResults)
 	Handle(r, "/_re-save", []string{"GET"}, ResaveRoute, handleResave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
-	Handle(r, "/_re-rate", []string{"GET"}, ReRateRoute, handleReRate)
+	Handle(r, "/_re-rate-glickos", []string{"GET"}, ReRateGlickosRoute, handleReRateGlickos)
+	Handle(r, "/_re-rate-true-skills", []string{"GET"}, ReRateTrueSkillsRoute, handleReRateTrueSkills)
 	Handle(r, "/_re-score", []string{"GET"}, ReScoreRoute, handleReScore)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)

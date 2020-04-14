@@ -74,7 +74,7 @@ func makeOpponentsAndResults(userId string, glickos []Glicko, scores []GameScore
 	return opponents, results, nil
 }
 
-func handleReRate(w ResponseWriter, r Request) error {
+func handleReRateGlickos(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*auth.User)

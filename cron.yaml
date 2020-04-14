@@ -1,7 +1,7 @@
 cron:
-    - description: "TrueSkill rate GameResults."
-      url: /_true-skill-rate-game-results
-      schedule: every 10 minutes
+    #   - description: "TrueSkill rate GameResults."
+    #     url: /_true-skill-rate-game-results
+    #     schedule: every 10 minutes
     - description: "Reap inactive players from open games."
       url: /_reap-inactive-waiting-players
       schedule: every 24 hours
