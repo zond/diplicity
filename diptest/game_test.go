@@ -604,8 +604,8 @@ func testGameListFilters(t *testing.T, private bool) {
 		"Quickness":   10,
 		"Hated":       0,
 		"Hater":       0,
-		"Glicko": &game.Glicko{
-			PracticalRating: 20,
+		"TrueSkill": &game.TrueSkill{
+			Rating: 20,
 		},
 	}).Success()
 	gameURLString := env.GetRoute(game.IndexRoute).Success().
@@ -651,8 +651,8 @@ func testGameListFilters(t *testing.T, private bool) {
 		"Quickness":   10,
 		"Hated":       0,
 		"Hater":       0,
-		"Glicko": &game.Glicko{
-			PracticalRating: 20,
+		"TrueSkill": &game.TrueSkill{
+			Rating: 20,
 		},
 	}).Success()
 

@@ -467,9 +467,9 @@ var (
 		route: ListMyStagingGamesRoute,
 	}
 	topRatedPlayersHandler = userStatsHandler{
-		query: datastore.NewQuery(userStatsKind).Order("-Glicko.PracticalRating"),
+		query: datastore.NewQuery(userStatsKind).Order("-TrueSkill.Rating"),
 		name:  "top-rated-players",
-		desc:  []string{"Top rated alayers", "Players sorted by PracticalGlicko (lowest bound of their rating: rating - 2 * deviation)"},
+		desc:  []string{"Top rated alayers", "Players sorted by TrueSkill rating"},
 		route: ListTopRatedPlayersRoute,
 	}
 	topReliablePlayersHandler = userStatsHandler{

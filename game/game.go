@@ -274,11 +274,11 @@ func (g *Games) RemoveFiltered(userStats *UserStats) [][]string {
 			failedRequirements[i] = append(failedRequirements[i], "Hater")
 			continue
 		}
-		if game.MaxRating != 0 && userStats.Glicko.PracticalRating > game.MaxRating {
+		if game.MaxRating != 0 && userStats.TrueSkill.Rating > game.MaxRating {
 			failedRequirements[i] = append(failedRequirements[i], "MaxRating")
 			continue
 		}
-		if game.MinRating != 0 && userStats.Glicko.PracticalRating < game.MinRating {
+		if game.MinRating != 0 && userStats.TrueSkill.Rating < game.MinRating {
 			failedRequirements[i] = append(failedRequirements[i], "MinRating")
 			continue
 		}
