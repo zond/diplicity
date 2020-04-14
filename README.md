@@ -1,4 +1,5 @@
 ![Test diplicity](https://github.com/zond/diplicity/workflows/Test%20diplicity/badge.svg)
+[![GoDoc](https://godoc.org/github.com/zond/diplicity?status.svg)](https://godoc.org/github.com/zond/diplicity)
 
 # diplicity
 
