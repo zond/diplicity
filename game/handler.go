@@ -90,6 +90,7 @@ const (
 	ReScoreRoute                        = "ReScore"
 	ReRateGlickosRoute                  = "ReRateGlickos"
 	ReRateTrueSkillsRoute               = "ReRateTrueSkills"
+	DeleteTrueSkillsRoute               = "DeleteTrueSkills"
 	GlobalStatsRoute                    = "GlobalStats"
 	RssRoute                            = "Rss"
 	ResaveRoute                         = "Resave"
@@ -1165,6 +1166,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-save", []string{"GET"}, ResaveRoute, handleResave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
 	Handle(r, "/_re-rate-glickos", []string{"GET"}, ReRateGlickosRoute, handleReRateGlickos)
+	Handle(r, "/_delete-true-skills", []string{"GET"}, DeleteTrueSkillsRoute, handleDeleteTrueSkills)
 	Handle(r, "/_re-rate-true-skills", []string{"GET"}, ReRateTrueSkillsRoute, handleReRateTrueSkills)
 	Handle(r, "/_re-score", []string{"GET"}, ReScoreRoute, handleReScore)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)

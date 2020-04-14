@@ -55,6 +55,40 @@ func (t *TrueSkill) ID(ctx context.Context) (*datastore.Key, error) {
 	return datastore.NewKey(ctx, trueSkillKind, t.UserId, 0, t.GameID), nil
 }
 
+func handleDeleteTrueSkills(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	log.Infof(ctx, "handleDeleteTrueSkills(..., ...)")
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+	trueSkillIDs, err := datastore.NewQuery(trueSkillKind).KeysOnly().Limit(500).GetAll(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	if err := datastore.DeleteMulti(ctx, trueSkillIDs); err != nil {
+		return err
+	}
+
+	log.Infof(ctx, "handleDeleteTrueSkills(..., ...): Deleted %v TrueSkills", len(trueSkillIDs))
+
+	return nil
+}
+
 func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -75,16 +109,6 @@ func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 			return HTTPErr{"unauthorized", http.StatusForbidden}
 		}
 	}
-
-	trueSkillIDs, err := datastore.NewQuery(trueSkillKind).KeysOnly().GetAll(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	if err := datastore.DeleteMulti(ctx, trueSkillIDs); err != nil {
-		return err
-	}
-	log.Infof(ctx, "handleReRateTrueSkills(..., ...): Deleted %v TrueSkills", len(trueSkillIDs))
 
 	iterator := datastore.NewQuery(gameResultKind).Filter("Private=", false).Order("CreatedAt").Run(ctx)
 
