@@ -309,6 +309,9 @@ func sendMsgNotificationsToFCM(ctx context.Context, host string, gameID *datasto
 		if fcmToken.MessageConfig.DontSendData {
 			dataPayload = nil
 		}
+		if fcmToken.MessageConfig.DontSendNotification {
+			notificationPayload = nil
+		}
 
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			if err := FCMSendToTokensFunc.EnqueueIn(
