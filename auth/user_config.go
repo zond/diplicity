@@ -28,6 +28,7 @@ type FCMNotificationConfig struct {
 	ClickActionTemplate string `methods:"PUT" datastore:",noindex"`
 	TitleTemplate       string `methods:"PUT" datastore:",noindex"`
 	BodyTemplate        string `methods:"PUT" datastore:",noindex"`
+	DontSendData        bool   `methods:"PUT" datastore:"`
 }
 
 func (f *FCMNotificationConfig) Customize(ctx context.Context, notif *fcm.NotificationPayload, data interface{}) {

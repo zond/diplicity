@@ -307,6 +307,9 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datas
 		}
 
 		fcmToken.PhaseConfig.Customize(ctx, notificationPayload, msgContext.mailData)
+		if fcmToken.MessageConfig.DontSendData {
+			dataPayload = nil
+		}
 
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 			if err := FCMSendToTokensFunc.EnqueueIn(
