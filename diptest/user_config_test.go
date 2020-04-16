@@ -18,11 +18,13 @@ func TestUserConfig(t *testing.T) {
 			"App":          String("app"),
 			"ReplaceToken": replaceToken,
 			"PhaseConfig": map[string]interface{}{
+				"DontSendData":        false,
 				"ClickActionTemplate": "",
 				"TitleTemplate":       "",
 				"BodyTemplate":        "",
 			},
 			"MessageConfig": map[string]interface{}{
+				"DontSendData":        false,
 				"ClickActionTemplate": "",
 				"TitleTemplate":       "",
 				"BodyTemplate":        "",
@@ -35,11 +37,13 @@ func TestUserConfig(t *testing.T) {
 			"App":          String("app"),
 			"ReplaceToken": "",
 			"PhaseConfig": map[string]interface{}{
+				"DontSendData":        false,
 				"ClickActionTemplate": "",
 				"TitleTemplate":       "",
 				"BodyTemplate":        "",
 			},
 			"MessageConfig": map[string]interface{}{
+				"DontSendData":        false,
 				"ClickActionTemplate": "",
 				"TitleTemplate":       "",
 				"BodyTemplate":        "",
