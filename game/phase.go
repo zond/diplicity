@@ -166,6 +166,7 @@ func getPhaseNotificationContext(ctx context.Context, host string, gameID *datas
 	res.fcmData = map[string]interface{}{
 		"type":      "phase",
 		"gameID":    res.game.ID,
+		"gameDesc":  res.game.Desc,
 		"phaseMeta": res.phase.PhaseMeta,
 	}
 
