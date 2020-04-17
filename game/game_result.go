@@ -297,5 +297,14 @@ var GameResultResource = &Resource{
 }
 
 func (g *GameResult) Item(r Request) *Item {
-	return NewItem(g).SetName("game-result").AddLink(r.NewLink(GameResultResource.Link("self", Load, []string{"game_id", g.GameID.Encode()})))
+	rval := NewItem(g).SetName("game-result").
+		AddLink(r.NewLink(GameResultResource.Link("self", Load, []string{"game_id", g.GameID.Encode()})))
+	if g.TrueSkillRated {
+		rval = rval.AddLink(r.NewLink(Link{
+			Rel:         "true-skills",
+			Route:       ListGameResultTrueSkillsRoute,
+			RouteParams: []string{"game_id", g.GameID.Encode()},
+		}))
+	}
+	return rval
 }

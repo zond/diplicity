@@ -973,3 +973,65 @@ func TestGameLists(t *testing.T) {
 	env.GetRoute(game.ListStartedGamesRoute).Success()
 	env.GetRoute(game.ListFinishedGamesRoute).Success()
 }
+
+func TestTrueSkillLinksFromFinishedGames(t *testing.T) {
+	withStartedGame(func() {
+		for _, game := range startedGames {
+			p := game.Follow("phases", "Links").Success().
+				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+
+			p.Follow("phase-states", "Links").Success().
+				Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"ReadyToResolve": true,
+				"WantsDIAS":      true,
+			}).Success()
+		}
+
+		WaitForEmptyQueue("game-asyncResolvePhase")
+
+		newGameDesc := String("test-game")
+
+		opts := map[string]interface{}{
+			"Variant":            "Classical",
+			"NoMerge":            true,
+			"Desc":               newGameDesc,
+			"PhaseLengthMinutes": 60 * 24,
+		}
+		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+			Follow("create-game", "Links").
+			Body(opts).Success().
+			AssertEq(newGameDesc, "Properties", "Desc")
+		newGameID := startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+			Follow("my-staging-games", "Links").Success().
+			Find(newGameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).GetValue("Properties", "ID").(string)
+		for _, env := range startedGameEnvs[1:] {
+			env.GetRoute("Game.Load").RouteParams("id", newGameID).Success().
+				Follow("join", "Links").Body(map[string]interface{}{}).Success()
+		}
+
+		WaitForEmptyQueue("game-asyncStartGame")
+
+		for _, env := range startedGameEnvs {
+			p := env.GetRoute("Game.Load").RouteParams("id", newGameID).Success().
+				Follow("phases", "Links").Success().
+				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+
+			p.Follow("phase-states", "Links").Success().
+				Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"ReadyToResolve": true,
+				"WantsDIAS":      true,
+			}).Success()
+		}
+
+		WaitForEmptyQueue("game-asyncResolvePhase")
+		WaitForEmptyQueue("game-reRateTrueSkills")
+		WaitForEmptyQueue("game-updateUserStats")
+
+		trueSkills := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", newGameID).Success().
+			Follow("game-result", "Links").Success().
+			Follow("true-skills", "Links").Success()
+
+	})
+}

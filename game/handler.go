@@ -83,6 +83,7 @@ const (
 	ListTopHaterPlayersRoute            = "ListTopHaterPlayers"
 	ListTopQuickPlayersRoute            = "ListTopQuickPlayers"
 	ListFlaggedMessagesRoute            = "ListFlaggedMessages"
+	ListGameResultTrueSkillsRoute       = "ListGameResultTrueSkills"
 	DevResolvePhaseTimeoutRoute         = "DevResolvePhaseTimeout"
 	DevUserStatsUpdateRoute             = "DevUserStatsUpdate"
 	ReceiveMailRoute                    = "ReceiveMail"
@@ -1155,6 +1156,7 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, UserStatsResource)
 	HandleResource(r, MessageFlagResource)
 	HandleResource(r, FlaggedMessagesResource)
+	HandleResource(r, TrueSkillResource)
 	HeadCallback(func(head *Node) error {
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/7.9.2/firebase.js")
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/7.9.2/firebase-app.js")

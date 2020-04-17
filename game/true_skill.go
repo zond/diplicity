@@ -22,10 +22,79 @@ const (
 
 var (
 	reRateTrueSkillsFunc *DelayFunc
+	TrueSkillResource    = &Resource{
+		Listers: []Lister{
+			{
+				Path:    "/Game/{game_id}/GameResult/TrueSkills",
+				Route:   ListGameResultTrueSkillsRoute,
+				Handler: listGameResultTrueSkills,
+			},
+		},
+	}
 )
 
 func init() {
 	reRateTrueSkillsFunc = NewDelayFunc("game-reRateTrueSkills", reRateTrueSkills)
+}
+
+func listGameResultTrueSkills(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	_, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return err
+	}
+
+	trueSkills := TrueSkills{}
+	if _, err := datastore.NewQuery(trueSkillKind).Ancestor(gameID).GetAll(ctx, &trueSkills); err != nil {
+		return err
+	}
+	errors := make(chan error, len(trueSkills))
+	for idx := range trueSkills {
+		go func(trueSkill *TrueSkill) {
+			lastBefore := []TrueSkill{}
+			if _, err := datastore.NewQuery(trueSkillKind).Filter("CreatedAt<", trueSkill.CreatedAt).Order("-CreatedAt").Limit(1).GetAll(ctx, &lastBefore); err != nil {
+				errors <- err
+				return
+			}
+			if len(lastBefore) == 1 {
+				trueSkill.Previous = &lastBefore[0]
+			}
+			errors <- nil
+			return
+		}(&trueSkills[idx])
+	}
+	merr := appengine.MultiError{}
+	for _ = range trueSkills {
+		if err := <-errors; err != nil {
+			merr = append(merr, err)
+		}
+	}
+	if len(merr) > 0 {
+		return merr
+	}
+	w.SetContent(trueSkills.Item(r, gameID))
+	return nil
+}
+
+type TrueSkills []TrueSkill
+
+func (t TrueSkills) Item(r Request, gameID *datastore.Key) *Item {
+	skillItems := make(List, len(t))
+	for i := range t {
+		skillItems[i] = t[i].Item(r)
+	}
+	skillsItem := NewItem(skillItems).SetName("true-skills").AddLink(r.NewLink(Link{
+		Rel:         "self",
+		Route:       ListGameResultTrueSkillsRoute,
+		RouteParams: []string{"game_id", gameID.Encode()},
+	}))
+	return skillsItem
 }
 
 type TrueSkill struct {
@@ -36,6 +105,11 @@ type TrueSkill struct {
 	Mu        float64
 	Sigma     float64
 	Rating    float64
+	Previous  *TrueSkill `datastore:"-"`
+}
+
+func (t TrueSkill) Item(r Request) *Item {
+	return NewItem(t).SetName("true-skill")
 }
 
 func GetTrueSkill(ctx context.Context, userId string) (*TrueSkill, error) {
