@@ -224,11 +224,11 @@ func (g *GameResult) AssignScores() {
 				} else {
 					if g.Scores[i].Score > float64(tributePerSurvivor) {
 						tributeSum += float64(tributePerSurvivor)
-						g.Scores[i].Explanation += fmt.Sprintf("Tribute to board top:%v", tributePerSurvivor)
+						g.Scores[i].Explanation += fmt.Sprintf("Tribute:%v", -tributePerSurvivor)
 						g.Scores[i].Score -= float64(tributePerSurvivor)
 					} else {
 						tributeSum += g.Scores[i].Score
-						g.Scores[i].Explanation += fmt.Sprintf("Tribute to board top:%v", g.Scores[i].Score)
+						g.Scores[i].Explanation += fmt.Sprintf("Tribute:%v", -g.Scores[i].Score)
 						g.Scores[i].Score = 0
 					}
 				}
@@ -240,7 +240,7 @@ func (g *GameResult) AssignScores() {
 		// Distribute tribute.
 		for i := range g.Scores {
 			if topperNations[g.Scores[i].Member] {
-				g.Scores[i].Explanation += fmt.Sprintf("Tribute for board top:%v", topperShare)
+				g.Scores[i].Explanation += fmt.Sprintf("Tribute:%v", topperShare)
 				g.Scores[i].Score += topperShare
 			}
 		}
