@@ -1029,7 +1029,7 @@ func TestTrueSkillLinksFromFinishedGames(t *testing.T) {
 		WaitForEmptyQueue("game-reRateTrueSkills")
 		WaitForEmptyQueue("game-updateUserStats")
 
-		trueSkills := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", newGameID).Success().
+		startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", newGameID).Success().
 			Follow("game-result", "Links").Success().
 			Follow("true-skills", "Links").Success()
 
