@@ -152,7 +152,15 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 	userStatsSlice := make(UserStatsSlice, len(activeUserStatsIDs))
 	err = datastore.GetMulti(ctx, activeUserStatsIDs, userStatsSlice)
 	if err != nil {
-		return err
+		if merr, ok := err.(appengine.MultiError); ok {
+			for _, serr := range merr {
+				if serr != nil && serr != datastore.ErrNoSuchEntity {
+					return err
+				}
+			}
+		} else if err != datastore.ErrNoSuchEntity {
+			return err
+		}
 	}
 
 	for _, userStats := range userStatsSlice {

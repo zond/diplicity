@@ -1,101 +1,141 @@
 <html>
 	<head>
 		<style>
-.hist-container {
-	margin-bottom: 10px;
-}
+			.hist-container {
+				margin-bottom: 10px;
+			}
 		</style>
 		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 		<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 		<script>
-var pies = {
-	"ActiveGameHistograms-Variant": true,
-	"ActiveGameHistograms-NMembers": true,
-	"ActiveGameHistograms-Private": true,
-	"ActiveGameHistograms-ConferenceChat": true,
-	"ActiveGameHistograms-GroupChat": true,
-	"ActiveGameHistograms-PrivateChat": true,
-	"ActiveGameHistograms-NationAllocation": true,
-};
-function drawPie(histType, histName, data) {
-	var id = histType + '-' + histName;
-	$('#hist-' + id).remove();
-	$('#hist-' + id + '-graphics-container').prepend('<div id="hist-' + id + '"></div>');
-    var values = [];
-	var labels = [];
-	for (var label in data) {
-		labels.push(label);
-		values.push(data[label]);
-	}
-	Plotly.newPlot('hist-' + id, [
-		{
-			values: values,
-			labels: labels,
-			type: 'pie',
-		},
-    ]);
-}
-function drawHist(histType, histName, data, bins) {
-	var id = histType + '-' + histName;
-	$('#hist-' + id).remove();
-	$('#hist-' + id + '-graphics-container').prepend('<div id="hist-' + id + '" style="height: 370px; width: 100%;"></div>');
-	var x = [];
-	var min = Number.MAX_SAFE_INTEGER;
-	var max = Number.MIN_SAFE_INTEGER;
-	for (var valueStr in data) {
-		var value = parseInt(valueStr);
-		for (var i = 0; i < data[valueStr]; i++) {
-			x.push(value);
-			if (value < min) {
-				min = value;
+			var pies = {
+				"ActiveGameHistograms-Variant": true,
+				"ActiveGameHistograms-NMembers": true,
+				"ActiveGameHistograms-Anonymous": true,
+				"ActiveGameHistograms-Private": true,
+				"ActiveGameHistograms-ConferenceChat": true,
+				"ActiveGameHistograms-GroupChat": true,
+				"ActiveGameHistograms-PrivateChat": true,
+				"ActiveGameHistograms-NationAllocation": true
+			};
+			function drawPie(histType, histName, data) {
+				var id = histType + "-" + histName;
+				$("#hist-" + id).remove();
+				$("#hist-" + id + "-graphics-container").prepend(
+					'<div id="hist-' + id + '"></div>'
+				);
+				var values = [];
+				var labels = [];
+				for (var label in data) {
+					labels.push(label);
+					values.push(data[label]);
+				}
+				Plotly.newPlot("hist-" + id, [
+					{
+						values: values,
+						labels: labels,
+						type: "pie"
+					}
+				]);
 			}
-			if (value > max) {
-				max = value;
+			function drawHist(histType, histName, data, bins) {
+				var id = histType + "-" + histName;
+				$("#hist-" + id).remove();
+				$("#hist-" + id + "-graphics-container").prepend(
+					'<div id="hist-' +
+						id +
+						'" style="height: 370px; width: 100%;"></div>'
+				);
+				var x = [];
+				var min = Number.MAX_SAFE_INTEGER;
+				var max = Number.MIN_SAFE_INTEGER;
+				for (var valueStr in data) {
+					var value = parseInt(valueStr);
+					for (var i = 0; i < data[valueStr]; i++) {
+						x.push(value);
+						if (value < min) {
+							min = value;
+						}
+						if (value > max) {
+							max = value;
+						}
+					}
+				}
+				var opts = {
+					x: x,
+					type: "histogram"
+				};
+				if (bins != null) {
+					opts.nbinsx = bins;
+				}
+				Plotly.newPlot("hist-" + id, [opts]);
+				return [min, max];
 			}
-		}
-	};
-	var opts = {
-		x: x,
-		type: 'histogram',
-	};
-	if (bins != null) {
-		opts.nbinsx = bins;
-	}
-	Plotly.newPlot('hist-' + id, [
-			opts,
-	]);
-	return [min, max];
-}
-function addHistogram(histType, histName, hist) {
-	var id = histType + '-' + histName;
-	$('body').append('<div class="hist-container" id="hist-' + id + '-container"><h3>' + histType + '.' + histName + '</h3>' + hist.Description + '</div>');
-	$('#hist-' + id + '-container').append('<div id="hist-' + id + '-graphics-container"></div>');
-	if (!!pies[id]) {
-		drawPie(histType, histName, hist.Data);
-	} else {
-		var minAndMax = drawHist(histType, histName, hist.Data, null);
-		$('#hist-' + id + '-container').append('Force bins to: <span id="hist-' + id + '-force-bins">-</span><input id="hist-' + id + '-bin-slider" type="range" min="2" max="' + minAndMax[1] + '" style="width: 100%" />');
-		$('#hist-' + id + '-bin-slider').change(function(ev) {
-			drawHist(histType, histName, hist.Data, parseInt($(ev.target).val()) - 1);
-			$('#hist-' + id + '-force-bins').text($(ev.target).val());
-		});
-	}
-}
-$.ajax('https://diplicity-engine.appspot.com/GlobalStats', {
-	method: 'GET',
-    headers: {
-		'Accept': 'application/json',
-	},
-	success: function(data) {
-		for (var histType in data.Properties) {
-			for (var histName in data.Properties[histType]) {
-				addHistogram(histType, histName, data.Properties[histType][histName]);
+			function addHistogram(histType, histName, hist) {
+				var id = histType + "-" + histName;
+				$("body").append(
+					'<div class="hist-container" id="hist-' +
+						id +
+						'-container"><h3>' +
+						histType +
+						"." +
+						histName +
+						"</h3>" +
+						hist.Description +
+						"</div>"
+				);
+				$("#hist-" + id + "-container").append(
+					'<div id="hist-' + id + '-graphics-container"></div>'
+				);
+				if (!!pies[id]) {
+					drawPie(histType, histName, hist.Data);
+				} else {
+					var minAndMax = drawHist(
+						histType,
+						histName,
+						hist.Data,
+						null
+					);
+					$("#hist-" + id + "-container").append(
+						'Force bins to: <span id="hist-' +
+							id +
+							'-force-bins">-</span><input id="hist-' +
+							id +
+							'-bin-slider" type="range" min="2" max="' +
+							minAndMax[1] +
+							'" style="width: 100%" />'
+					);
+					$("#hist-" + id + "-bin-slider").change(function(ev) {
+						drawHist(
+							histType,
+							histName,
+							hist.Data,
+							parseInt($(ev.target).val()) - 1
+						);
+						$("#hist-" + id + "-force-bins").text(
+							$(ev.target).val()
+						);
+					});
+				}
 			}
-		}
-	},
-});
+			$.ajax("https://diplicity-engine.appspot.com/GlobalStats", {
+				method: "GET",
+				headers: {
+					Accept: "application/json"
+				},
+				success: function(data) {
+					for (var histType in data.Properties) {
+						for (var histName in data.Properties[histType]) {
+							addHistogram(
+								histType,
+								histName,
+								data.Properties[histType][histName]
+							);
+						}
+					}
+				}
+			});
 		</script>
 	</head>
-	<body>
-	</body>
+	<body></body>
 </html>
