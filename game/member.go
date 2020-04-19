@@ -182,6 +182,9 @@ func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId strin
 			return datastore.Delete(ctx, gameID)
 		}
 		game.Members = newMembers
+		if err := UpdateUserStatsASAP(ctx, []string{member.User.Id}); err != nil {
+			return err
+		}
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
@@ -243,6 +246,9 @@ func createMemberHelper(
 			if err := asyncStartGameFunc.EnqueueIn(ctx, 0, game.ID, r.Req().Host); err != nil {
 				return err
 			}
+		}
+		if err := UpdateUserStatsASAP(ctx, []string{member.User.Id}); err != nil {
+			return err
 		}
 		return nil
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
