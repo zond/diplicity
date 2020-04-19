@@ -182,6 +182,7 @@ func (u UserStatsSlice) Item(r Request, cursor *datastore.Cursor, limit int64, n
 }
 
 type UserStatsNumbers struct {
+	JoinedGames   int
 	StartedGames  int
 	FinishedGames int
 
@@ -287,6 +288,9 @@ func (u *UserStats) Item(r Request) *Item {
 
 func (u *UserStatsNumbers) Recalculate(ctx context.Context, private bool, userId string) error {
 	var err error
+	if u.JoinedGames, err = datastore.NewQuery(gameKind).Filter("Members.User.Id=", userId).Filter("Private=", private).Count(ctx); err != nil {
+		return err
+	}
 	if u.StartedGames, err = datastore.NewQuery(gameKind).Filter("Members.User.Id=", userId).Filter("Started=", true).Filter("Private=", private).Count(ctx); err != nil {
 		return err
 	}
