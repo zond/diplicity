@@ -842,6 +842,7 @@ func (p *PhaseResolver) Act() error {
 		eliminatedUsers := []string{}
 		scores := []GameScore{}
 
+Adding this compilation-breaking text, because this is a serious problem: We shouldn't go through the quitters slice here - it only tells us who wants to quit (and why), instead we should go through the phase results, and just check who is eliminated and NMRed, and the rest should be part of any draw.
 		for _, member := range p.Game.Members {
 			var state quitState
 			quitter, isQuitter := quitters[member.Nation]
