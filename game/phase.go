@@ -801,8 +801,8 @@ func (p *PhaseResolver) Act() error {
 
 	// Check if the game should end.
 
-	if soloWinner != "" || len(quitters) > len(variant.Nations)-1 {
-		log.Infof(p.Context, "soloWinner: %q, quitters: %v => game needs to end", soloWinner, PP(quitters))
+	if soloWinner != "" || len(quitters) > len(variant.Nations)-1 || (p.Game.LastYear != 0 && newPhase.Year > p.Game.LastYear) {
+		log.Infof(p.Context, "soloWinner: %q, quitters: %v, lastYear: %v => game needs to end", soloWinner, PP(quitters), p.Game.LastYear)
 		// Just to ensure we don't try to resolve it again, even by mistake.
 		newPhase.Resolved = true
 		newPhase.ResolvedAt = time.Now()

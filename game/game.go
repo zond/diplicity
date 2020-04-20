@@ -412,6 +412,7 @@ type Game struct {
 	DisablePrivateChat    bool             `methods:"POST"`
 	NationAllocation      AllocationMethod `methods:"POST"`
 	Anonymous             bool             `methods:"POST"`
+	LastYear              int              `methods:"POST"`
 
 	NMembers int
 	Members  Members

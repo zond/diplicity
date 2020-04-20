@@ -519,6 +519,36 @@ func TestSoloEnding(t *testing.T) {
 	})
 }
 
+func TestLastYearEnding(t *testing.T) {
+	withStartedGameOpts(func(opts map[string]interface{}) {
+		opts["LastYear"] = 1901
+	}, func() {
+		for i, nat := range startedGameNats {
+			p := startedGames[i].Follow("phases", "Links").Success().
+				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+
+			p.Follow("phase-states", "Links").Success().
+				Find(nat, []string{"Properties"}, []string{"Properties", "Nation"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"ReadyToResolve": true,
+			}).Success()
+		}
+		WaitForEmptyQueue("game-asyncResolvePhase")
+		for i, nat := range startedGameNats {
+			p := startedGames[i].Follow("phases", "Links").Success().
+				Find("Fall", []string{"Properties"}, []string{"Properties", "Season"})
+
+			p.Follow("phase-states", "Links").Success().
+				Find(nat, []string{"Properties"}, []string{"Properties", "Nation"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"ReadyToResolve": true,
+			}).Success()
+		}
+		WaitForEmptyQueue("game-asyncResolvePhase")
+		startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().AssertEq(true, "Properties", "Finished")
+	})
+}
+
 func TestDIASEnding(t *testing.T) {
 	withStartedGame(func() {
 		WaitForEmptyQueue("game-updateUserStats")
