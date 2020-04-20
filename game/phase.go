@@ -1131,14 +1131,29 @@ func (p *Phase) Recalc() error {
 
 type Phase struct {
 	PhaseMeta
-	GameID      *datastore.Key
-	Units       []UnitWrapper
-	SCs         []SC
-	Dislodgeds  []Dislodged
-	Dislodgers  []Dislodger
-	Bounces     []Bounce
-	Resolutions []Resolution
-	Host        string
+	GameID            *datastore.Key
+	Units             []UnitWrapper
+	SCs               []SC
+	Dislodgeds        []Dislodged
+	Dislodgers        []Dislodger
+	Bounces           []Bounce
+	Resolutions       []Resolution
+	Host              string
+	PreliminaryScores GameScores `datastore:"-"`
+}
+
+func (p *Phase) Score() {
+	scCountByMember := map[godip.Nation]int{}
+	for _, sc := range p.SCs {
+		scCountByMember[sc.Owner] += 1
+	}
+	for owner, scCount := range scCountByMember {
+		p.PreliminaryScores = append(p.PreliminaryScores, GameScore{
+			Member: owner,
+			SCs:    scCount,
+		})
+	}
+	p.PreliminaryScores.Assign()
 }
 
 func (p *Phase) Load(props []datastore.Property) error {
@@ -1265,6 +1280,7 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 	}
 	game.ID = gameID
 	phase.Refresh()
+	phase.Score()
 
 	member, isMember := game.GetMemberByUserId(user.Id)
 	if isMember {
@@ -1653,6 +1669,7 @@ func listPhases(w ResponseWriter, r Request) error {
 	}
 	for i := range phases {
 		phases[i].Refresh()
+		phases[i].Score()
 	}
 
 	w.SetContent(phases.Item(r, gameID))

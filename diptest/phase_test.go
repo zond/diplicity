@@ -519,6 +519,14 @@ func TestSoloEnding(t *testing.T) {
 	})
 }
 
+func TestPreliminaryScores(t *testing.T) {
+	withStartedGame(func() {
+		p := startedGames[0].Follow("phases", "Links").Success().
+			Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+		p.Find("Germany", []string{"Properties", "PreliminaryScores"}, []string{"Member"}).Find(14.064935064935066, []string{"Score"})
+	})
+}
+
 func TestLastYearEnding(t *testing.T) {
 	withStartedGameOpts(func(opts map[string]interface{}) {
 		opts["LastYear"] = 1901
