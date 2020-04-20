@@ -1142,8 +1142,11 @@ type Phase struct {
 	PreliminaryScores GameScores `datastore:"-"`
 }
 
-func (p *Phase) Score() {
+func (p *Phase) Score(nations godip.Nations) {
 	scCountByMember := map[godip.Nation]int{}
+	for _, nation := range nations {
+		scCountByMember[nation] = 0
+	}
 	for _, sc := range p.SCs {
 		scCountByMember[sc.Owner] += 1
 	}
@@ -1280,7 +1283,7 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 	}
 	game.ID = gameID
 	phase.Refresh()
-	phase.Score()
+	phase.Score(variants.Variants[game.Variant].Nations)
 
 	member, isMember := game.GetMemberByUserId(user.Id)
 	if isMember {
@@ -1669,7 +1672,7 @@ func listPhases(w ResponseWriter, r Request) error {
 	}
 	for i := range phases {
 		phases[i].Refresh()
-		phases[i].Score()
+		phases[i].Score(variants.Variants[game.Variant].Nations)
 	}
 
 	w.SetContent(phases.Item(r, gameID))
