@@ -626,6 +626,7 @@ func TestDIASEnding(t *testing.T) {
 		})
 
 		t.Run("VerifyStatsChanged", func(t *testing.T) {
+			WaitForEmptyQueue("game-reRateTrueSkills")
 			WaitForEmptyQueue("game-updateUserStats")
 			statsAfter := startedGameEnvs[0].GetRoute("UserStats.Load").RouteParams("user_id", startedGameEnvs[0].GetUID()).Success().
 				GetValue("Properties").(map[string]interface{})
@@ -667,6 +668,7 @@ func TestDIASEnding(t *testing.T) {
 					AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 			})
 			t.Run("TestStatsVisibility", func(t *testing.T) {
+				WaitForEmptyQueue("game-reRateTrueSkills")
 				WaitForEmptyQueue("game-updateUserStats")
 				statsPreviously := startedGameEnvs[0].GetRoute("UserStats.Load").RouteParams("user_id", startedGameEnvs[0].GetUID()).Success().
 					GetValue("Properties").(map[string]interface{})
