@@ -53,9 +53,9 @@ func (gs GameScores) Assign() {
 	// Score per SC is 34 / number of SCs.
 	scorePerSC := 34.0 / float64(numSCs)
 	// Tribute is one for each SCs over minimum topper size.
-	tributePerSurvivor := 0
+	tributePerSurvivor := 0.0
 	if topperSize > minTopperSize {
-		tributePerSurvivor = scorePerSC * (topperSize - minTopperSize)
+		tributePerSurvivor = scorePerSC * float64(topperSize-minTopperSize)
 	}
 
 	// Find toppers, and assign survival and SC scores, and find tribute sum.
@@ -72,10 +72,10 @@ func (gs GameScores) Assign() {
 			if gs[i].SCs == topperSize {
 				topperNations[gs[i].Member] = true
 			} else {
-				if gs[i].Score > float64(tributePerSurvivor) {
-					tributeSum += float64(tributePerSurvivor)
+				if gs[i].Score > tributePerSurvivor {
+					tributeSum += tributePerSurvivor
 					gs[i].Explanation += fmt.Sprintf("Tribute:%v", -tributePerSurvivor)
-					gs[i].Score -= float64(tributePerSurvivor)
+					gs[i].Score -= tributePerSurvivor
 				} else {
 					tributeSum += gs[i].Score
 					gs[i].Explanation += fmt.Sprintf("Tribute:%v", -gs[i].Score)
