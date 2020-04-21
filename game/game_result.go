@@ -269,7 +269,42 @@ func (g *GameResult) ID(ctx context.Context) *datastore.Key {
 	return GameResultID(ctx, g.GameID)
 }
 
-func (g *GameResult) Save(ctx context.Context) error {
+// I have seen some signs that there are broken GameResults in the database. Thus, some validation.
+func (g *GameResult) Validate(game *Game) error {
+	if !g.GameID.Equal(game.ID) {
+		return fmt.Errorf("Invalid GameResult %+v, GameID doesn't match parent %+v", g, game)
+	}
+	userMap := map[string]bool{}
+	for _, member := range game.Members {
+		userMap[member.User.Id] = true
+	}
+	if g.SoloWinnerUser != "" && !userMap[g.SoloWinnerUser] {
+		return fmt.Errorf("Invalid GameResult %+v, SoloWinner doesn't match parent %+v", g, game)
+	}
+	isSubset := func(users []string) bool {
+		for _, user := range users {
+			if !userMap[user] {
+				return false
+			}
+		}
+		return true
+	}
+	if !isSubset(g.DIASUsers) {
+		return fmt.Errorf("Invalid GameResult %+v, DIASUsers don't match parent %+v", g, game)
+	}
+	if !isSubset(g.EliminatedUsers) {
+		return fmt.Errorf("Invalid GameResult %+v, EliminatedUsers don't match parent %+v", g, game)
+	}
+	if !isSubset(g.AllUsers) {
+		return fmt.Errorf("Invalid GameResult %+v, AllUsers don't match parent %+v", g, game)
+	}
+	return nil
+}
+
+func (g *GameResult) Save(ctx context.Context, game *Game) error {
+	if err := g.Validate(game); err != nil {
+		return err
+	}
 	_, err := datastore.Put(ctx, g.ID(ctx), g)
 	return err
 }

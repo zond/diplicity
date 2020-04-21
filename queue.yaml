@@ -1,4 +1,6 @@
 queue:
+    - name: game-reGameResult
+      rate: 500/s
     - name: game-reRateTrueSkills
       rate: 1/s
     - name: game-sendPhaseDeadlineWarning

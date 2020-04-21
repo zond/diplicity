@@ -887,7 +887,7 @@ func (p *PhaseResolver) Act() error {
 			CreatedAt:         time.Now(),
 		}
 		gameResult.AssignScores()
-		if err := gameResult.Save(p.Context); err != nil {
+		if err := gameResult.Save(p.Context, p.Game); err != nil {
 			log.Errorf(p.Context, "Unable to save game result %v: %v; hope datastore gets fixed", PP(gameResult), err)
 			return err
 		}

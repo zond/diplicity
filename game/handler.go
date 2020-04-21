@@ -27,6 +27,7 @@ var (
 	router                   = mux.NewRouter()
 	reScoreFunc              *DelayFunc
 	reSaveFunc               *DelayFunc
+	reGameResultFunc         *DelayFunc
 	ejectMemberFunc          *DelayFunc
 	recalculateDIASUsersFunc *DelayFunc
 	containerGenerators      = map[string]func() interface{}{
@@ -41,6 +42,7 @@ var (
 func init() {
 	reSaveFunc = NewDelayFunc("game-reSave", reSave)
 	reScoreFunc = NewDelayFunc("game-reScore", reScore)
+	reGameResultFunc = NewDelayFunc("game-reGameResult", reGameResult)
 	ejectMemberFunc = NewDelayFunc("game-ejectMember", ejectMember)
 	recalculateDIASUsersFunc = NewDelayFunc("", recalculateDIASUsers)
 	AllocationResource = &Resource{
@@ -88,6 +90,7 @@ const (
 	DevUserStatsUpdateRoute             = "DevUserStatsUpdate"
 	ReceiveMailRoute                    = "ReceiveMail"
 	RenderPhaseMapRoute                 = "RenderPhaseMap"
+	ReGameResultRoute                   = "ReGameResult"
 	ReScoreRoute                        = "ReScore"
 	ReRateGlickosRoute                  = "ReRateGlickos"
 	ReRateTrueSkillsRoute               = "ReRateTrueSkills"
@@ -594,6 +597,46 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func reGameResult(ctx context.Context, counter int, valid int, invalid int, cursorString string) error {
+	log.Infof(ctx, "reGameResult(..., %v, %v, %v, %q)", counter, valid, invalid, cursorString)
+
+	q := datastore.NewQuery(gameResultKind)
+	if cursorString != "" {
+		cursor, err := datastore.DecodeCursor(cursorString)
+		if err != nil {
+			return err
+		}
+		q = q.Start(cursor)
+	}
+	iterator := q.Run(ctx)
+
+	gameResult := &GameResult{}
+	if _, err := iterator.Next(gameResult); err == datastore.Done {
+		log.Infof(ctx, "reGameResult(..., %v, %v, %v, %q) is DONE", counter, valid, invalid, cursorString)
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	game := &Game{ID: gameResult.GameID}
+	if err := datastore.Get(ctx, gameResult.GameID, game); err != nil {
+		return err
+	}
+
+	if err := gameResult.Validate(game); err != nil {
+		log.Errorf(ctx, "Loaded invalid GameResult: %v", err)
+		invalid += 1
+	} else {
+		valid += 1
+	}
+
+	cursor, err := iterator.Cursor()
+	if err != nil {
+		return err
+	}
+	return reGameResultFunc.EnqueueIn(ctx, 0, counter+1, valid, invalid, cursor.String())
+}
+
 func reScore(ctx context.Context, counter int, cursorString string) error {
 	log.Infof(ctx, "reScore(..., %v, %q)", counter, cursorString)
 
@@ -617,7 +660,12 @@ func reScore(ctx context.Context, counter int, cursorString string) error {
 
 	gameResult.AssignScores()
 
-	if err := gameResult.Save(ctx); err != nil {
+	game := &Game{}
+	if err := datastore.Get(ctx, gameResult.GameID, game); err != nil {
+		return err
+	}
+
+	if err := gameResult.Save(ctx, game); err != nil {
 		return err
 	}
 
@@ -701,6 +749,28 @@ func reSave(ctx context.Context, kind string, counter int, cursorString string) 
 	}
 
 	return nil
+}
+
+func handleReGameResult(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	return reGameResultFunc.EnqueueIn(ctx, 0, 0, 0, 0, "")
 }
 
 func handleReScore(w ResponseWriter, r Request) error {
@@ -1127,6 +1197,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_delete-true-skills", []string{"GET"}, DeleteTrueSkillsRoute, handleDeleteTrueSkills)
 	Handle(r, "/_re-rate-true-skills", []string{"GET"}, ReRateTrueSkillsRoute, handleReRateTrueSkills)
 	Handle(r, "/_re-score", []string{"GET"}, ReScoreRoute, handleReScore)
+	Handle(r, "/_re-game-result", []string{"GET"}, ReGameResultRoute, handleReGameResult)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
