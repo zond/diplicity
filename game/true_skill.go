@@ -173,12 +173,12 @@ func handleDeleteTrueSkills(w ResponseWriter, r Request) error {
 
 func UpdateTrueSkillsASAP(ctx context.Context) error {
 	if appengine.IsDevAppServer() {
-		return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, 0, "", true)
+		return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, 0, "", true, true)
 	}
-	return reRateTrueSkillsFunc.EnqueueIn(ctx, time.Second*10, 0, "", true)
+	return reRateTrueSkillsFunc.EnqueueIn(ctx, time.Second*10, 0, "", true, true)
 }
 
-func reRateTrueSkills(ctx context.Context, counter int, cursorString string, onlyUnrated bool) error {
+func reRateTrueSkills(ctx context.Context, counter int, cursorString string, onlyUnrated bool, updateUserStats bool) error {
 	log.Infof(ctx, "reRateTrueSkills(..., %v, %v, %v)", counter, cursorString, onlyUnrated)
 
 	query := datastore.NewQuery(gameResultKind).Filter("Private=", false).Order("CreatedAt")
@@ -209,13 +209,24 @@ func reRateTrueSkills(ctx context.Context, counter int, cursorString string, onl
 	}
 	log.Infof(ctx, "reRateTrueSkills(..., %v, %v, %v): Successfully rated %+v", counter, cursorString, onlyUnrated, gameResult)
 
+	if updateUserStats {
+		userIds := []string{}
+		for _, score := range gameResult.Scores {
+			userIds = append(userIds, score.UserId)
+		}
+		if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
+			return err
+		}
+		log.Infof(ctx, "reRateTrueSkills(..., %v, %v, %v): Successfully scheduled %+v for stats update", counter, cursorString, onlyUnrated, userIds)
+	}
+
 	cursor, err := iterator.Cursor()
 	if err != nil {
 		log.Errorf(ctx, "reRateTrueSkills(..., %v, %v, %v): iterator.Cursor(): %v", counter, cursorString, onlyUnrated, err)
 		return err
 	}
 
-	return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, counter+1, cursor.String(), onlyUnrated)
+	return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, counter+1, cursor.String(), onlyUnrated, updateUserStats)
 }
 
 func handleReRateTrueSkills(w ResponseWriter, r Request) error {
@@ -239,5 +250,5 @@ func handleReRateTrueSkills(w ResponseWriter, r Request) error {
 		}
 	}
 
-	return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, 0, "", false)
+	return reRateTrueSkillsFunc.EnqueueIn(ctx, 0, 0, "", false, false)
 }
