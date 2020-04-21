@@ -48,6 +48,7 @@ const (
 	ListVariantsRoute   = "ListVariants"
 	VariantStartRoute   = "StartVariant"
 	VariantResolveRoute = "ResolveVariant"
+	VariantOptionsRoute = "VariantOptions"
 	VariantUnitsRoute   = "VariantUnits"
 	VariantFlagsRoute   = "VariantFlags"
 	VariantMapRoute     = "VariantMap"
@@ -144,6 +145,15 @@ func (rv *Variant) Item(r Request) *Item {
 			Rel:         fmt.Sprintf("unit-%v", unitName),
 			Route:       VariantUnitsRoute,
 			RouteParams: []string{"variant_name", rv.Name, "unit_name", string(unitName)},
+		}))
+	}
+	for _, nationName := range rv.Nations {
+		item.AddLink(r.NewLink(Link{
+			Rel:         fmt.Sprintf("%v-options", nationName),
+			Method:      "POST",
+			Route:       VariantOptionsRoute,
+			RouteParams: []string{"name", rv.Name, "nation", string(nationName)},
+			Type:        reflect.TypeOf(Phase{}),
 		}))
 	}
 	for nationName := range rv.SVGFlags {
@@ -304,6 +314,7 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, VariantResource)
 	Handle(r, "/Variant/{name}/Start", []string{"GET"}, VariantStartRoute, startVariant)
 	Handle(r, "/Variant/{name}/Resolve", []string{"POST"}, VariantResolveRoute, resolveVariant)
+	Handle(r, "/Variant/{name}/{nation}/Options", []string{"POST"}, VariantOptionsRoute, variantOptions)
 	Handle(r, "/Variant/{name}/Map.svg", []string{"GET"}, VariantMapRoute, variantMap)
 	Handle(r, "/Variant/{variant_name}/Units/{unit_name}.svg", []string{"GET"}, VariantUnitsRoute, variantUnits)
 	Handle(r, "/Variant/{variant_name}/Flags/{nation_name}.svg", []string{"GET"}, VariantFlagsRoute, variantFlags)
