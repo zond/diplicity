@@ -50,13 +50,13 @@ func (gs GameScores) Assign() {
 
 	// Minimum number of SCs required to top the board is ceil(number of SCs / number of players) + 1 (ceil(34 / 7) + 1 = 5 + 1 = 6).
 	minTopperSize := int(math.Ceil(float64(numSCs)/float64(len(gs))) + 1)
+	// Score per SC is 34 / number of SCs.
+	scorePerSC := 34.0 / float64(numSCs)
 	// Tribute is one for each SCs over minimum topper size.
 	tributePerSurvivor := 0
 	if topperSize > minTopperSize {
-		tributePerSurvivor = topperSize - minTopperSize
+		tributePerSurvivor = scorePerSC * (topperSize - minTopperSize)
 	}
-	// Score per SC is 34 / number of SCs.
-	scorePerSC := 34.0 / float64(numSCs)
 
 	// Find toppers, and assign survival and SC scores, and find tribute sum.
 	tributeSum := 0.0
@@ -325,7 +325,7 @@ func (g *GameResult) Repair(ctx context.Context, game *Game) error {
 		if merr, ok := err.(appengine.MultiError); ok {
 			for idx, serr := range merr {
 				if serr != nil && (idx == 0 || err != datastore.ErrNoSuchEntity) {
-					log.Errorf(ctx, "Unable to load phase and phase states, error %v was %v", serr)
+					log.Errorf(ctx, "Unable to load phase and phase states, error %v was %v", idx, serr)
 					return err
 				}
 			}

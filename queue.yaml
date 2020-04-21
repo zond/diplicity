@@ -10,7 +10,7 @@ queue:
     - name: game-ejectMember
       rate: 500/s
     - name: game-reScore
-      rate: 10/s
+      rate: 1/s
     - name: game-reSave
       rate: 10/s
     - name: game-updateGlickos
