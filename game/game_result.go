@@ -306,15 +306,10 @@ func (g *GameResult) Repair(ctx context.Context, game *Game) error {
 	if err != nil {
 		return err
 	}
-	phaseResultID, err := PhaseResultID(ctx, g.GameID, newestPhaseMeta.PhaseOrdinal-1)
-	if err != nil {
-		return err
-	}
 	phase := &Phase{}
-	phaseResult := &PhaseResult{}
 	phaseStateByNat := map[godip.Nation]*PhaseState{}
-	keys := []*datastore.Key{phaseID, phaseResultID}
-	values := []interface{}{phase, phaseResult}
+	keys := []*datastore.Key{phaseID}
+	values := []interface{}{phase}
 	for _, member := range game.Members {
 		phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
 		if err != nil {
@@ -347,10 +342,18 @@ func (g *GameResult) Repair(ctx context.Context, game *Game) error {
 		g.SoloWinnerUser = ""
 	}
 
-	g.NMRUsers = phaseResult.NMRUsers
-	g.NMRMembers = convertUidsToNats(g.NMRUsers)
+	g.NMRMembers = nil
+	for _, state := range phaseStateByNat {
+		if state.OnProbation {
+			g.NMRMembers = append(g.NMRMembers, state.Nation)
+		}
+	}
+	g.NMRUsers = convertNatsToUids(g.NMRMembers)
 
-	g.AllUsers = phaseResult.AllUsers
+	g.AllUsers = nil
+	for _, member := range game.Members {
+		g.AllUsers = append(g.AllUsers, member.User.Id)
+	}
 
 	g.EliminatedMembers = nil
 	scByNat := map[godip.Nation]int{}
