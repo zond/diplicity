@@ -162,7 +162,7 @@ func sendEmailError(ctx context.Context, to string, errorMessage string) error {
 	}
 
 	msg := sendgrid.NewMail()
-	msg.SetText(fmt.Sprint("Your recent mail to diplicity was not successfully parsed.\n\nAn error message follows.\n\n%v", errorMessage))
+	msg.SetText(fmt.Sprintf("Your recent mail to diplicity was not successfully parsed.\n\nAn error message follows.\n\n%v", errorMessage))
 	msg.SetSubject("Unsuccessfully parsed")
 	msg.AddTo(to)
 	msg.SetFrom(noreplyFromAddr)
@@ -370,7 +370,7 @@ func sendMsgNotificationsToUsers(ctx context.Context, host string, gameID *datas
 			return err
 		}
 		if err := countUnreadMessages(ctx, channels, member.Nation); err != nil {
-			log.Errorf(ctx, "Unable to count unread messages for %v in %v; hope datastore gets fixed", member.Nation, gameID, err)
+			log.Errorf(ctx, "Unable to count unread messages for %v in %v: %v; hope datastore gets fixed", member.Nation, gameID, err)
 			return err
 		}
 		total := 0
