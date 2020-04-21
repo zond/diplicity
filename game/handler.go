@@ -667,7 +667,7 @@ func reScore(ctx context.Context, counter int, cursorString string) error {
 
 	gameResult.AssignScores()
 
-	game := &Game{}
+	game := &Game{ID: gameResult.ID}
 	if err := datastore.Get(ctx, gameResult.GameID, game); err != nil {
 		return err
 	}
