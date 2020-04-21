@@ -324,7 +324,7 @@ func (g *GameResult) Repair(ctx context.Context, game *Game) error {
 	if err := datastore.GetMulti(ctx, keys, values); err != nil {
 		if merr, ok := err.(appengine.MultiError); ok {
 			for idx, serr := range merr {
-				if serr != nil && (idx == 0 || err != datastore.ErrNoSuchEntity) {
+				if serr != nil && (idx == 0 || serr != datastore.ErrNoSuchEntity) {
 					log.Errorf(ctx, "Unable to load phase and phase states, error %v was %v", idx, serr)
 					return err
 				}
