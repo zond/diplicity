@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/mail"
 	"net/url"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -868,6 +870,14 @@ func (p *PhaseResolver) Act() error {
 				Member: member.Nation,
 				SCs:    scCounts[member.Nation],
 			})
+		}
+
+		sort.Sort(sort.StringSlice(nmrUsers))
+		sort.Sort(sort.StringSlice(oldPhaseResult.NMRUsers))
+		if !reflect.DeepEqual(nmrUsers, oldPhaseResult.NMRUsers) {
+			err := fmt.Errorf("oldPhaseResult %+v doesn't match the NMRUsers %+v we want to store in the GameResult!", oldPhaseResult, nmrUsers)
+			log.Errorf(p.Context, err.Error())
+			return err
 		}
 
 		gameResult := &GameResult{

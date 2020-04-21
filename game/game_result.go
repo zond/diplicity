@@ -7,14 +7,15 @@ import (
 	"sort"
 	"time"
 
-	"github.com/mafredri/go-trueskill"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip"
+	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
 
+	trueskill "github.com/mafredri/go-trueskill"
 	. "github.com/zond/goaeoas"
 )
 
@@ -267,6 +268,111 @@ func GameResultID(ctx context.Context, gameID *datastore.Key) *datastore.Key {
 
 func (g *GameResult) ID(ctx context.Context) *datastore.Key {
 	return GameResultID(ctx, g.GameID)
+}
+
+func (g *GameResult) Repair(ctx context.Context, game *Game) error {
+	if !game.ID.Equal(g.GameID) {
+		return fmt.Errorf("Can't repair a GameResult %+v with another Game %+v", g, game)
+	}
+
+	if len(game.NewestPhaseMeta) != 1 {
+		return fmt.Errorf("Can't repair GameResult with a game without NewestPhaseMeta %+v", game)
+	}
+	newestPhaseMeta := game.NewestPhaseMeta[0]
+
+	uidByNat := map[godip.Nation]string{}
+	natByUid := map[string]godip.Nation{}
+	for _, member := range game.Members {
+		uidByNat[member.Nation] = member.User.Id
+		natByUid[member.User.Id] = member.Nation
+	}
+
+	convertUidsToNats := func(uids []string) godip.Nations {
+		rval := make(godip.Nations, len(uids))
+		for idx, uid := range uids {
+			rval[idx] = natByUid[uid]
+		}
+		return rval
+	}
+	convertNatsToUids := func(nats godip.Nations) []string {
+		rval := make([]string, len(nats))
+		for idx, nat := range nats {
+			rval[idx] = uidByNat[nat]
+		}
+		return rval
+	}
+
+	phaseID, err := PhaseID(ctx, g.GameID, newestPhaseMeta.PhaseOrdinal)
+	if err != nil {
+		return err
+	}
+	phaseResultID, err := PhaseResultID(ctx, g.GameID, newestPhaseMeta.PhaseOrdinal-1)
+	if err != nil {
+		return err
+	}
+	phase := &Phase{}
+	phaseResult := &PhaseResult{}
+	phaseStateByNat := map[godip.Nation]*PhaseState{}
+	keys := []*datastore.Key{phaseID, phaseResultID}
+	values := []interface{}{phase, phaseResult}
+	for _, member := range game.Members {
+		phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
+		if err != nil {
+			return err
+		}
+		keys = append(keys, phaseStateID)
+		phaseState := &PhaseState{}
+		phaseStateByNat[member.Nation] = phaseState
+		values = append(values, phaseState)
+	}
+
+	if err := datastore.GetMulti(ctx, keys, values); err != nil {
+		log.Errorf(ctx, "Unable to load phase, phase result, and phase states: %v", err)
+		return err
+	}
+
+	orderMap, err := phase.Orders(ctx)
+	if err != nil {
+		return err
+	}
+	variant := variants.Variants[game.Variant]
+	s, err := phase.State(ctx, variant, orderMap)
+	if err != nil {
+		return err
+	}
+	g.SoloWinnerMember = variant.SoloWinner(s)
+	if g.SoloWinnerMember != "" {
+		g.SoloWinnerUser = uidByNat[g.SoloWinnerMember]
+	} else {
+		g.SoloWinnerUser = ""
+	}
+
+	g.NMRUsers = phaseResult.NMRUsers
+	g.NMRMembers = convertUidsToNats(g.NMRUsers)
+
+	g.AllUsers = phaseResult.AllUsers
+
+	g.EliminatedMembers = nil
+	scByNat := map[godip.Nation]int{}
+	for _, owner := range s.SupplyCenters() {
+		scByNat[owner] += 1
+	}
+	for _, member := range game.Members {
+		if scByNat[member.Nation] == 0 {
+			g.EliminatedMembers = append(g.EliminatedMembers, member.Nation)
+		}
+	}
+	g.EliminatedUsers = convertNatsToUids(g.EliminatedMembers)
+
+	g.DIASUsers = nil
+	for _, member := range game.Members {
+		if phaseStateByNat[member.Nation].WantsDIAS {
+			g.DIASUsers = append(g.DIASUsers, member.User.Id)
+		}
+	}
+	g.DIASMembers = convertUidsToNats(g.DIASUsers)
+
+	return g.Save(ctx, game)
 }
 
 // I have seen some signs that there are broken GameResults in the database. Thus, some validation.

@@ -597,7 +597,7 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func reGameResult(ctx context.Context, counter int, valid int, invalid int, cursorString string) error {
+func reGameResult(ctx context.Context, withRepair bool, counter int, valid int, invalid int, cursorString string) error {
 	log.Infof(ctx, "reGameResult(..., %v, %v, %v, %q)", counter, valid, invalid, cursorString)
 
 	q := datastore.NewQuery(gameResultKind)
@@ -625,6 +625,10 @@ func reGameResult(ctx context.Context, counter int, valid int, invalid int, curs
 
 	if err := gameResult.Validate(game); err != nil {
 		log.Errorf(ctx, "Loaded invalid GameResult: %v", err)
+		if err = gameResult.Repair(ctx, game); err != nil {
+			log.Errorf(ctx, "Unable to repair GameResult: %v", err)
+			return err
+		}
 		invalid += 1
 	} else {
 		valid += 1
@@ -634,7 +638,7 @@ func reGameResult(ctx context.Context, counter int, valid int, invalid int, curs
 	if err != nil {
 		return err
 	}
-	return reGameResultFunc.EnqueueIn(ctx, 0, counter+1, valid, invalid, cursor.String())
+	return reGameResultFunc.EnqueueIn(ctx, 0, withRepair, counter+1, valid, invalid, cursor.String())
 }
 
 func reScore(ctx context.Context, counter int, cursorString string) error {
@@ -770,7 +774,7 @@ func handleReGameResult(w ResponseWriter, r Request) error {
 		}
 	}
 
-	return reGameResultFunc.EnqueueIn(ctx, 0, 0, 0, 0, "")
+	return reGameResultFunc.EnqueueIn(ctx, 0, r.Req().URL.Query().Get("with-repair") == "true", 0, 0, 0, "")
 }
 
 func handleReScore(w ResponseWriter, r Request) error {
