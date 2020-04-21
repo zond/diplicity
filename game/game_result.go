@@ -48,6 +48,16 @@ func (gs GameScores) Assign() {
 		numSCs += gs[i].SCs
 	}
 
+	if numSCs == 0 {
+		scorePerPlayer := 100.0 / float64(len(gs))
+		// Degenrate case, just spread all points evenly.
+		for i := range gs {
+			gs[i].Explanation = fmt.Sprintf("Degenerate result, no SCs owned:%v", scorePerPlayer)
+			gs[i].Score = scorePerPlayer
+		}
+		return
+	}
+
 	// Minimum number of SCs required to top the board is ceil(number of SCs / number of players) + 1 (ceil(34 / 7) + 1 = 5 + 1 = 6).
 	minTopperSize := int(math.Ceil(float64(numSCs)/float64(len(gs))) + 1)
 	// Score per SC is 34 / number of SCs.
