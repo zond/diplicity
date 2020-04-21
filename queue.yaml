@@ -1,4 +1,6 @@
 queue:
+    - name: game-updateAllUserStats
+      rate: 10/s
     - name: game-reGameResult
       rate: 500/s
     - name: game-reRateTrueSkills

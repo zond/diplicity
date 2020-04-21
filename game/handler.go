@@ -30,6 +30,7 @@ var (
 	reGameResultFunc         *DelayFunc
 	ejectMemberFunc          *DelayFunc
 	recalculateDIASUsersFunc *DelayFunc
+	updateAllUserStatsFunc   *DelayFunc
 	containerGenerators      = map[string]func() interface{}{
 		gameKind:        func() interface{} { return &Game{} },
 		gameResultKind:  func() interface{} { return &GameResult{} },
@@ -45,6 +46,7 @@ func init() {
 	reGameResultFunc = NewDelayFunc("game-reGameResult", reGameResult)
 	ejectMemberFunc = NewDelayFunc("game-ejectMember", ejectMember)
 	recalculateDIASUsersFunc = NewDelayFunc("", recalculateDIASUsers)
+	updateAllUserStatsFunc = NewDelayFunc("game-updateAllUserStats", updateAllUserStats)
 	AllocationResource = &Resource{
 		Create:      createAllocation,
 		RenderLinks: true,
@@ -94,6 +96,7 @@ const (
 	ReScoreRoute                        = "ReScore"
 	ReRateGlickosRoute                  = "ReRateGlickos"
 	ReRateTrueSkillsRoute               = "ReRateTrueSkills"
+	UpdateAllUserStatsRoute             = "UpdateAllUserStats"
 	DeleteTrueSkillsRoute               = "DeleteTrueSkills"
 	GlobalStatsRoute                    = "GlobalStats"
 	RssRoute                            = "Rss"
@@ -644,6 +647,38 @@ func reGameResult(ctx context.Context, withRepair bool, counter int, valid int, 
 	return reGameResultFunc.EnqueueIn(ctx, 0, withRepair, counter+1, valid, invalid, cursor.String())
 }
 
+func updateAllUserStats(ctx context.Context, counter int, cursorString string) error {
+	log.Infof(ctx, "updateAllUserStats(..., %v, %q)", counter, cursorString)
+
+	q := datastore.NewQuery(userStatsKind).KeysOnly()
+	if cursorString != "" {
+		cursor, err := datastore.DecodeCursor(cursorString)
+		if err != nil {
+			return err
+		}
+		q = q.Start(cursor)
+	}
+	iterator := q.Run(ctx)
+
+	id, err := iterator.Next(nil)
+	if err == datastore.Done {
+		log.Infof(ctx, "updateAllUserStats(..., %v, %q) is DONE", counter, cursorString)
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	if err := updateUserStat(ctx, id.StringID()); err != nil {
+		return err
+	}
+
+	cursor, err := iterator.Cursor()
+	if err != nil {
+		return err
+	}
+	return updateAllUserStatsFunc.EnqueueIn(ctx, 0, counter+1, cursor.String())
+}
+
 func reScore(ctx context.Context, counter int, cursorString string) error {
 	log.Infof(ctx, "reScore(..., %v, %q)", counter, cursorString)
 
@@ -778,6 +813,28 @@ func handleReGameResult(w ResponseWriter, r Request) error {
 	}
 
 	return reGameResultFunc.EnqueueIn(ctx, 0, r.Req().URL.Query().Get("with-repair") == "true", 0, 0, 0, "")
+}
+
+func handleUpdateAllUserStats(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	return updateAllUserStatsFunc.EnqueueIn(ctx, 0, 0, "")
 }
 
 func handleReScore(w ResponseWriter, r Request) error {
@@ -1204,6 +1261,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_delete-true-skills", []string{"GET"}, DeleteTrueSkillsRoute, handleDeleteTrueSkills)
 	Handle(r, "/_re-rate-true-skills", []string{"GET"}, ReRateTrueSkillsRoute, handleReRateTrueSkills)
 	Handle(r, "/_re-score", []string{"GET"}, ReScoreRoute, handleReScore)
+	Handle(r, "/_update-all-user-stats", []string{"GET"}, UpdateAllUserStatsRoute, handleUpdateAllUserStats)
 	Handle(r, "/_re-game-result", []string{"GET"}, ReGameResultRoute, handleReGameResult)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)

@@ -209,15 +209,6 @@ func reRateTrueSkills(ctx context.Context, counter int, cursorString string, onl
 	}
 	log.Infof(ctx, "reRateTrueSkills(..., %v, %v, %v): Successfully rated %+v", counter, cursorString, onlyUnrated, gameResult)
 
-	userIds := []string{}
-	for _, score := range gameResult.Scores {
-		userIds = append(userIds, score.UserId)
-	}
-	if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
-		return err
-	}
-	log.Infof(ctx, "reRateTrueSkills(..., %v, %v, %v): Successfully scheduled %+v for stats update", counter, cursorString, onlyUnrated, userIds)
-
 	cursor, err := iterator.Cursor()
 	if err != nil {
 		log.Errorf(ctx, "reRateTrueSkills(..., %v, %v, %v): iterator.Cursor(): %v", counter, cursorString, onlyUnrated, err)
