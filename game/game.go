@@ -490,6 +490,9 @@ func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
 	if g.NMembers+o.NMembers > len(variants.Variants[g.Variant].Nations) {
 		return false
 	}
+	if g.LastYear != o.LastYear {
+		return false
+	}
 	for _, member := range o.Members {
 		if member.User.Id == avoid.Id {
 			return false
