@@ -598,7 +598,7 @@ func handleConfigure(w ResponseWriter, r Request) error {
 }
 
 func reGameResult(ctx context.Context, withRepair bool, counter int, valid int, invalid int, cursorString string) error {
-	log.Infof(ctx, "reGameResult(..., %v, %v, %v, %q)", counter, valid, invalid, cursorString)
+	log.Infof(ctx, "reGameResult(..., %v, %v, %v, %v, %q)", withRepair, counter, valid, invalid, cursorString)
 
 	q := datastore.NewQuery(gameResultKind)
 	if cursorString != "" {
@@ -612,7 +612,7 @@ func reGameResult(ctx context.Context, withRepair bool, counter int, valid int, 
 
 	gameResult := &GameResult{}
 	if _, err := iterator.Next(gameResult); err == datastore.Done {
-		log.Infof(ctx, "reGameResult(..., %v, %v, %v, %q) is DONE", counter, valid, invalid, cursorString)
+		log.Infof(ctx, "reGameResult(..., %v, %v, %v, %v, %q) is DONE", withRepair, counter, valid, invalid, cursorString)
 		return nil
 	} else if err != nil {
 		return err
