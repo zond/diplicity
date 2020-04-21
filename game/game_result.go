@@ -156,7 +156,7 @@ func (p players) Swap(i, j int) {
 
 // TrueSkillRate must be idempotent, because it gets called every n minutes by a cron job,
 // and can't run inside a transaction since it updates too many users in large games.
-func (g *GameResult) TrueSkillRate(ctx context.Context, onlyUnrated bool) error {
+func (g *GameResult) TrueSkillRate(ctx context.Context, onlyUnrated bool, updateUserStats bool) error {
 	// Last action of the func is to store this GameResult with TrueSkillRated = true, to avoid
 	// repetition.
 	if onlyUnrated && g.TrueSkillRated {
@@ -241,9 +241,11 @@ func (g *GameResult) TrueSkillRate(ctx context.Context, onlyUnrated bool) error 
 		return err
 	}
 
-	// Schedule UserStats updates for all users in the game, to let them see their new ratings.
-	if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
-		return err
+	if updateUserStats {
+		// Schedule UserStats updates for all users in the game, to let them see their new ratings.
+		if err := UpdateUserStatsASAP(ctx, userIds); err != nil {
+			return err
+		}
 	}
 
 	// Save the probability of this outcome, along with the fact that we are now rated.
