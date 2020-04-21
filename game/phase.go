@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/mail"
 	"net/url"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -874,10 +873,17 @@ func (p *PhaseResolver) Act() error {
 
 		sort.Sort(sort.StringSlice(nmrUsers))
 		sort.Sort(sort.StringSlice(oldPhaseResult.NMRUsers))
-		if !reflect.DeepEqual(nmrUsers, oldPhaseResult.NMRUsers) {
+		if len(nmrUsers) != len(oldPhaseResult.NMRUsers) {
 			err := fmt.Errorf("oldPhaseResult %+v doesn't match the NMRUsers %+v we want to store in the GameResult!", oldPhaseResult, nmrUsers)
 			log.Errorf(p.Context, err.Error())
 			return err
+		}
+		for idx, nmrUser := range nmrUsers {
+			if oldPhaseResult.NMRUsers[idx] != nmrUser {
+				err := fmt.Errorf("oldPhaseResult %+v doesn't match the NMRUsers %+v we want to store in the GameResult!", oldPhaseResult, nmrUsers)
+				log.Errorf(p.Context, err.Error())
+				return err
+			}
 		}
 
 		gameResult := &GameResult{
