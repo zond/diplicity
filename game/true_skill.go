@@ -157,16 +157,23 @@ func handleDeleteTrueSkills(w ResponseWriter, r Request) error {
 			return HTTPErr{"unauthorized", http.StatusForbidden}
 		}
 	}
-	trueSkillIDs, err := datastore.NewQuery(trueSkillKind).KeysOnly().Limit(500).GetAll(ctx, nil)
+
+	getFunc := func() ([]*datastore.Key, error) {
+		return datastore.NewQuery(trueSkillKind).KeysOnly().Limit(500).GetAll(ctx, nil)
+	}
+	deleted := 0
+	trueSkillIDs, err := getFunc()
+	for ; err == nil && len(trueSkillIDs) > 0; trueSkillIDs, err = getFunc() {
+		if err := datastore.DeleteMulti(ctx, trueSkillIDs); err != nil {
+			return err
+		}
+		deleted += len(trueSkillIDs)
+	}
 	if err != nil {
 		return err
 	}
 
-	if err := datastore.DeleteMulti(ctx, trueSkillIDs); err != nil {
-		return err
-	}
-
-	log.Infof(ctx, "handleDeleteTrueSkills(..., ...): Deleted %v TrueSkills", len(trueSkillIDs))
+	log.Infof(ctx, "handleDeleteTrueSkills(..., ...): Deleted %v TrueSkills", deleted)
 
 	return nil
 }
