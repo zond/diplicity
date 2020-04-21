@@ -325,12 +325,12 @@ func (g *GameResult) Repair(ctx context.Context, game *Game) error {
 		if merr, ok := err.(appengine.MultiError); ok {
 			for idx, serr := range merr {
 				if serr != nil && (idx == 0 || err != datastore.ErrNoSuchEntity) {
-					log.Errorf(ctx, "Unable to load phase, phase result, and phase states: %v", err)
+					log.Errorf(ctx, "Unable to load phase and phase states, error %v was %v", serr)
 					return err
 				}
 			}
 		} else {
-			log.Errorf(ctx, "Unable to load phase, phase result, and phase states: %v", err)
+			log.Errorf(ctx, "Unable to load phase and phase states: %v", err)
 			return err
 		}
 	}
