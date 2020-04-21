@@ -625,9 +625,12 @@ func reGameResult(ctx context.Context, withRepair bool, counter int, valid int, 
 
 	if err := gameResult.Validate(game); err != nil {
 		log.Errorf(ctx, "Loaded invalid GameResult: %v", err)
-		if err = gameResult.Repair(ctx, game); err != nil {
-			log.Errorf(ctx, "Unable to repair GameResult: %v", err)
-			return err
+		if withRepair {
+			if err = gameResult.Repair(ctx, game); err != nil {
+				log.Errorf(ctx, "Unable to repair GameResult: %v", err)
+				return err
+			}
+			log.Infof(ctx, "Reparied the game result!")
 		}
 		invalid += 1
 	} else {
