@@ -180,6 +180,28 @@ func (self *Phase) State(variant vrt.Variant) (*state.State, error) {
 	), nil
 }
 
+func variantOptions(w ResponseWriter, r Request) error {
+	variantName := r.Vars()["name"]
+	variant, found := variants.Variants[variantName]
+	if !found {
+		return HTTPErr{fmt.Sprintf("Variant %q not found", variantName), http.StatusNotFound}
+	}
+	p := &Phase{
+		Variant: variantName,
+	}
+	if err := Copy(p, r, "POST"); err != nil {
+		return err
+	}
+	state, err := p.State(variant)
+	if err != nil {
+		return err
+	}
+
+	options := state.Phase().Options(state, godip.Nation(r.Vars()["nation"]))
+	w.SetContent(NewItem(options).SetName(fmt.Sprintf("%v options, %s %d, %s", r.Vars()["nation"], p.Season, p.Year, p.Type)))
+	return nil
+}
+
 func resolveVariant(w ResponseWriter, r Request) error {
 	variantName := r.Vars()["name"]
 	variant, found := variants.Variants[variantName]
