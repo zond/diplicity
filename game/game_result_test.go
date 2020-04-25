@@ -85,6 +85,23 @@ func TestAssign_OneNationRemaining(t *testing.T) {
 	assertScoresTo2DP(t, gameScores, []float64{100})
 }
 
+// Check that for a very large lead the tribute is capped by the survival bonus.
+func TestAssign_LargeLead(t *testing.T) {
+	scores := []GameScore{}
+	scores = append(scores, GameScore{Member: "Austria", SCs: 17})
+	scores = append(scores, GameScore{Member: "England", SCs: 4})
+	scores = append(scores, GameScore{Member: "France", SCs: 4})
+	scores = append(scores, GameScore{Member: "Germany", SCs: 3})
+	scores = append(scores, GameScore{Member: "Italy", SCs: 3})
+	scores = append(scores, GameScore{Member: "Russia", SCs: 2})
+	scores = append(scores, GameScore{Member: "Turkey", SCs: 1})
+	gameScores := GameScores(scores)
+
+	gameScores.Assign()
+
+	assertScoresTo2DP(t, gameScores, []float64{83, 4, 4, 3, 3, 2, 1})
+}
+
 // Check that with SCs split almost evenly then the scores are distributed appropriately.
 func TestAssign_SevenNationsRemaining(t *testing.T) {
 	scores := []GameScore{}
@@ -133,8 +150,7 @@ func TestAssign_SmallSurvivors(t *testing.T) {
 
 	gameScores.Assign()
 
-	// TODO Currently fails.
-	//assertScoresMakeSense(t, gameScores)
+	assertScoresMakeSense(t, gameScores)
 }
 
 // Check that small survivors are still ranked in order of SCs with all SCs assigned in Europe 1939.
@@ -152,8 +168,7 @@ func TestAssign_SmallSurvivorsEurope1939(t *testing.T) {
 
 	gameScores.Assign()
 
-	// TODO Currently fails.
-	//assertScoresMakeSense(t, gameScores)
+	assertScoresMakeSense(t, gameScores)
 }
 
 // Check that the algorithm can cope with lots of nations and lots of SCs.
@@ -216,13 +231,11 @@ func TestAssign_SanityTesting_Hundred(t *testing.T) {
 }
 
 func TestAssign_SanityTesting_VietnamWar(t *testing.T) {
-	// TODO Fails with SC distribution [1, 2, 2, 14], since first player has no reward for surviving.
-	//sanityTestAllPositions(t, 5, 25, 15)
+	sanityTestAllPositions(t, 5, 25, 15)
 }
 
 func TestAssign_SanityTesting_AncientMed(t *testing.T) {
-	// TODO Fails with SC distribution [1, 2, 2, 3, 17].
-	//sanityTestAllPositions(t, 5, 34, 18)
+	sanityTestAllPositions(t, 5, 34, 18)
 }
 
 // TODO: Add more tests based on the metrics from Tribute:

@@ -62,10 +62,14 @@ func (gs GameScores) Assign() {
 	minTopperSize := int(math.Ceil(float64(numSCs)/float64(len(gs))) + 1)
 	// Score per SC is 34 / number of SCs.
 	scorePerSC := 34.0 / float64(numSCs)
+	survivalPart := 66.0 / float64(survivors)
 	// Tribute is one for each SCs over minimum topper size.
 	tributePerSurvivor := 0.0
 	if topperSize > minTopperSize {
 		tributePerSurvivor = scorePerSC * float64(topperSize-minTopperSize)
+		if tributePerSurvivor > survivalPart {
+			tributePerSurvivor = survivalPart
+		}
 	}
 
 	// Find toppers, and assign survival and SC scores, and find tribute sum.
@@ -75,7 +79,6 @@ func (gs GameScores) Assign() {
 		if gs[i].SCs == 0 {
 			gs[i].Explanation = "Eliminated:0"
 		} else if gs[i].SCs > 0 {
-			survivalPart := 66.0 / float64(survivors)
 			scPart := scorePerSC * float64(gs[i].SCs)
 			gs[i].Explanation = fmt.Sprintf("Survival:%v\nSupply centers:%v\n", survivalPart, scPart)
 			gs[i].Score = scPart + survivalPart
