@@ -461,7 +461,7 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 	}
 
 	if err := timeoutResolvePhaseFunc.EnqueueAt(ctx, phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal); err != nil {
-		log.Errorf(ctx, "timeoutResolvePhaseFunc.EnqueueAt(..., %v, %v, %v): %v; hope taskqueues get fixed", phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal)
+		log.Errorf(ctx, "timeoutResolvePhaseFunc.EnqueueAt(..., %v, %v, %v): %v; hope taskqueues get fixed", phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal, err)
 		return err
 	}
 	log.Infof(ctx, "Successfully scheduled phase resolution at %v", phase.DeadlineAt)

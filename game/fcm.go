@@ -145,7 +145,7 @@ func manageFCMTokens(ctx context.Context, tokensToRemove, tokensToUpdate map[str
 			ctx,
 			toUpdate,
 			func(tok *auth.FCMToken, newValue string) {
-				tok.Note = fmt.Sprint("Updated from %q at %v due to FCM service indication.", tok.Value, time.Now())
+				tok.Note = fmt.Sprintf("Updated from %q at %v due to FCM service indication.", tok.Value, time.Now())
 				tok.Value = newValue
 			},
 			func() error {
