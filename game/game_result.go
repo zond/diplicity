@@ -85,15 +85,9 @@ func (gs GameScores) Assign() {
 			if gs[i].SCs == topperSize {
 				topperNations[gs[i].Member] = true
 			} else {
-				if gs[i].Score > tributePerSurvivor {
-					tributeSum += tributePerSurvivor
-					gs[i].Explanation += fmt.Sprintf("Tribute:%v", -tributePerSurvivor)
-					gs[i].Score -= tributePerSurvivor
-				} else {
-					tributeSum += gs[i].Score
-					gs[i].Explanation += fmt.Sprintf("Tribute:%v", -gs[i].Score)
-					gs[i].Score = 0
-				}
+				tributeSum += tributePerSurvivor
+				gs[i].Explanation += fmt.Sprintf("Tribute:%v", -tributePerSurvivor)
+				gs[i].Score -= tributePerSurvivor
 			}
 		}
 	}
