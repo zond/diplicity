@@ -237,18 +237,3 @@ func TestAssign_SanityTesting_VietnamWar(t *testing.T) {
 func TestAssign_SanityTesting_AncientMed(t *testing.T) {
 	sanityTestAllPositions(t, 5, 34, 18)
 }
-
-// TODO: Add more tests based on the metrics from Tribute:
-
-// Converting the metrics from Tribute article into four tests we get:
-// 1. Board-Top Incentive: How much does taking the lead improve one’s score?
-//    a) Gaining a center increases score
-//    b) Leader losing a center benefits other survivors
-// 2. Survival Incentive: How much more does a 1-center power score than an elimination?
-//    c) Scores ordered same as SCs
-// 3. Growth Incentive: How much does taking a center increase one’s score?
-//    a) Gaining a center increases score
-// 4. Dominance Incentive: How much does taking another center improve the leader’s score?
-//    a) Gaining a center increases score
-// 5. Balance of Power Incentive: How much better is taking a center from the leader over taking one from the other powers?
-//    d) Gaining a center from leader is better than from anyone else
