@@ -429,7 +429,7 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 			ChannelMembers: Nations{godip.Nation(nation), DiplicitySender},
 			Sender:         DiplicitySender,
 			Body: fmt.Sprintf(
-				"This is a reminder that the current phase will resolve in %v (at %v), and you haven't declared that you are ready for the next phase. If you don't declare ready you will lose Quickness score. If you don't declare ready and don't provide any orders you will lose Reliability score.",
+				"This is a reminder that the current phase will resolve in %v (at %v), and you haven't declared that you are ready for the next phase. If you don't declare ready you will lose Quickness score. If you don't declare ready and don't provide any orders you will lose Reliability score, and be evicted from all staging game queues.",
 				phase.DeadlineAt.Sub(time.Now()),
 				phase.DeadlineAt),
 		}
