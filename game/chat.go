@@ -553,7 +553,7 @@ func (c *Channel) CountSince(ctx context.Context, since time.Time) error {
 
 type Messages []Message
 
-func (m Messages) Item(r Request, gameID *datastore.Key, channelMembers Nations) *Item {
+func (m Messages) Item(r Request, gameID *datastore.Key, channelMembers Nations, isMember bool) *Item {
 	messageItems := make(List, len(m))
 	for i := range m {
 		messageItems[i] = m[i].Item(r)
@@ -567,7 +567,10 @@ func (m Messages) Item(r Request, gameID *datastore.Key, channelMembers Nations)
 		Rel:         "self",
 		Route:       ListMessagesRoute,
 		RouteParams: []string{"game_id", gameID.Encode(), "channel_members", channelMembers.String()},
-	})).AddLink(r.NewLink(MessageFlagResource.Link("flag-messages", Create, []string{"game_id", gameID.Encode(), "channel_members", channelMembers.String()})))
+	}))
+	if isMember {
+		messagesItem.AddLink(r.NewLink(MessageFlagResource.Link("flag-messages", Create, []string{"game_id", gameID.Encode(), "channel_members", channelMembers.String()})))
+	}
 	return messagesItem
 }
 
@@ -833,7 +836,8 @@ func listMessages(w ResponseWriter, r Request) error {
 	}
 	game.ID = gameID
 	if !game.Started {
-		w.SetContent((Messages{}).Item(r, gameID, channelMembers))
+		_, isMember := game.GetMemberByUserId(user.Id)
+		w.SetContent((Messages{}).Item(r, gameID, channelMembers, isMember))
 		return nil
 	}
 
@@ -897,6 +901,8 @@ func listMessages(w ResponseWriter, r Request) error {
 		return err
 	}
 
+	var member *Member
+	isMember := false
 	if nation != "" && len(messages) > 0 && (seenMarker == nil || seenMarker.At.Before(messages[0].CreatedAt)) {
 		seenMarker = &SeenMarker{
 			GameID:  gameID,
@@ -916,7 +922,7 @@ func listMessages(w ResponseWriter, r Request) error {
 			}
 			game.ID = gameID
 
-			member, isMember := game.GetMemberByUserId(user.Id)
+			member, isMember = game.GetMemberByUserId(user.Id)
 			if !isMember {
 				return fmt.Errorf("not member of the game?")
 			}
@@ -963,7 +969,7 @@ func listMessages(w ResponseWriter, r Request) error {
 		}
 	}
 
-	w.SetContent(filteredMessages.Item(r, gameID, channelMembers))
+	w.SetContent(filteredMessages.Item(r, gameID, channelMembers, isMember))
 	return nil
 }
 
