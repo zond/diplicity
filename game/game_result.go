@@ -133,8 +133,9 @@ type GameResult struct {
 }
 
 type player struct {
-	score  GameScore
-	player trueskill.Player
+	score             GameScore
+	player            trueskill.Player
+	previousTrueSkill TrueSkill
 }
 
 type players []player
@@ -165,7 +166,7 @@ func (g *GameResult) TrueSkillRate(ctx context.Context, onlyUnrated bool, update
 	oldTrueSkillIDs := make([]*datastore.Key, len(g.Scores))
 	var err error
 	for idx := range g.Scores {
-		if oldTrueSkillIDs[idx], err = (&TrueSkill{GameID: g.GameID, UserId: g.Scores[idx].UserId}).ID(ctx); err != nil {
+		if oldTrueSkillIDs[idx], err = (&TrueSkillContent{GameID: g.GameID, UserId: g.Scores[idx].UserId}).ID(ctx); err != nil {
 			return err
 		}
 	}
@@ -189,8 +190,9 @@ func (g *GameResult) TrueSkillRate(ctx context.Context, onlyUnrated bool, update
 			return err
 		}
 		players[idx] = player{
-			score:  g.Scores[idx],
-			player: trueskill.NewPlayer(trueSkill.Mu, trueSkill.Sigma),
+			score:             g.Scores[idx],
+			player:            trueskill.NewPlayer(trueSkill.Mu, trueSkill.Sigma),
+			previousTrueSkill: *trueSkill,
 		}
 	}
 
@@ -221,13 +223,16 @@ func (g *GameResult) TrueSkillRate(ctx context.Context, onlyUnrated bool, update
 	for idx := range players {
 		userIds[idx] = players[idx].score.UserId
 		newTrueSkills[idx] = TrueSkill{
-			GameID:    g.GameID,
-			UserId:    players[idx].score.UserId,
-			CreatedAt: time.Now(),
-			Member:    players[idx].score.Member,
-			Mu:        newTSPlayers[idx].Mu(),
-			Sigma:     newTSPlayers[idx].Sigma(),
-			Rating:    ts.TrueSkill(newTSPlayers[idx]),
+			TrueSkillContent: TrueSkillContent{
+				GameID:    g.GameID,
+				UserId:    players[idx].score.UserId,
+				CreatedAt: time.Now(),
+				Member:    players[idx].score.Member,
+				Mu:        newTSPlayers[idx].Mu(),
+				Sigma:     newTSPlayers[idx].Sigma(),
+				Rating:    ts.TrueSkill(newTSPlayers[idx]),
+			},
+			Previous: []TrueSkillContent{players[idx].previousTrueSkill.TrueSkillContent},
 		}
 		if newTrueSkillIDs[idx], err = newTrueSkills[idx].ID(ctx); err != nil {
 			return err

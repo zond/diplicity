@@ -54,30 +54,7 @@ func listGameResultTrueSkills(w ResponseWriter, r Request) error {
 	if _, err := datastore.NewQuery(trueSkillKind).Ancestor(gameID).GetAll(ctx, &trueSkills); err != nil {
 		return err
 	}
-	errors := make(chan error, len(trueSkills))
-	for idx := range trueSkills {
-		go func(trueSkill *TrueSkill) {
-			lastBefore := []TrueSkill{}
-			if _, err := datastore.NewQuery(trueSkillKind).Filter("CreatedAt<", trueSkill.CreatedAt).Order("-CreatedAt").Limit(1).GetAll(ctx, &lastBefore); err != nil {
-				errors <- err
-				return
-			}
-			if len(lastBefore) == 1 {
-				trueSkill.Previous = &lastBefore[0]
-			}
-			errors <- nil
-			return
-		}(&trueSkills[idx])
-	}
-	merr := appengine.MultiError{}
-	for _ = range trueSkills {
-		if err := <-errors; err != nil {
-			merr = append(merr, err)
-		}
-	}
-	if len(merr) > 0 {
-		return merr
-	}
+
 	w.SetContent(trueSkills.Item(r, gameID))
 	return nil
 }
@@ -97,16 +74,20 @@ func (t TrueSkills) Item(r Request, gameID *datastore.Key) *Item {
 	return skillsItem
 }
 
+type TrueSkillContent struct {
+	GameID    *datastore.Key
+	UserId    string
+	CreatedAt time.Time
+	Member    godip.Nation
+	Mu        float64
+	Sigma     float64
+	Rating    float64
+}
+
 type TrueSkill struct {
-	GameID           *datastore.Key
-	UserId           string
-	CreatedAt        time.Time
-	Member           godip.Nation
-	Mu               float64
-	Sigma            float64
-	Rating           float64
-	HigherRatedCount int        `datastore:"-"`
-	Previous         *TrueSkill `datastore:"-"`
+	TrueSkillContent
+	Previous         []TrueSkillContent
+	HigherRatedCount int `datastore:"-"`
 }
 
 func (t TrueSkill) Item(r Request) *Item {
@@ -122,16 +103,18 @@ func GetTrueSkill(ctx context.Context, userId string) (*TrueSkill, error) {
 		ts := trueskill.New()
 		player := ts.NewPlayer()
 		return &TrueSkill{
-			UserId: userId,
-			Mu:     player.Mu(),
-			Sigma:  player.Sigma(),
-			Rating: ts.TrueSkill(player),
+			TrueSkillContent: TrueSkillContent{
+				UserId: userId,
+				Mu:     player.Mu(),
+				Sigma:  player.Sigma(),
+				Rating: ts.TrueSkill(player),
+			},
 		}, nil
 	}
 	return &trueSkills[0], nil
 }
 
-func (t *TrueSkill) ID(ctx context.Context) (*datastore.Key, error) {
+func (t *TrueSkillContent) ID(ctx context.Context) (*datastore.Key, error) {
 	if t.GameID == nil || t.GameID.IntID() == 0 || t.UserId == "" {
 		return nil, fmt.Errorf("TrueSkills must have game IDs with non zero int ID, and non empty user IDs")
 	}
