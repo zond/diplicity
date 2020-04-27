@@ -995,11 +995,9 @@ func (p *PhaseResolver) Act() error {
 				log.Errorf(p.Context, "Unable to enqueue updating of Glicko ratings: %v; hope datastore gets fixed", err)
 				return err
 			}
-			if appengine.IsDevAppServer() {
-				if err := UpdateTrueSkillsASAP(p.Context); err != nil {
-					log.Errorf(p.Context, "Unable to enqueue updating of TrueSkill ratings: %v; hope datastore gets fixed", err)
-					return err
-				}
+			if err := UpdateTrueSkillsASAP(p.Context); err != nil {
+				log.Errorf(p.Context, "Unable to enqueue updating of TrueSkill ratings: %v; hope datastore gets fixed", err)
+				return err
 			}
 		}
 
