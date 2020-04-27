@@ -706,6 +706,8 @@ func TestDIASEnding(t *testing.T) {
 				privateStatsAfter := statsAfter["PrivateStats"]
 				delete(statsPreviously, "PrivateStats")
 				delete(statsAfter, "PrivateStats")
+				delete(statsPreviously["TrueSkill"].(map[string]interface{}), "HigherRatedCount")
+				delete(statsAfter["TrueSkill"].(map[string]interface{}), "HigherRatedCount")
 				delete(statsPreviously, "User")
 				delete(statsAfter, "User")
 				if diff := pretty.Diff(statsPreviously, statsAfter); len(diff) > 0 {
