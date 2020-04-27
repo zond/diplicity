@@ -262,6 +262,13 @@ func loadUserStats(w ResponseWriter, r Request) (*UserStats, error) {
 		return nil, err
 	}
 
+	higherRatedCount, err := datastore.NewQuery(userStatsKind).Filter("TrueSkill.Rating>", userStats.TrueSkill.Rating).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	userStats.TrueSkill.HigherRatedCount = higherRatedCount
+
 	return userStats, nil
 }
 

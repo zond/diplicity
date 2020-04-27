@@ -98,14 +98,15 @@ func (t TrueSkills) Item(r Request, gameID *datastore.Key) *Item {
 }
 
 type TrueSkill struct {
-	GameID    *datastore.Key
-	UserId    string
-	CreatedAt time.Time
-	Member    godip.Nation
-	Mu        float64
-	Sigma     float64
-	Rating    float64
-	Previous  *TrueSkill `datastore:"-"`
+	GameID           *datastore.Key
+	UserId           string
+	CreatedAt        time.Time
+	Member           godip.Nation
+	Mu               float64
+	Sigma            float64
+	Rating           float64
+	HigherRatedCount int        `datastore:"-"`
+	Previous         *TrueSkill `datastore:"-"`
 }
 
 func (t TrueSkill) Item(r Request) *Item {
