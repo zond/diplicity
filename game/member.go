@@ -26,6 +26,11 @@ var MemberResource = &Resource{
 	FullPath:   "/Game/{game_id}/Member/{user_id}",
 }
 
+type Collusion struct {
+	WithUserID  string
+	CommonGames int
+}
+
 type Member struct {
 	User              auth.User
 	Nation            godip.Nation
@@ -33,6 +38,8 @@ type Member struct {
 	NationPreferences string `methods:"POST,PUT" datastore:",noindex"`
 	NewestPhaseState  PhaseState
 	UnreadMessages    int
+	TotalGames        int         `datastore:"-"`
+	Collusions        []Collusion `datastore:"-"`
 }
 
 type Members []Member
@@ -44,6 +51,41 @@ func (m Members) Len() int {
 func (m Members) Each(f func(int, Preferer)) {
 	for idx, member := range m {
 		f(idx, member)
+	}
+}
+
+func (m Members) UpdateCollusions(ctx context.Context) error {
+	errors := make(chan error, len(m))
+	gameLists := make([]Games, len(m))
+	memberIdxByUid := map[string]int{}
+	for idx := range m {
+		memberIdxByUid[m[idx].User.Id] = idx
+		go func(idx int) {
+			gameList := Games{}
+			ids, err := datastore.NewQuery(gameKind).Filter("Member.User.Id=", m[idx].User.Id).GetAll(ctx, &gameList)
+			for idIdx, id := range ids {
+				gameList[idIdx].ID = id
+			}
+			gameLists[idx] = gameList
+			errors <- err
+		}(idx)
+	}
+	for idx := range m {
+		if err := <-errors; err != nil {
+			return err
+		}
+		m[idx].Collusions = make([]Collusion, len(m))
+		m[idx].TotalGames = len(gameLists[idx])
+		for collusionIdx, other := range m {
+			m[idx].Collusions[collusionIdx].WithUser = other.User.Id
+		}
+		for _, game := range gameLists[idx] {
+			for _, member := range game.Members {
+				if memberIdx, found := memberIdxByUid[member.User.Id]; found {
+					m[idx].Collusions[memberIdx] += 1
+				}
+			}
+		}
 	}
 }
 
