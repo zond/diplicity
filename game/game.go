@@ -911,6 +911,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 				GameID:        g.ID,
 				PhaseOrdinal:  phase.PhaseOrdinal,
 				Nation:        nat,
+				Messages:      strings.Join(state.Phase().Messages(state, nat), ","),
 				ZippedOptions: zippedOptions,
 			}
 			phaseStateID, err := phaseState.ID(ctx)

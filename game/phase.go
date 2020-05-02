@@ -789,6 +789,7 @@ func (p *PhaseResolver) Act() error {
 			Eliminated:     wasEliminated,
 			WantsDIAS:      autoDIAS,
 			OnProbation:    autoProbation,
+			Messages:       strings.Join(s.Phase().Messages(s, member.Nation), ","),
 			ZippedOptions:  zippedOptions,
 			Note:           fmt.Sprintf("Auto generated due to phase change at %v/%v: %s", p.Phase.GameID, p.Phase.PhaseOrdinal, stateString),
 		}

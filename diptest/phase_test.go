@@ -557,6 +557,61 @@ func TestLastYearEnding(t *testing.T) {
 	})
 }
 
+var phaseMessageTestOrders = orderSets{
+	{
+		{
+			nat: "Austria",
+			ord: [][]string{
+				{
+					"vie",
+					"Move",
+					"tyr",
+				},
+			},
+		},
+	},
+	{},
+	{
+		{
+			nat: "Austria",
+			ord: [][]string{
+				{
+					"tyr",
+					"Move",
+					"ven",
+				},
+			},
+		},
+		{
+			nat: "Italy",
+			ord: [][]string{
+				{
+					"ven",
+					"Move",
+					"pie",
+				},
+			},
+		},
+	},
+	{},
+}
+
+func TestPhaseMessages(t *testing.T) {
+	withStartedGameOptsAndOrders(nil, phaseMessageTestOrders, func() {
+		for nat, idx := range startedGameIdxByNat {
+			member := startedGameEnvs[idx].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Find(nat, []string{"Properties", "Members"}, []string{"Nation"})
+			if startedGameNats[idx] == "Austria" {
+				member.AssertEq("MayBuild:1", "NewestPhaseState", "Messages")
+			} else if startedGameNats[idx] == "Italy" {
+				member.AssertEq("MustDisband:1", "NewestPhaseState", "Messages")
+			} else {
+				member.AssertEq("MayBuild:0", "NewestPhaseState", "Messages")
+			}
+		}
+	})
+}
+
 func TestDIASEnding(t *testing.T) {
 	withStartedGame(func() {
 		WaitForEmptyQueue("game-updateUserStats")
