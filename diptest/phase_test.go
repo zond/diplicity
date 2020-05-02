@@ -612,6 +612,69 @@ func TestPhaseMessages(t *testing.T) {
 	})
 }
 
+var phaseLengthTestOrders = orderSets{
+	{
+		{
+			nat: "Austria",
+			ord: [][]string{
+				{
+					"vie",
+					"Move",
+					"tyr",
+				},
+			},
+		},
+	},
+	{},
+	{
+		{
+			nat: "Austria",
+			ord: [][]string{
+				{
+					"tyr",
+					"Move",
+					"ven",
+				},
+			},
+		},
+		{
+			nat: "Austria",
+			ord: [][]string{
+				{
+					"tri",
+					"Support",
+					"tyr",
+					"ven",
+				},
+			},
+		},
+	},
+	{},
+}
+
+func TestPhaseLengths(t *testing.T) {
+	withStartedGameOpts(func(opts map[string]interface{}) {
+		opts["PhaseLengthMinutes"] = 60
+		opts["NonMovementPhaseLengthMinutes"] = 30
+	}, func() {
+		if nextIn := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+			GetValue("Properties", "NewestPhaseMeta").([]interface{})[0].(map[string]interface{})["NextDeadlineIn"].(float64) / 1000000000 / 60; nextIn > 61 || nextIn < 59 {
+			t.Errorf("Wanted 60 minutes, got %v", nextIn)
+		}
+
+		for phaseOrdinalMinus1, set := range phaseLengthTestOrders {
+			set.execute(phaseOrdinalMinus1 + 1)
+		}
+		WaitForEmptyQueue("game-asyncResolvePhase")
+
+		if nextIn := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+			GetValue("Properties", "NewestPhaseMeta").([]interface{})[0].(map[string]interface{})["NextDeadlineIn"].(float64) / 1000000000 / 60; nextIn > 31 || nextIn < 29 {
+			t.Errorf("Wanted 30 minutes, got %v", nextIn)
+		}
+
+	})
+}
+
 func TestDIASEnding(t *testing.T) {
 	withStartedGame(func() {
 		WaitForEmptyQueue("game-updateUserStats")

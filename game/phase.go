@@ -678,7 +678,11 @@ func (p *PhaseResolver) Act() error {
 	if p.Game.PhaseLengthMinutes == 0 {
 		p.Game.PhaseLengthMinutes = MAX_PHASE_DEADLINE
 	}
-	newPhase.DeadlineAt = newPhase.CreatedAt.Add(time.Minute * p.Game.PhaseLengthMinutes)
+	if newPhase.Type != godip.Movement && p.Game.NonMovementPhaseLengthMinutes != 0 {
+		newPhase.DeadlineAt = newPhase.CreatedAt.Add(time.Minute * p.Game.NonMovementPhaseLengthMinutes)
+	} else {
+		newPhase.DeadlineAt = newPhase.CreatedAt.Add(time.Minute * p.Game.PhaseLengthMinutes)
+	}
 
 	// Check if we can roll forward again, and potentially create new phase states.
 
@@ -957,7 +961,11 @@ func (p *PhaseResolver) Act() error {
 				log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(newPhase), err)
 				return err
 			}
-			log.Infof(p.Context, "%v has phase length of %v minutes, scheduled new resolve", PP(p.Game), p.Game.PhaseLengthMinutes)
+			log.Infof(
+				p.Context, "%v has phase length of %v/%v minutes, scheduled new resolve",
+				PP(p.Game),
+				p.Game.PhaseLengthMinutes,
+				p.Game.NonMovementPhaseLengthMinutes)
 		}
 	}
 

@@ -79,24 +79,25 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 
 	globalStats := GlobalStats{
 		ActiveGameHistograms: map[string]Histogram{
-			"PhaseLengthMinutes": newHist("Phase length of active games, in minutes"),
-			"MaxHated":           newHist("Max hated attribute for players to have joined active games"),
-			"MaxHater":           newHist("Max hater attribute for players to have joined active games"),
-			"MinRating":          newHist("Min rating attribute for players to have joined active games"),
-			"MaxRating":          newHist("Max rating attribute for players to have joined active games"),
-			"MinReliability":     newHist("Min reliability attribute for players to have joined active games"),
-			"MinQuickness":       newHist("Min quickness attribute for players to have joined active games"),
-			"NMembers":           newHist("Number of players in active games"),
-			"Variant":            newHist("Variant of active games"),
-			"CreatedAtDaysAgo":   newHist("Days ago active games were created"),
-			"StartedAtDaysAgo":   newHist("Days ago active games were started"),
-			"NewestPhaseOrdinal": newHist("Number of generated phases for active games"),
-			"Private":            newHist("Distribution of private vs public games"),
-			"Anonymous":          newHist("Distribution of anonymous vs non-anonymous"),
-			"ConferenceChat":     newHist("Distribution of games with vs without conference chat"),
-			"GroupChat":          newHist("Distribution of games with vs without group chat"),
-			"PrivateChat":        newHist("Distribution of games with vs without private chat"),
-			"NationAllocation":   newHist("Distribution of games with different methods of nation allocation"),
+			"PhaseLengthMinutes":            newHist("Phase length of active games, in minutes"),
+			"NonMovementPhaseLengthMinutes": newHist("Phase length of non movement phases of active games, in minutes"),
+			"MaxHated":                      newHist("Max hated attribute for players to have joined active games"),
+			"MaxHater":                      newHist("Max hater attribute for players to have joined active games"),
+			"MinRating":                     newHist("Min rating attribute for players to have joined active games"),
+			"MaxRating":                     newHist("Max rating attribute for players to have joined active games"),
+			"MinReliability":                newHist("Min reliability attribute for players to have joined active games"),
+			"MinQuickness":                  newHist("Min quickness attribute for players to have joined active games"),
+			"NMembers":                      newHist("Number of players in active games"),
+			"Variant":                       newHist("Variant of active games"),
+			"CreatedAtDaysAgo":              newHist("Days ago active games were created"),
+			"StartedAtDaysAgo":              newHist("Days ago active games were started"),
+			"NewestPhaseOrdinal":            newHist("Number of generated phases for active games"),
+			"Private":                       newHist("Distribution of private vs public games"),
+			"Anonymous":                     newHist("Distribution of anonymous vs non-anonymous"),
+			"ConferenceChat":                newHist("Distribution of games with vs without conference chat"),
+			"GroupChat":                     newHist("Distribution of games with vs without group chat"),
+			"PrivateChat":                   newHist("Distribution of games with vs without private chat"),
+			"NationAllocation":              newHist("Distribution of games with different methods of nation allocation"),
 		},
 		ActiveGameMemberUserStatsHistograms: newUserStatsHistograms("members of active games"),
 		ActiveMemberUserStatsHistograms:     newUserStatsHistograms("active members of active games"),
@@ -113,6 +114,7 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 
 	for _, game := range activeGames {
 		bumpNamedHistogram("PhaseLengthMinutes", int(game.PhaseLengthMinutes), globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("NonMovementPhaseLengthMinutes", int(game.NonMovementPhaseLengthMinutes), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("MaxHated", int(game.MaxHated), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("MaxHater", int(game.MaxHater), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("MinRating", int(game.MinRating), globalStats.ActiveGameHistograms)

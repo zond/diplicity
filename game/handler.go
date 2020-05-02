@@ -330,6 +330,9 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 	if f := req.intervalFilter(req.ctx, "PhaseLengthMinutes", "phase-length-minutes"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
+	if f := req.intervalFilter(req.ctx, "NonMovementPhaseLengthMinutes", "non-movement-phase-length-minutes"); f != nil {
+		req.detailFilters = append(req.detailFilters, f)
+	}
 	if f := req.intervalFilter(req.ctx, "MinReliability", "min-reliability"); f != nil {
 		req.detailFilters = append(req.detailFilters, f)
 	}
