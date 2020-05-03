@@ -110,6 +110,7 @@ const (
 	RemoveDIASFromSoloGamesRoute        = "RemoveDIASFromSoloGamesRoute"
 	ReComputeAllDIASUsersRoute          = "ReComputeAllDIASUsers"
 	SendSystemMessageRoute              = "SendSystemMessage"
+	TelegramWebhookRoute                = "TelegramWebhook"
 )
 
 type userStatsHandler struct {
@@ -1262,6 +1263,7 @@ func ejectMember(ctx context.Context, gameID *datastore.Key, userId string) erro
 
 func SetupRouter(r *mux.Router) {
 	router = r
+	Handle(r, "/_telegram_webhook", []string{"POST"}, TelegramWebhookRoute, handleTelegramWebhook)
 	Handle(r, "/_reap-inactive-waiting-players", []string{"GET"}, ReapInactiveWaitingPlayersRoute, handleReapInactiveWaitingPlayers)
 	Handle(r, "/_test_reap-inactive-waiting-players", []string{"GET"}, TestReapInactiveWaitingPlayersRoute, handleTestReapInactiveWaitingPlayers)
 	Handle(r, "/_re-save", []string{"GET"}, ReSaveRoute, handleReSave)
