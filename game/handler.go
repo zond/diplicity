@@ -567,10 +567,11 @@ func createAllocation(w ResponseWriter, r Request) (*Allocation, error) {
 }
 
 type configuration struct {
-	OAuth      *auth.OAuth
-	FCMConf    *FCMConf
-	SendGrid   *SendGrid
-	Superusers *auth.Superusers
+	OAuth        *auth.OAuth
+	FCMConf      *FCMConf
+	SendGrid     *SendGrid
+	Superusers   *auth.Superusers
+	TelegramConf *TelegramConf
 }
 
 func handleConfigure(w ResponseWriter, r Request) error {
@@ -597,6 +598,11 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	}
 	if conf.Superusers != nil {
 		if err := auth.SetSuperusers(ctx, conf.Superusers); err != nil {
+			return err
+		}
+	}
+	if conf.TelegramConf != nil {
+		if err := SetTelegramConf(ctx, conf.TelegramConf); err != nil {
 			return err
 		}
 	}
