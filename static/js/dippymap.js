@@ -10,109 +10,109 @@ function dippyMap(container) {
 	};
 	// Based on http://godsnotwheregodsnot.blogspot.se/2012/09/color-distribution-methodology.html.
 	that.contrasts = [
-	"#F44336",
-	"#2196F3",
-	"#80DEEA",
-	"#90A4AE",
-	"#4CAF50",
-	"#FFC107",
-	"#F5F5F5",
-	"#009688",
-	"#FFEB3B",
-	"#795548",
-	"#E91E63",
-	"#CDDC39",
-	"#FF9800",
-	"#D05CE3",
-	"#9A67EA",
-	"#FF6090",
-	"#6EC6FF",
-	"#80E27E",
-	"#A98274",
-	"#CFCFCF",
-	"#FF34FF",
-	"#1CE6FF",
-	"#FFDBE5",
-	"#FF7961",
-	"#C66900",
-	"#9C27B0",
-	"#3F51B5",
-	"#C8B900",
-	"#C2185B",
-	"#BA000D",
-	"#607D8B",
-	"#087F23",
-	"#673AB7",
-	"#0069C0",
-	"#34515E",
-	"#002984",
-	"#004C40",
-	"#FFFF6E",
-	"#B4FFFF",
-	"#6A0080",
-	"#757DE8",
-	"#04F757",
-	"#CEFDAE",
-	"#974D2B",
-	"#974D2B",
-	"#FF2F80",
-	"#0CBD66",
-	"#FF90C9",
-	"#BEC459",
-	"#0086ED",
-	"#FFB500",
-	"#0AA6D8",
-	"#A05837",
-	"#EEC3FF",
-	"#456648",
-	"#D790FF",
-	"#6A3A4C",
-	"#324E72",
-	"#A4E804",
-	"#CB7E98",
-	"#0089A3",
-	"#404E55",
-	"#FDE8DC",
-	"#5B4534",
-	"#922329",
-	"#3A2465",
-	"#99ADC0",
-	"#BC23FF",
-	"#72418F",
-	"#201625",
-	"#FFF69F",
-	"#549E79",
-	"#9B9700",
-	"#772600",
-	"#6B002C",
-	"#6367A9",
-	"#A77500",
-	"#7900D7",
-	"#1E6E00",
-	"#C8A1A1",
-	"#885578",
-	"#788D66",
-	"#7A87A1",
-	"#B77B68",
-	"#456D75",
-	"#6F0062",
-	"#00489C",
-	"#001E09",
-	"#C2FF99",
-	"#C0B9B2",
-	"#CC0744",
-	"#A079BF",
-	"#C2FFED",
-	"#372101",
-	"#00846F",
-	"#013349",
-	"#300018",
-	"#A1C299",
-	"#7B4F4B",
-	"#000035",
-	"#DDEFFF",
-	"#D16100",
-	"#B903AA"
+		"#F44336",
+		"#2196F3",
+		"#80DEEA",
+		"#90A4AE",
+		"#4CAF50",
+		"#FFC107",
+		"#F5F5F5",
+		"#009688",
+		"#FFEB3B",
+		"#795548",
+		"#E91E63",
+		"#CDDC39",
+		"#FF9800",
+		"#D05CE3",
+		"#9A67EA",
+		"#FF6090",
+		"#6EC6FF",
+		"#80E27E",
+		"#A98274",
+		"#CFCFCF",
+		"#FF34FF",
+		"#1CE6FF",
+		"#FFDBE5",
+		"#FF7961",
+		"#C66900",
+		"#9C27B0",
+		"#3F51B5",
+		"#C8B900",
+		"#C2185B",
+		"#BA000D",
+		"#607D8B",
+		"#087F23",
+		"#673AB7",
+		"#0069C0",
+		"#34515E",
+		"#002984",
+		"#004C40",
+		"#FFFF6E",
+		"#B4FFFF",
+		"#6A0080",
+		"#757DE8",
+		"#04F757",
+		"#CEFDAE",
+		"#974D2B",
+		"#974D2B",
+		"#FF2F80",
+		"#0CBD66",
+		"#FF90C9",
+		"#BEC459",
+		"#0086ED",
+		"#FFB500",
+		"#0AA6D8",
+		"#A05837",
+		"#EEC3FF",
+		"#456648",
+		"#D790FF",
+		"#6A3A4C",
+		"#324E72",
+		"#A4E804",
+		"#CB7E98",
+		"#0089A3",
+		"#404E55",
+		"#FDE8DC",
+		"#5B4534",
+		"#922329",
+		"#3A2465",
+		"#99ADC0",
+		"#BC23FF",
+		"#72418F",
+		"#201625",
+		"#FFF69F",
+		"#549E79",
+		"#9B9700",
+		"#772600",
+		"#6B002C",
+		"#6367A9",
+		"#A77500",
+		"#7900D7",
+		"#1E6E00",
+		"#C8A1A1",
+		"#885578",
+		"#788D66",
+		"#7A87A1",
+		"#B77B68",
+		"#456D75",
+		"#6F0062",
+		"#00489C",
+		"#001E09",
+		"#C2FF99",
+		"#C0B9B2",
+		"#CC0744",
+		"#A079BF",
+		"#C2FFED",
+		"#372101",
+		"#00846F",
+		"#013349",
+		"#300018",
+		"#A1C299",
+		"#7B4F4B",
+		"#000035",
+		"#DDEFFF",
+		"#D16100",
+		"#B903AA"
 	];
 	that.contrastNeutral = "#f4d7b5";
 	that.Poi = function(x, y) {
@@ -182,6 +182,9 @@ function dippyMap(container) {
 		container[0].innerHTML = "";
 		container[0].appendChild(source[0]);
 		el = container.find("svg")[0];
+	};
+	that.colorSC = function(province, color) {
+		$(el).find("#" + province + "Center")[0].style.stroke = color;
 	};
 	that.colorProvince = function(province, color) {
 		var path = $(el).find("#" + that.selEscape(province))[0];
@@ -297,7 +300,7 @@ function dippyMap(container) {
 			});
 		}
 	};
-	that.addBox = function(province, corners, color) {
+	that.addBox = function(province, corners, color, opts = {}) {
 		var loc = that.centerOf(province);
 		loc.x -= 3;
 		loc.y -= 3;
@@ -313,7 +316,9 @@ function dippyMap(container) {
 			"style",
 			"fill-rule:evenodd;fill:" +
 				color +
-				";stroke:#000000;stroke-width:0.5;stroke-miterlimit:4;stroke-opacity:1.0;fill-opacity:0.9;"
+				";stroke:" +
+				(opts.stroke || "#000000") +
+				";stroke-width:0.5;stroke-miterlimit:4;stroke-opacity:1.0;fill-opacity:0.9;"
 		);
 		var d = "";
 		var subBox = function(boundF) {
@@ -339,7 +344,7 @@ function dippyMap(container) {
 			.find("#orders")[0]
 			.appendChild(path);
 	};
-	that.addArrow = function(provs, color) {
+	that.addArrow = function(provs, color, opts = {}) {
 		var start = null;
 		var middle = null;
 		var end = null;
@@ -388,7 +393,9 @@ function dippyMap(container) {
 			"style",
 			"fill:" +
 				color +
-				";stroke:#000000;stroke-width:0.5;stroke-miterlimit:4;stroke-opacity:1.0;fill-opacity:0.7;"
+				";stroke:" +
+				(opts.stroke || "#000000") +
+				";stroke-width:0.5;stroke-miterlimit:4;stroke-opacity:1.0;fill-opacity:0.7;"
 		);
 		var d = "M " + start0.x + "," + start0.y;
 		d +=
@@ -427,7 +434,7 @@ function dippyMap(container) {
 			.find("#orders")[0]
 			.appendChild(path);
 	};
-	that.addCross = function(province, color) {
+	that.addCross = function(province, color, opts = {}) {
 		var bound = 14;
 		var width = 4;
 		var loc = that.centerOf(province);
@@ -438,7 +445,9 @@ function dippyMap(container) {
 			"style",
 			"fill:" +
 				color +
-				";stroke:#000000;stroke-width:0.5;stroke-miterlimit:4;stroke-opacity:1.0;fill-opacity:0.9;"
+				";stroke:" +
+				(opts.stroke || "#000000") +
+				";stroke-width:0.5;stroke-miterlimit:4;stroke-opacity:1.0;fill-opacity:0.9;"
 		);
 		var d =
 			"M " +
@@ -511,28 +520,36 @@ function dippyMap(container) {
 			.find("#orders")
 			.empty();
 	};
-	that.addOrder = function(order, color) {
+	that.addOrder = function(order, color, opts = {}) {
 		if (order[1] == "Hold") {
-			addBox(order[0], 4, color);
+			addBox(order[0], 4, color, opts);
 		} else if (order[1] == "Move") {
-			addArrow([order[0], order[2]], color);
+			addArrow([order[0], order[2]], color, opts);
 		} else if (order[1] == "MoveViaConvoy") {
-			addArrow([order[0], order[2]], color);
-			addBox(order[0], 5, color);
+			addArrow([order[0], order[2]], color, opts);
+			addBox(order[0], 5, color, opts);
 		} else if (order[1] == "Build") {
-			addUnit("unit" + order[2], order[0], color, false, true, "#orders");
+			addUnit(
+				"unit" + order[2],
+				order[0],
+				color,
+				false,
+				true,
+				"#orders",
+				opts
+			);
 		} else if (order[1] == "Disband") {
-			addCross(order[0], color);
+			addCross(order[0], color, opts);
 		} else if (order[1] == "Convoy") {
-			addBox(order[0], 5, color);
-			addArrow([order[2], order[0], order[3]], color);
+			addBox(order[0], 5, color, opts);
+			addArrow([order[2], order[0], order[3]], color, opts);
 		} else if (order[1] == "Support") {
 			if (order.length == 3) {
-				addBox(order[0], 3, color);
-				addArrow([order[2], order[3]], color);
+				addBox(order[0], 3, color, opts);
+				addArrow([order[2], order[3]], color, opts);
 			} else {
 				addBox(order[0], 3, color);
-				addArrow([order[0], order[2], order[3]], color);
+				addArrow([order[0], order[2], order[3]], color, opts);
 			}
 		}
 	};
@@ -550,7 +567,8 @@ function dippyMap(container) {
 		color,
 		dislodged,
 		build,
-		layer
+		layer,
+		opts = {}
 	) {
 		if (typeof layer === "undefined") {
 			layer = "#units";
@@ -590,7 +608,9 @@ function dippyMap(container) {
 				color +
 				";fill-opacity:" +
 				opacity +
-				";stroke:#000000;stroke-width:1;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+				";stroke:" +
+				(opts.stroke || "#000000") +
+				";stroke-width:1;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
 		);
 		$(el)
 			.find(layer)[0]
