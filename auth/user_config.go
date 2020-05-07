@@ -181,6 +181,18 @@ type UserConfig struct {
 	PhaseDeadlineWarningMinutesAhead int        `methods:"PUT"`
 }
 
+func (u *UserConfig) Load(props []datastore.Property) error {
+	err := datastore.LoadStruct(u, props)
+	if _, is := err.(*datastore.ErrFieldMismatch); is {
+		err = nil
+	}
+	return err
+}
+
+func (u *UserConfig) Save() ([]datastore.Property, error) {
+	return datastore.SaveStruct(u)
+}
+
 var UserConfigResource = &Resource{
 	Load:     loadUserConfig,
 	Update:   updateUserConfig,
