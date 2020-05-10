@@ -272,17 +272,21 @@ function dippyMap(container) {
 				e.preventDefault();
 				var touchendHandler = null;
 				var touchmoveHandler = null;
+				var moved = false;
+				var at = new Date().getTime();
 				function unregisterTouchHandlers() {
 					$(copy).unbind("touchend", touchendHandler);
 					$(copy).unbind("touchmove", touchmoveHandler);
 				}
 				touchendHandler = function(e) {
-					handler(province);
+					if (!moved || new Date().getTime() - at < 300) {
+						handler(province);
+					}
 					unregisterTouchHandlers();
 				};
 				$(copy).bind("touchend", touchendHandler);
 				touchmoveHandler = function(e) {
-					unregisterTouchHandlers();
+					moved = true;
 				};
 				$(copy).bind("touchmove", touchmoveHandler);
 			}
