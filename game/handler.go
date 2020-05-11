@@ -110,6 +110,7 @@ const (
 	RemoveDIASFromSoloGamesRoute        = "RemoveDIASFromSoloGamesRoute"
 	ReComputeAllDIASUsersRoute          = "ReComputeAllDIASUsers"
 	SendSystemMessageRoute              = "SendSystemMessage"
+	TelegramWebhookRoute                = "TelegramWebhook"
 )
 
 type userStatsHandler struct {
@@ -567,10 +568,11 @@ func createAllocation(w ResponseWriter, r Request) (*Allocation, error) {
 }
 
 type configuration struct {
-	OAuth      *auth.OAuth
-	FCMConf    *FCMConf
-	SendGrid   *SendGrid
-	Superusers *auth.Superusers
+	OAuth        *auth.OAuth
+	FCMConf      *FCMConf
+	SendGrid     *SendGrid
+	Superusers   *auth.Superusers
+	TelegramConf *TelegramConf
 }
 
 func handleConfigure(w ResponseWriter, r Request) error {
@@ -597,6 +599,11 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	}
 	if conf.Superusers != nil {
 		if err := auth.SetSuperusers(ctx, conf.Superusers); err != nil {
+			return err
+		}
+	}
+	if conf.TelegramConf != nil {
+		if err := SetTelegramConf(ctx, conf.TelegramConf); err != nil {
 			return err
 		}
 	}
@@ -1256,6 +1263,7 @@ func ejectMember(ctx context.Context, gameID *datastore.Key, userId string) erro
 
 func SetupRouter(r *mux.Router) {
 	router = r
+	Handle(r, "/_telegram_webhook", []string{"POST"}, TelegramWebhookRoute, handleTelegramWebhook)
 	Handle(r, "/_reap-inactive-waiting-players", []string{"GET"}, ReapInactiveWaitingPlayersRoute, handleReapInactiveWaitingPlayers)
 	Handle(r, "/_test_reap-inactive-waiting-players", []string{"GET"}, TestReapInactiveWaitingPlayersRoute, handleTestReapInactiveWaitingPlayers)
 	Handle(r, "/_re-save", []string{"GET"}, ReSaveRoute, handleReSave)

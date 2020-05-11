@@ -124,6 +124,29 @@ func (m *MailNotificationConfig) Customize(ctx context.Context, msg *sendgrid.SG
 	}
 }
 
+type TelegramNotificationConfig struct {
+	BodyTemplate string `methods:"PUT" datastore:",noindex"`
+}
+
+func (m *TelegramNotificationConfig) Validate() error {
+	if m.BodyTemplate != "" {
+		if _, err := raymond.Parse(m.BodyTemplate); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *TelegramNotificationConfig) Customize(ctx context.Context, msg *string, data interface{}) {
+	if m.BodyTemplate != "" {
+		if customTextBody, err := raymond.Render(m.BodyTemplate, data); err == nil {
+			*msg = customTextBody
+		} else {
+			log.Infof(ctx, "Broken BodyTemplate %q: %v", m.BodyTemplate, err)
+		}
+	}
+}
+
 type FCMToken struct {
 	Value         string                `methods:"PUT"`
 	Disabled      bool                  `methods:"PUT"`
@@ -173,12 +196,29 @@ func (m *MailConfig) Validate() error {
 	return nil
 }
 
+type TelegramConfig struct {
+	Enabled       bool                       `methods:"PUT"`
+	MessageConfig TelegramNotificationConfig `methods:"PUT"`
+	PhaseConfig   TelegramNotificationConfig `methods:"PUT"`
+}
+
+func (m *TelegramConfig) Validate() error {
+	if err := m.MessageConfig.Validate(); err != nil {
+		return err
+	}
+	if err := m.PhaseConfig.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
 type UserConfig struct {
 	UserId                           string
-	FCMTokens                        []FCMToken `methods:"PUT"`
-	MailConfig                       MailConfig `methods:"PUT"`
-	Colors                           []string   `methods:"PUT"`
-	PhaseDeadlineWarningMinutesAhead int        `methods:"PUT"`
+	FCMTokens                        []FCMToken     `methods:"PUT"`
+	MailConfig                       MailConfig     `methods:"PUT"`
+	TelegramConfig                   TelegramConfig `methods:"PUT"`
+	Colors                           []string       `methods:"PUT"`
+	PhaseDeadlineWarningMinutesAhead int            `methods:"PUT"`
 }
 
 func (u *UserConfig) Load(props []datastore.Property) error {
