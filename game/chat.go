@@ -864,15 +864,10 @@ func listMessages(w ResponseWriter, r Request) error {
 		return err
 	}
 	game.ID = gameID
-	if !game.Started {
-		_, isMember := game.GetMemberByUserId(user.Id)
-		w.SetContent((Messages{}).Item(r, gameID, channelMembers, isMember))
-		return nil
-	}
 
 	var nation godip.Nation
 	mutedNats := map[godip.Nation]struct{}{}
-	if member, found := game.GetMemberByUserId(user.Id); found {
+	if member, found := game.GetMemberByUserId(user.Id); game.Started && found {
 		nation = member.Nation
 		gameStateID, err := GameStateID(ctx, gameID, nation)
 		if err != nil {
@@ -912,7 +907,7 @@ func listMessages(w ResponseWriter, r Request) error {
 			messages[i].ID = messageIDs[i]
 			messages[i].Age = time.Now().Sub(messages[i].CreatedAt)
 		}
-		if nation != "" {
+		if game.Started && nation != "" {
 			seenMarkerID, err := SeenMarkerID(ctx, channelID, nation)
 			if err != nil {
 				return err
@@ -932,7 +927,7 @@ func listMessages(w ResponseWriter, r Request) error {
 
 	var member *Member
 	isMember := false
-	if nation != "" && len(messages) > 0 && (seenMarker == nil || seenMarker.At.Before(messages[0].CreatedAt)) {
+	if game.Started && nation != "" && len(messages) > 0 && (seenMarker == nil || seenMarker.At.Before(messages[0].CreatedAt)) {
 		seenMarker = &SeenMarker{
 			GameID:  gameID,
 			Owner:   nation,
@@ -1009,7 +1004,7 @@ func loadChannels(ctx context.Context, game *Game, viewer godip.Nation) (Channel
 		if err != nil {
 			return nil, err
 		}
-	} else if game.Started {
+	} else {
 		if viewer == "" {
 			channelID, err := ChannelID(ctx, game.ID, publicChannel(game.Variant))
 			if err != nil {
@@ -1118,7 +1113,7 @@ func listChannels(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	if isMember {
+	if game.Started && isMember {
 		if err := countUnreadMessages(ctx, channels, nation); err != nil {
 			return err
 		}

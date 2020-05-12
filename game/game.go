@@ -600,13 +600,11 @@ func (g *Game) Item(r Request) *Item {
 				gameItem.AddLink(r.NewLink(MemberResource.Link("join", Create, []string{"game_id", g.ID.Encode()})))
 			}
 		}
-		if g.Started {
-			gameItem.AddLink(r.NewLink(Link{
-				Rel:         "channels",
-				Route:       ListChannelsRoute,
-				RouteParams: []string{"game_id", g.ID.Encode()},
-			}))
-		}
+		gameItem.AddLink(r.NewLink(Link{
+			Rel:         "channels",
+			Route:       ListChannelsRoute,
+			RouteParams: []string{"game_id", g.ID.Encode()},
+		}))
 		if g.Started {
 			gameItem.AddLink(r.NewLink(Link{
 				Rel:         "phases",

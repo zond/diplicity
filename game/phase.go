@@ -622,7 +622,7 @@ func (p *PhaseResolver) Act() error {
 		// Find ready members.
 
 		readyMembers := map[godip.Nation]bool{}
-		unreadyMembers := Nations{}
+		unreadyMembers := []string{}
 		for _, phaseState := range p.PhaseStates {
 			stateID, err := phaseState.ID(p.Context)
 			if err != nil {
@@ -633,7 +633,7 @@ func (p *PhaseResolver) Act() error {
 			if phaseState.ReadyToResolve {
 				readyMembers[phaseState.Nation] = true
 			} else {
-				unreadyMembers = append(unreadyMembers, phaseState.Nation)
+				unreadyMembers = append(unreadyMembers, string(phaseState.Nation))
 			}
 		}
 
