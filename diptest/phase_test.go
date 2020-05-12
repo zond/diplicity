@@ -111,7 +111,7 @@ func withStartedGameOptsAndOrders(conf func(m map[string]interface{}), orders or
 		Follow("my-started-games", "Links").Success().
 		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 		Follow("phases", "Links").Success().
-		Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+		Find("Muster", []string{"Properties"}, []string{"Properties", "Type"})
 
 	startedGameNats = make([]string, len(envs))
 	startedGames = make([]*Result, len(envs))
@@ -120,17 +120,28 @@ func withStartedGameOptsAndOrders(conf func(m map[string]interface{}), orders or
 		startedGames[i] = env.GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		startedGames[i].Find("Muster", []string{"Properties", "NewestPhaseMeta"}, []string{"Type"})
 		startedGameNats[i] = startedGames[i].Find(env.GetUID(), []string{"Properties", "Members"}, []string{"User", "Id"}).GetValue("Nation").(string)
+		startedGames[i].Follow("phases", "Links").Success().
+			Find("Muster", []string{"Properties"}, []string{"Properties", "Type"}).
+			Follow("phase-states", "Links").Success().
+			Find(startedGameNats[i], []string{"Properties"}, []string{"Properties", "Nation"}).
+			Follow("update", "Links").Body(map[string]interface{}{"ReadyToResolve": true}).Success()
 		startedGameIdxByNat[startedGameNats[i]] = i
 		startedGameID = startedGames[i].GetValue("Properties", "ID").(string)
 	}
+
+	WaitForEmptyQueue("game-asyncResolvePhase")
+
+	startedGames[0].Follow("phases", "Links").Success().
+		Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 
 	startedGameEnvs = envs
 	startedGameDesc = gameDesc
 
 	executed := false
-	for phaseOrdinalMinus1, set := range orders {
-		set.execute(phaseOrdinalMinus1 + 1)
+	for phaseOrdinalMinus2, set := range orders {
+		set.execute(phaseOrdinalMinus2 + 2)
 		fmt.Print("p")
 		executed = true
 	}
@@ -494,7 +505,7 @@ func TestSoloEnding(t *testing.T) {
 				nat:  "England",
 				dias: true,
 			},
-		}.execute(len(russianSoloOrders) + 1)
+		}.execute(len(russianSoloOrders) + 2)
 		g := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success()
 		g.AssertBoolEq(true, "Properties", "Finished")
 		g.Follow("game-result", "Links").Success().AssertNil("Properties", "DIASMembers").AssertEq("Russia", "Properties", "SoloWinnerMember")
@@ -522,7 +533,7 @@ func TestSoloEnding(t *testing.T) {
 func TestPreliminaryScores(t *testing.T) {
 	withStartedGame(func() {
 		p := startedGames[0].Follow("phases", "Links").Success().
-			Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+			Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 		p.Find("Germany", []string{"Properties", "PreliminaryScores"}, []string{"Member"}).Find(14.064935064935066, []string{"Score"})
 	})
 }
@@ -533,7 +544,7 @@ func TestLastYearEnding(t *testing.T) {
 	}, func() {
 		for i, nat := range startedGameNats {
 			p := startedGames[i].Follow("phases", "Links").Success().
-				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+				Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 
 			p.Follow("phase-states", "Links").Success().
 				Find(nat, []string{"Properties"}, []string{"Properties", "Nation"}).
@@ -662,9 +673,10 @@ func TestPhaseLengths(t *testing.T) {
 			t.Errorf("Wanted 60 minutes, got %v", nextIn)
 		}
 
-		for phaseOrdinalMinus1, set := range phaseLengthTestOrders {
-			set.execute(phaseOrdinalMinus1 + 1)
+		for phaseOrdinalMinus2, set := range phaseLengthTestOrders {
+			set.execute(phaseOrdinalMinus2 + 2)
 		}
+		fmt.Println()
 		WaitForEmptyQueue("game-asyncResolvePhase")
 
 		if nextIn := startedGameEnvs[0].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
@@ -702,14 +714,14 @@ func TestDIASEnding(t *testing.T) {
 				}
 
 				p := startedGames[i].Follow("phases", "Links").Success().
-					Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+					Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 
 				p.Follow("create-order", "Links").Body(map[string]interface{}{
 					"Parts": order,
 				}).Success()
 
 				p.Follow("phase-states", "Links").Success().
-					Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+					Find(startedGameNats[i], []string{"Properties"}, []string{"Properties", "Nation"}).
 					Follow("update", "Links").Body(map[string]interface{}{
 					"ReadyToResolve": true,
 					"WantsDIAS":      true,
@@ -723,7 +735,7 @@ func TestDIASEnding(t *testing.T) {
 			g := startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 				Follow("finished-games", "Links").Success().
 				Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
-			g.Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+			g.Find(3, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
 				AssertEq(true, "Resolved")
 			startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 				Follow("started-games", "Links").Success().
@@ -799,14 +811,26 @@ func TestDIASEnding(t *testing.T) {
 					Follow("my-started-games", "Links").Success().
 					Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 					Follow("phases", "Links").Success().
-					Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+					Find("Muster", []string{"Properties"}, []string{"Properties", "Type"})
 				for _, env := range startedGameEnvs {
 					p := env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 						Follow("phases", "Links").Success().
-						Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+						Find("Muster", []string{"Properties"}, []string{"Properties", "Type"})
 
 					p.Follow("phase-states", "Links").Success().
-						Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+						Find(false, []string{"Properties"}, []string{"Properties", "ReadyToResolve"}).
+						Follow("update", "Links").Body(map[string]interface{}{
+						"ReadyToResolve": true,
+					}).Success()
+				}
+				WaitForEmptyQueue("game-asyncResolvePhase")
+				for _, env := range startedGameEnvs {
+					p := env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+						Follow("phases", "Links").Success().
+						Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
+
+					p.Follow("phase-states", "Links").Success().
+						Find(false, []string{"Properties"}, []string{"Properties", "ReadyToResolve"}).
 						Follow("update", "Links").Body(map[string]interface{}{
 						"ReadyToResolve": true,
 						"WantsDIAS":      true,
@@ -815,7 +839,7 @@ func TestDIASEnding(t *testing.T) {
 				WaitForEmptyQueue("game-asyncResolvePhase")
 				g := startedGameEnvs[0].GetRoute(game.ListMyFinishedGamesRoute).Success().
 					Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
-				g.Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				g.Find(3, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
 					AssertEq(true, "Resolved")
 				WaitForEmptyQueue("game-updateUserStats")
 				statsAfter := startedGameEnvs[0].GetRoute("UserStats.Load").RouteParams("user_id", startedGameEnvs[0].GetUID()).Success().
@@ -875,7 +899,7 @@ func TestTimeoutResolution(t *testing.T) {
 				}
 
 				p := startedGames[i].Follow("phases", "Links").Success().
-					Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+					Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 
 				p.Follow("create-order", "Links").Body(map[string]interface{}{
 					"Parts": order,
@@ -889,7 +913,7 @@ func TestTimeoutResolution(t *testing.T) {
 				}
 
 				p.Follow("phase-states", "Links").Success().
-					Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+					Find(startedGameNats[i], []string{"Properties"}, []string{"Properties", "Nation"}).
 					Follow("update", "Links").Body(map[string]interface{}{
 					"ReadyToResolve": isReady,
 					"WantsDIAS":      false,
@@ -914,15 +938,15 @@ func TestTimeoutResolution(t *testing.T) {
 
 		t.Run("TestNoResolve-1", func(t *testing.T) {
 			startedGames[0].Follow("phases", "Links").Success().
-				AssertNotFind(2, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
+				AssertNotFind(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
 			startedGames[0].Follow("self", "Links").Success().
-				Find(1, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
 				AssertEq(false, "Resolved")
 		})
 
 		t.Run("TimeoutResolve-1", func(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
-				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "1").Success()
+				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "2").Success()
 		})
 
 		t.Run("TestNewestPhaseState-1", func(t *testing.T) {
@@ -947,11 +971,11 @@ func TestTimeoutResolution(t *testing.T) {
 
 		t.Run("TestNextPhaseNoProbation", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(false, "Properties", "Resolved")
 
 			startedGames[0].Follow("self", "Links").Success().
-				Find(3, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				Find(4, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
 				AssertEq(false, "Resolved")
 
 			p.Find("rum", []string{"Properties", "Units"}, []string{"Province"})
@@ -969,7 +993,7 @@ func TestTimeoutResolution(t *testing.T) {
 				AssertEq(false, "Properties", "ReadyToResolve")
 
 			startedGames[1].Follow("phases", "Links").Success().
-				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				Follow("phase-states", "Links").Success().
 				Find(startedGameNats[1], []string{"Properties"}, []string{"Properties", "Nation"}).
 				AssertEq(false, "Properties", "WantsDIAS").
@@ -996,7 +1020,7 @@ func TestTimeoutResolution(t *testing.T) {
 				prov = "bot"
 			}
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(false, "Properties", "Resolved")
 
 			p.Follow("options", "Links").Success().
@@ -1005,7 +1029,7 @@ func TestTimeoutResolution(t *testing.T) {
 
 		t.Run("TestOldPhase-1", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(1, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(2, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(true, "Properties", "Resolved").
 				AssertLen(22, "Properties", "Resolutions")
 
@@ -1024,7 +1048,7 @@ func TestTimeoutResolution(t *testing.T) {
 
 		t.Run("TestOldPhase-2", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(2, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(true, "Properties", "Resolved")
 			pr := p.Follow("phase-result", "Links").Success().
 				AssertLen(7, "Properties", "ReadyUsers").
@@ -1060,7 +1084,7 @@ func TestTimeoutResolution(t *testing.T) {
 				}
 
 				p := startedGames[i].Follow("phases", "Links").Success().
-					Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
+					Find(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
 
 				hasOrders := true
 				if i == 0 {
@@ -1080,26 +1104,26 @@ func TestTimeoutResolution(t *testing.T) {
 
 		t.Run("TestNoResolve-2", func(t *testing.T) {
 			startedGames[0].Follow("phases", "Links").Success().
-				AssertNotFind(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
+				AssertNotFind(5, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
 
 			startedGames[0].Follow("self", "Links").Success().
-				Find(3, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				Find(4, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
 				AssertEq(false, "Resolved")
 
 		})
 
 		t.Run("TimeoutResolve-2", func(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
-				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "3").Success()
+				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "4").Success()
 		})
 
 		t.Run("TestNextPhaseHasProbation", func(t *testing.T) {
 			startedGames[0].Follow("self", "Links").Success().
-				Find(6, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				Find(7, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
 				AssertEq(false, "Resolved")
 
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(6, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(7, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(false, "Properties", "Resolved").
 				AssertNil("Properties", "Resolutions")
 
@@ -1114,7 +1138,7 @@ func TestTimeoutResolution(t *testing.T) {
 				AssertEq(true, "Properties", "OnProbation")
 
 			startedGames[1].Follow("phases", "Links").Success().
-				Find(6, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(7, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				Follow("phase-states", "Links").Success().
 				Find(startedGameNats[1], []string{"Properties"}, []string{"Properties", "Nation"}).
 				AssertEq(false, "Properties", "WantsDIAS").
@@ -1131,7 +1155,7 @@ func TestTimeoutResolution(t *testing.T) {
 
 		t.Run("TestOldPhase-3", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(true, "Properties", "Resolved")
 			pr := p.Follow("phase-result", "Links").Success().
 				AssertNil("Properties", "ReadyUsers").
@@ -1148,12 +1172,12 @@ func TestTimeoutResolution(t *testing.T) {
 
 		t.Run("TimeoutResolve-3", func(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
-				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "6").Success()
+				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "7").Success()
 		})
 
 		t.Run("TestGameFinished", func(t *testing.T) {
 			startedGames[0].Follow("self", "Links").Success().
-				Find(7, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
+				Find(8, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"}).
 				AssertEq(true, "Resolved")
 
 			startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
@@ -1179,7 +1203,7 @@ func TestTimeoutResolution(t *testing.T) {
 
 		t.Run("TestOldPhase-4", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(6, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(7, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(true, "Properties", "Resolved")
 			pr := p.Follow("phase-result", "Links").Success().
 				AssertNil("Properties", "ReadyUsers").
@@ -1216,7 +1240,7 @@ func testReadyResolution(t *testing.T) {
 			}
 
 			startedGames[i].Follow("phases", "Links").Success().
-				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"}).
+				Find("Movement", []string{"Properties"}, []string{"Properties", "Type"}).
 				Follow("create-order", "Links").Body(map[string]interface{}{
 				"Parts": order,
 			}).Success()
@@ -1229,9 +1253,9 @@ func testReadyResolution(t *testing.T) {
 			}
 
 			startedGames[i].Follow("phases", "Links").Success().
-				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"}).
+				Find("Movement", []string{"Properties"}, []string{"Properties", "Type"}).
 				Follow("phase-states", "Links").Success().
-				Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+				Find(startedGameNats[i], []string{"Properties"}, []string{"Properties", "Nation"}).
 				Follow("update", "Links").Body(map[string]interface{}{
 				"ReadyToResolve": true,
 				"WantsDIAS":      wantsDIAS,
@@ -1243,7 +1267,7 @@ func testReadyResolution(t *testing.T) {
 
 	t.Run("TestOldPhase", func(t *testing.T) {
 		p := startedGames[0].Follow("phases", "Links").Success().
-			Find(1, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+			Find(2, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 			AssertEq(true, "Properties", "Resolved")
 		p.Follow("orders", "Links").Success().
 			AssertLen(7, "Properties").
@@ -1262,7 +1286,7 @@ func testReadyResolution(t *testing.T) {
 	})
 	t.Run("TestSkippedPhase", func(t *testing.T) {
 		p := startedGames[0].Follow("phases", "Links").Success().
-			Find(2, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+			Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 			AssertEq(true, "Properties", "Resolved")
 
 		p.Find("rum", []string{"Properties", "Units"}, []string{"Province"})
@@ -1293,7 +1317,7 @@ func testReadyResolution(t *testing.T) {
 	})
 	t.Run("TestNextPhase", func(t *testing.T) {
 		p := startedGames[0].Follow("phases", "Links").Success().
-			Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+			Find(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 			AssertEq(false, "Properties", "Resolved")
 
 		p.Find("rum", []string{"Properties", "Units"}, []string{"Province"})
@@ -1311,7 +1335,7 @@ func testReadyResolution(t *testing.T) {
 			AssertEq(false, "Properties", "ReadyToResolve")
 
 		startedGames[1].Follow("phases", "Links").Success().
-			Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+			Find(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 			Follow("phase-states", "Links").Success().
 			Find(startedGameNats[1], []string{"Properties"}, []string{"Properties", "Nation"}).
 			AssertEq(false, "Properties", "WantsDIAS").
@@ -1366,14 +1390,14 @@ func TestEliminatedNMRPlayer(t *testing.T) {
 				}
 
 				p := startedGames[i].Follow("phases", "Links").Success().
-					Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+					Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 
 				p.Follow("create-order", "Links").Body(map[string]interface{}{
 					"Parts": order,
 				}).Success()
 
 				p.Follow("phase-states", "Links").Success().
-					Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+					Find(false, []string{"Properties"}, []string{"Properties", "ReadyToResolve"}).
 					Follow("update", "Links").Body(map[string]interface{}{
 					"ReadyToResolve": true,
 					"WantsDIAS":      false,
@@ -1382,11 +1406,11 @@ func TestEliminatedNMRPlayer(t *testing.T) {
 		})
 		t.Run("TimeoutResolvePhase1", func(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
-				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "1").Success()
+				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "2").Success()
 		})
 		t.Run("TestOldPhase1", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(1, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(2, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(true, "Properties", "Resolved").
 				AssertLen(7, "Properties", "Resolutions")
 
@@ -1424,7 +1448,7 @@ func TestEliminatedNMRPlayer(t *testing.T) {
 				}
 
 				p := startedGames[i].Follow("phases", "Links").Success().
-					Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
+					Find(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
 
 				p.Follow("create-order", "Links").Body(map[string]interface{}{
 					"Parts": order,
@@ -1433,11 +1457,11 @@ func TestEliminatedNMRPlayer(t *testing.T) {
 		})
 		t.Run("TimeoutResolvePhase3", func(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
-				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "3").Success()
+				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "4").Success()
 		})
 		t.Run("TestOldPhase3", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(4, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(true, "Properties", "Resolved").
 				AssertLen(6, "Properties", "Resolutions")
 
@@ -1463,7 +1487,7 @@ func TestEliminatedNMRPlayer(t *testing.T) {
 				}
 				order := []string{"lon", "Build", "Army"}
 				p := startedGames[i].Follow("phases", "Links").Success().
-					Find(5, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
+					Find(6, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"})
 
 				p.Follow("create-order", "Links").Body(map[string]interface{}{
 					"Parts": order,
@@ -1472,11 +1496,11 @@ func TestEliminatedNMRPlayer(t *testing.T) {
 		})
 		t.Run("TimeoutResolvePhase5", func(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.DevResolvePhaseTimeoutRoute).
-				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "5").Success()
+				RouteParams("game_id", fmt.Sprint(startedGameID), "phase_ordinal", "6").Success()
 		})
 		t.Run("TestOldPhase5", func(t *testing.T) {
 			p := startedGames[0].Follow("phases", "Links").Success().
-				Find(5, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+				Find(6, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
 				AssertEq(true, "Properties", "Resolved").
 				AssertLen(1, "Properties", "Resolutions")
 

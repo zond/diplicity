@@ -980,12 +980,12 @@ func TestGameLists(t *testing.T) {
 
 func TestTrueSkillLinksFromFinishedGames(t *testing.T) {
 	withStartedGame(func() {
-		for _, game := range startedGames {
+		for idx, game := range startedGames {
 			p := game.Follow("phases", "Links").Success().
-				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+				Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 
 			p.Follow("phase-states", "Links").Success().
-				Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+				Find(startedGameNats[idx], []string{"Properties"}, []string{"Properties", "Nation"}).
 				Follow("update", "Links").Body(map[string]interface{}{
 				"ReadyToResolve": true,
 				"WantsDIAS":      true,
@@ -1019,10 +1019,24 @@ func TestTrueSkillLinksFromFinishedGames(t *testing.T) {
 		for _, env := range startedGameEnvs {
 			p := env.GetRoute("Game.Load").RouteParams("id", newGameID).Success().
 				Follow("phases", "Links").Success().
-				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+				Find("Muster", []string{"Properties"}, []string{"Properties", "Type"})
 
 			p.Follow("phase-states", "Links").Success().
-				Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+				Find(false, []string{"Properties"}, []string{"Properties", "ReadyToResolve"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"ReadyToResolve": true,
+			}).Success()
+		}
+
+		WaitForEmptyQueue("game-asyncResolvePhase")
+
+		for _, env := range startedGameEnvs {
+			p := env.GetRoute("Game.Load").RouteParams("id", newGameID).Success().
+				Follow("phases", "Links").Success().
+				Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
+
+			p.Follow("phase-states", "Links").Success().
+				Find(false, []string{"Properties"}, []string{"Properties", "ReadyToResolve"}).
 				Follow("update", "Links").Body(map[string]interface{}{
 				"ReadyToResolve": true,
 				"WantsDIAS":      true,

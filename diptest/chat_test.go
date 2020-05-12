@@ -17,22 +17,25 @@ func testChat(t *testing.T) {
 	sort.Sort(members)
 	chanName := strings.Join(members, ",")
 
+	WaitForEmptyQueue("game-asyncSendMsg")
+	WaitForEmptyQueue("game-sendMsgNotificationsToUsers")
+
 	t.Run("TestChatIsolationBetweenMembers", func(t *testing.T) {
-		startedGames[0].Follow("channels", "Links").Success().AssertEmpty("Properties")
-		startedGames[1].Follow("channels", "Links").Success().AssertEmpty("Properties")
-		startedGames[2].Follow("channels", "Links").Success().AssertEmpty("Properties")
+		startedGames[0].Follow("channels", "Links").Success().AssertLen(1, "Properties")
+		startedGames[1].Follow("channels", "Links").Success().AssertLen(1, "Properties")
+		startedGames[2].Follow("channels", "Links").Success().AssertLen(1, "Properties")
 
 		startedGameEnvs[1].GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(0), "UnreadMessages")
+			AssertEq(float64(1), "UnreadMessages")
 
 		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
-			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(0), "UnreadMessages")
+			Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
+			AssertEq(float64(1), "UnreadMessages")
 
 		startedGames[0].Follow("channels", "Links").Success().
 			Follow("message", "Links").Body(map[string]interface{}{
@@ -46,19 +49,19 @@ func testChat(t *testing.T) {
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(1), "UnreadMessages")
+			AssertEq(float64(2), "UnreadMessages")
 
 		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
-			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(0), "UnreadMessages")
+			Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
+			AssertEq(float64(1), "UnreadMessages")
 
 		startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"})
 		startedGames[1].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"})
-		startedGames[2].Follow("channels", "Links").Success().AssertEmpty("Properties")
+		startedGames[2].Follow("channels", "Links").Success().AssertLen(1, "Properties")
 
 		startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"}).
@@ -98,7 +101,7 @@ func testChat(t *testing.T) {
 			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
 		outsiderGame.Follow("channels", "Links").Success().
-			AssertEmpty("Properties")
+			AssertLen(1, "Properties")
 
 		msg2 := String("message")
 
@@ -295,14 +298,14 @@ func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 
 		extGame.Follow("channels", "Links").Success().
 			AssertNotRel("message", "Links").
-			AssertLen(0, "Properties")
+			AssertLen(1, "Properties")
 
-		for _, game := range startedGames {
+		for idx, game := range startedGames {
 			p := game.Follow("phases", "Links").Success().
-				Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+				Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 
 			p.Follow("phase-states", "Links").Success().
-				Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+				Find(startedGameNats[idx], []string{"Properties"}, []string{"Properties", "Nation"}).
 				Follow("update", "Links").Body(map[string]interface{}{
 				"ReadyToResolve": true,
 				"WantsDIAS":      true,
@@ -314,14 +317,14 @@ func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 		extGame.Follow("channels", "Links").Success().
 			AssertNotRel("message", "Links")
 		extGame.Follow("channels", "Links").Success().
-			AssertLen(1, "Properties").
-			Find(1, []string{"Properties"}, []string{"Properties", "NMessages"}).
+			AssertLen(2, "Properties").
+			Find(startedGameNats[0], []string{"Properties"}, []string{"Properties", "LatestMessage", "Sender"}).
 			Follow("messages", "Links").Success().
 			Find(msg, []string{"Properties"}, []string{"Properties", "Body"})
 
 		WaitForEmptyQueue("game-reRateTrueSkills")
 		WaitForEmptyQueue("game-updateUserStats")
-    WaitForEmptyQueue("game-updateUserStat")
+		WaitForEmptyQueue("game-updateUserStat")
 		for idx, env := range startedGameEnvs {
 			wantedScore := 14.0
 			wantedRating := 10.0

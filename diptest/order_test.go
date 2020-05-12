@@ -40,7 +40,7 @@ func testOrders(t *testing.T) {
 
 	phase := g.
 		Follow("phases", "Links").Success().
-		Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+		Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 
 	t.Run("TestOrdersIsolated", func(t *testing.T) {
 		phase.Follow("orders", "Links").Success().
@@ -50,7 +50,7 @@ func testOrders(t *testing.T) {
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
 			Follow("phases", "Links").Success().
-			Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+			Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 
 		otherPlayerPhase.Follow("orders", "Links").Success().
 			AssertEmpty("Properties")

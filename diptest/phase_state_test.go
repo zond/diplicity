@@ -11,15 +11,15 @@ func testPhaseState(t *testing.T) {
 			Find(false, []string{"NewestPhaseState", "ReadyToResolve"})
 
 		phases[i] = g.Follow("phases", "Links").Success().
-			Find("Spring", []string{"Properties"}, []string{"Properties", "Season"})
+			Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
 		phases[i].Follow("phase-states", "Links").Success().
-			Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+			Find(startedGameNats[i], []string{"Properties"}, []string{"Properties", "Nation"}).
 			AssertBoolEq(false, "Properties", "ReadyToResolve").
 			AssertBoolEq(false, "Properties", "WantsDIAS")
 	}
 
 	phases[0].Follow("phase-states", "Links").Success().
-		Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+		Find(startedGameNats[0], []string{"Properties"}, []string{"Properties", "Nation"}).
 		Follow("update", "Links").Body(map[string]interface{}{
 		"ReadyToResolve": true,
 		"WantsDIAS":      true,
@@ -32,7 +32,7 @@ func testPhaseState(t *testing.T) {
 		Find(true, []string{"NewestPhaseState", "ReadyToResolve"})
 
 	phases[1].Follow("phase-states", "Links").Success().
-		Find("", []string{"Properties"}, []string{"Properties", "Note"}).
+		Find(startedGameNats[1], []string{"Properties"}, []string{"Properties", "Nation"}).
 		AssertBoolEq(false, "Properties", "ReadyToResolve").
 		AssertBoolEq(false, "Properties", "WantsDIAS")
 
