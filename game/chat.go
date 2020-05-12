@@ -49,6 +49,7 @@ var (
 	sendMsgNotificationsToUsersFunc *DelayFunc
 	sendMsgNotificationsToFCMFunc   *DelayFunc
 	sendMsgNotificationsToMailFunc  *DelayFunc
+	AsyncSendMsgFunc                *DelayFunc
 
 	MessageResource *Resource
 )
@@ -57,6 +58,7 @@ func init() {
 	sendMsgNotificationsToUsersFunc = NewDelayFunc("game-sendMsgNotificationsToUsers", sendMsgNotificationsToUsers)
 	sendMsgNotificationsToFCMFunc = NewDelayFunc("game-sendMsgNotificationsToFCM", sendMsgNotificationsToFCM)
 	sendMsgNotificationsToMailFunc = NewDelayFunc("game-sendMsgNotificationsToMail", sendMsgNotificationsToMail)
+	AsyncSendMsgFunc = NewDelayFunc("game-asyncSendMsg", asyncSendMsg)
 
 	MessageResource = &Resource{
 		Create:     createMessage,
@@ -69,6 +71,33 @@ func init() {
 			},
 		},
 	}
+}
+
+func asyncSendMsg(
+	ctx context.Context,
+	gameID *datastore.Key,
+	sender string,
+	channelMembers []string,
+	body string,
+	host string,
+) error {
+	log.Infof(ctx, "asyncSendMsg(..., %v, %v, %+v, %q)", gameID, sender, channelMembers, body)
+	nats := make(Nations, len(channelMembers))
+	for idx := range channelMembers {
+		nats[idx] = godip.Nation(channelMembers[idx])
+	}
+	newMessage := &Message{
+		GameID:         gameID,
+		ChannelMembers: nats,
+		Sender:         godip.Nation(sender),
+		Body:           body,
+	}
+	if err := createMessageHelper(ctx, host, newMessage); err != nil {
+		log.Errorf(ctx, "createMessageHelper(..., %v, %+v): %v; fix it?", host, newMessage, err)
+		return err
+	}
+	log.Infof(ctx, "asyncSendMsg(..., %v, %v, %+v, %q) *** SUCCESS ***", gameID, sender, channelMembers, body)
+	return nil
 }
 
 type msgNotificationContext struct {

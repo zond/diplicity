@@ -467,7 +467,7 @@ var (
 	openGamesHandler = gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("StartETA"),
 		name:  "open-games",
-		desc:  []string{"Open games", "Open games, sorted with fullest and oldest first."},
+		desc:  []string{"Open games", "Open games, sorted with those expected to start soonest first."},
 		route: ListOpenGamesRoute,
 	}
 	stagingGamesHandler = gamesHandler{

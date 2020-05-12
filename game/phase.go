@@ -31,6 +31,10 @@ import (
 	. "github.com/zond/goaeoas"
 )
 
+const (
+	Muster = "Muster"
+)
+
 var (
 	asyncResolvePhaseFunc             *DelayFunc
 	timeoutResolvePhaseFunc           *DelayFunc
@@ -430,8 +434,8 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 			Sender:         DiplicitySender,
 			Body: fmt.Sprintf(
 				"This is a reminder that the current phase will resolve in %v (at %v), and you haven't declared that you are ready for the next phase. If you don't declare ready you will lose Quickness score. If you don't declare ready and don't provide any orders you will lose Reliability score, and be evicted from all staging game queues.",
-				phase.DeadlineAt.Sub(time.Now()),
-				phase.DeadlineAt),
+				phase.DeadlineAt.Sub(time.Now()).Round(time.Minute),
+				phase.DeadlineAt.Format(time.RFC822)),
 		}
 		if err := createMessageHelper(ctx, phase.Host, newMessage); err != nil {
 			log.Errorf(ctx, "createMessageHelper(..., %v, %+v): %v; fix it?", phase.Host, newMessage, err)
@@ -599,6 +603,101 @@ func (p *PhaseResolver) Act() error {
 		return nil
 	}
 
+	// Make mustering phases disappear completely, and their games go back to staging, if everyone isn't ready.
+
+	variant := variants.Variants[p.Game.Variant]
+
+	if p.Phase.Type == Muster {
+
+		// Collect IDs for phase and phase states, in case we need to delete them in a bit.
+
+		keys := []*datastore.Key{}
+		phaseID, err := p.Phase.ID(p.Context)
+		if err != nil {
+			log.Errorf(p.Context, "p.Phase.ID(...): %v; fix it?", err)
+			return err
+		}
+		keys = append(keys, phaseID)
+
+		// Find ready members.
+
+		readyMembers := map[godip.Nation]bool{}
+		unreadyMembers := Nations{}
+		for _, phaseState := range p.PhaseStates {
+			stateID, err := phaseState.ID(p.Context)
+			if err != nil {
+				log.Errorf(p.Context, "phaseState.ID(...): %v; fix it?", err)
+				return err
+			}
+			keys = append(keys, stateID)
+			if phaseState.ReadyToResolve {
+				readyMembers[phaseState.Nation] = true
+			} else {
+				unreadyMembers = append(unreadyMembers, phaseState.Nation)
+			}
+		}
+
+		// If it's not everyone:
+
+		if len(readyMembers) < len(variant.Nations) {
+			p.Game.Started = false
+			p.Game.StartedAt = time.Time{}
+			p.Game.Closed = false
+			p.Game.NewestPhaseMeta = nil
+			newMembers := []Member{}
+			members := []string{}
+			probationaries := []string{}
+			uids := []string{}
+			for i := range p.Game.Members {
+				member := p.Game.Members[i]
+				members = append(members, string(member.Nation))
+				uids = append(uids, member.User.Id)
+				if readyMembers[member.Nation] {
+					member.Nation = ""
+					newMembers = append(newMembers, member)
+				} else {
+					probationaries = append(probationaries, member.User.Id)
+				}
+			}
+			// Make the game have only the ready members.
+			p.Game.Members = newMembers
+			// Eject anyone not ready from any staging games.
+			if err := ejectProbationariesFunc.EnqueueIn(p.Context, 0, probationaries); err != nil {
+				log.Errorf(p.Context, "Unable to enqueue ejection of probationaries %+v: %v; hope datastore gets fixed", probationaries, err)
+				return err
+			}
+			// Save the game with the new state of being staging, and no longer closed.
+			if err := p.Game.Save(p.Context); err != nil {
+				log.Errorf(p.Context, "Unable to save game %v: %v; hope datastore will get fixed", PP(p.Game), err)
+				return err
+			}
+			// Update all users with the new stats about joined/started games.
+			if err := UpdateUserStatsASAP(p.Context, uids); err != nil {
+				log.Errorf(p.Context, "UpdateUserStatsASAP(..., %+v): %v; hope datastore gets fixed", uids, err)
+				return err
+			}
+			// Delete the phase and all it's phase states.
+			if err := datastore.DeleteMulti(p.Context, keys); err != nil {
+				log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", keys, err)
+				return err
+			}
+			notificationBody := fmt.Sprintf("Unfortunately %v weren't ready, so the game has re-entered the staging state. Once it has enough players it will re-enter the mustering state again.", strings.Join(unreadyMembers, ","))
+			if err := AsyncSendMsgFunc.EnqueueIn(
+				p.Context, 0,
+				p.Phase.GameID,
+				DiplicitySender,
+				members,
+				notificationBody,
+				p.Phase.Host,
+			); err != nil {
+				log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, variant.Nations, notificationBody, p.Phase.Host)
+				return err
+			}
+			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY REVERTED MUSTER PHASE ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+			return nil
+		}
+	}
+
 	// Clean up old phase states, and populate the nonEliminatedUserIds slice if necessary.
 
 	phaseStateIDs := make([]*datastore.Key, len(p.PhaseStates))
@@ -625,6 +724,10 @@ func (p *PhaseResolver) Act() error {
 		log.Errorf(p.Context, "Unable to save old phase states %v: %v; hope datastore will get fixed", PP(p.PhaseStates), err)
 		return err
 	}
+	// We don't change the nonEliminatedUserIds map if it's already set.
+	// I _think_ (a long time since I implemented this) that it's because
+	// we want to make sure that anyone not eliminated _before_ this resolution
+	// should still be notified when all the resolutions are finished.
 	if p.nonEliminatedUserIds == nil {
 		p.nonEliminatedUserIds = nonEliminatedUserIds
 	}
@@ -640,15 +743,23 @@ func (p *PhaseResolver) Act() error {
 	}
 	log.Infof(p.Context, "Orders at resolve time: %v", PP(orderMap))
 
-	variant := variants.Variants[p.Game.Variant]
-	s, err := p.Phase.State(p.Context, variant, orderMap)
-	if err != nil {
-		log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", PP(p.Phase), err)
-		return err
-	}
-	if err := s.Next(); err != nil {
-		log.Errorf(p.Context, "Unable to roll State forward for %v: %v; fix godip!", PP(p.Phase), err)
-		return err
+	var s *state.State
+	if p.Phase.Type == Muster {
+		s, err = variant.Start()
+		if err != nil {
+			log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", PP(p.Phase), err)
+			return err
+		}
+	} else {
+		s, err = p.Phase.State(p.Context, variant, orderMap)
+		if err != nil {
+			log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", PP(p.Phase), err)
+			return err
+		}
+		if err := s.Next(); err != nil {
+			log.Errorf(p.Context, "Unable to roll State forward for %v: %v; fix godip!", PP(p.Phase), err)
+			return err
+		}
 	}
 	scCounts := p.SCCounts(s)
 
@@ -749,6 +860,7 @@ func (p *PhaseResolver) Act() error {
 		// When a player updates a phase state, it's always set to 'OnProbation = false'.
 		// Thus, if the player was on probation last phase, we know they didn't enter orders or update their phase state, and they are safe to put on probation again.
 		// The reason for the `||` is that they can still be ready to resolve, due to not having options!
+		// (i.e. even someone who is ready to resolve can be on probation)
 		// A player should not be on probation once they've been eliminated from the game.
 		autoProbation := (wasOnProbation || (!hadOrders && !wasReady)) && !wasEliminated
 		if autoProbation {
@@ -1380,6 +1492,12 @@ func (p *Phase) DBSave(ctx context.Context) error {
 	p.PhaseMeta.SCsJSON = ""
 	_, err = datastore.Put(ctx, key, p)
 	return err
+}
+
+func MusterPhase(s *state.State, gameID *datastore.Key, host string) *Phase {
+	phase := NewPhase(s, gameID, 1, host)
+	phase.Type = Muster
+	return phase
 }
 
 func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host string) *Phase {

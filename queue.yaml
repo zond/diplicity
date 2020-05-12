@@ -1,4 +1,6 @@
 queue:
+    - name: game-asyncSendMsg
+      rate: 10/s
     - name: game-updateAllUserStats
       rate: 10/s
     - name: game-reGameResult

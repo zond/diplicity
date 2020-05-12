@@ -874,12 +874,16 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 			return HTTPErr{msg, http.StatusBadRequest}
 		}
 
-		phase := NewPhase(s, g.ID, 1, host)
+		phase := MusterPhase(s, g.ID, host)
 		// To ensure we don't get 0 phase length games.
 		if g.PhaseLengthMinutes == 0 {
 			g.PhaseLengthMinutes = MAX_PHASE_DEADLINE
 		}
-		phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.PhaseLengthMinutes)
+		if g.NonMovementPhaseLengthMinutes != 0 {
+			phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.NonMovementPhaseLengthMinutes)
+		} else {
+			phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.PhaseLengthMinutes)
+		}
 
 		toSave := []interface{}{
 			phase,
@@ -894,17 +898,8 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 			phaseID,
 		}
 
-		state, err := phase.State(ctx, variant, nil)
-		if err != nil {
-			log.Errorf(ctx, "phase.State(..., %v, nil): %v", variant, err)
-			return err
-		}
 		for _, nat := range variant.Nations {
-			options := state.Phase().Options(state, nat)
-			profile, counts := state.GetProfile()
-			for k, v := range profile {
-				log.Debugf(ctx, "Profiling state: %v => %v, %v", k, v, counts[k])
-			}
+			options := godip.Options{}
 			zippedOptions, err := zipOptions(ctx, options)
 			if err != nil {
 				log.Errorf(ctx, "zipOptions(..., %+v): %v", options, err)
@@ -915,13 +910,20 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 				GameID:        g.ID,
 				PhaseOrdinal:  phase.PhaseOrdinal,
 				Nation:        nat,
-				Messages:      strings.Join(state.Phase().Messages(state, nat), ","),
+				NoOrders:      true,
 				ZippedOptions: zippedOptions,
+				Note:          fmt.Sprintf("Created by Diplicity at %v due to game start.", time.Now()),
 			}
 			phaseStateID, err := phaseState.ID(ctx)
 			if err != nil {
 				log.Errorf(ctx, "phaseState.ID(...): %v", err)
 				return err
+			}
+
+			for idx := range g.Members {
+				if g.Members[idx].Nation == phaseState.Nation {
+					g.Members[idx].NewestPhaseState = *phaseState
+				}
 			}
 
 			toSave = append(toSave, phaseState)
@@ -978,6 +980,22 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 		}
 		if err := UpdateUserStatsASAP(ctx, uids); err != nil {
 			log.Errorf(ctx, "UpdateUserStatsASAP(..., %+v): %v; hope datastore gets fixed", uids, err)
+			return err
+		}
+		greetingBody := fmt.Sprintf("Welcome to the %q game %q! Before the game starts properly, all players must first declare themselves ready to play by checking 'ready to resolve'. If anyone doesn't do this within %v (before %v), they will be ejected from the game and it will re-enter the staging state. Have fun!", variant.Name, g.Desc, phase.DeadlineAt.Sub(time.Now()).Round(time.Minute), phase.DeadlineAt.Format(time.RFC822))
+		members := make([]string, len(variant.Nations))
+		for idx := range variant.Nations {
+			members[idx] = string(variant.Nations[idx])
+		}
+		if err := AsyncSendMsgFunc.EnqueueIn(
+			ctx, 0,
+			g.ID,
+			DiplicitySender,
+			members,
+			greetingBody,
+			host,
+		); err != nil {
+			log.Errorf(ctx, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", g.ID, DiplicitySender, variant.Nations, greetingBody, host)
 			return err
 		}
 
