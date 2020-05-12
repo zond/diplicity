@@ -39,7 +39,7 @@ func QueueEmpty(name string) (bool, error) {
 }
 
 func WaitForEmptyQueue(name string) {
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	for deadline.After(time.Now()) {
 		empty, err := QueueEmpty(name)
 		if err != nil {
