@@ -918,11 +918,16 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 				return err
 			}
 
+			messages := ""
+			if phase.Type != Muster {
+				messages = strings.Join(state.Phase().Messages(state, nat), ",")
+			}
 			phaseState := &PhaseState{
 				GameID:        g.ID,
 				PhaseOrdinal:  phase.PhaseOrdinal,
 				Nation:        nat,
 				NoOrders:      len(options) == 0,
+				Messages:      messages,
 				ZippedOptions: zippedOptions,
 				Note:          fmt.Sprintf("Created by Diplicity at %v due to game start.", time.Now()),
 			}
