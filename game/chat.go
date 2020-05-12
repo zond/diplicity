@@ -479,7 +479,7 @@ func (n Nations) String() string {
 
 type Channels []Channel
 
-func (c Channels) Item(r Request, gameID *datastore.Key, isMember bool, started bool) *Item {
+func (c Channels) Item(r Request, gameID *datastore.Key, isMember bool) *Item {
 	channelItems := make(List, len(c))
 	for i := range c {
 		channelItems[i] = c[i].Item(r)
@@ -1123,7 +1123,7 @@ func listChannels(w ResponseWriter, r Request) error {
 		}
 	}
 
-	w.SetContent(channels.Item(r, gameID, isMember, game.Started))
+	w.SetContent(channels.Item(r, gameID, isMember))
 	return nil
 }
 
