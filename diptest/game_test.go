@@ -1053,3 +1053,239 @@ func TestTrueSkillLinksFromFinishedGames(t *testing.T) {
 
 	})
 }
+
+func TestWithoutMustering(t *testing.T) {
+	gameDesc := String("test-game")
+	env1 := NewEnv().SetUID(String("uid"))
+	gameID := env1.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").Body(map[string]interface{}{
+		"Variant":            "France vs Austria",
+		"NoMerge":            true,
+		"Desc":               gameDesc,
+		"Private":            false,
+		"SkipMusterPhase":    true,
+		"PhaseLengthMinutes": 60,
+	}).Success().GetValue("Properties", "ID").(string)
+
+	env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	env1.GetRoute(game.ListMyStartedGamesRoute).Success().
+		AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	env2 := NewEnv().SetUID(String("uid"))
+
+	env2.GetRoute(game.ListOpenGamesRoute).Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	env2.GetRoute(game.ListStartedGamesRoute).Success().
+		AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	env2.GetRoute(game.ListMyStartedGamesRoute).Success().
+		AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("join", "Links").Body(map[string]interface{}{}).Success()
+
+	WaitForEmptyQueue("game-asyncStartGame")
+
+	g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
+	g.AssertLen(1, "Properties", "NewestPhaseMeta").
+		Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
+	g.Follow("channels", "Links").Success().
+		AssertLen(0, "Properties")
+	phases := g.Follow("phases", "Links").Success()
+	phases.AssertLen(1, "Properties")
+	phases.AssertNotFind(game.Muster, []string{"Properties"}, []string{"Properties", "Type"}).
+		Find(godip.Movement, []string{"Properties"}, []string{"Properties", "Type"}).
+		AssertEq(2.0, "Properties", "PhaseOrdinal")
+
+	env1.GetRoute(game.ListMyStartedGamesRoute).Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+		AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	env2.GetRoute(game.ListOpenGamesRoute).Success().
+		AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	env2.GetRoute(game.ListStartedGamesRoute).Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	env2.GetRoute(game.ListMyStartedGamesRoute).Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+}
+
+func TestMustering(t *testing.T) {
+	t.Run("NotReady", func(t *testing.T) {
+		gameDesc := String("test-game")
+		env1 := NewEnv().SetUID(String("uid"))
+		gameID := env1.GetRoute(game.IndexRoute).Success().
+			Follow("create-game", "Links").Body(map[string]interface{}{
+			"Variant":            "France vs Austria",
+			"NoMerge":            true,
+			"Desc":               gameDesc,
+			"Private":            false,
+			"PhaseLengthMinutes": 60,
+		}).Success().GetValue("Properties", "ID").(string)
+
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env2 := NewEnv().SetUID(String("uid"))
+
+		env2.GetRoute(game.ListOpenGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListStartedGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListMyStartedGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			Follow("join", "Links").Body(map[string]interface{}{}).Success()
+
+		WaitForEmptyQueue("game-asyncStartGame")
+
+		g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
+		g.AssertLen(1, "Properties", "NewestPhaseMeta").
+			Find(1, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
+		g.Follow("channels", "Links").Success().
+			AssertLen(1, "Properties").
+			Find(gameID, []string{"Properties"}, []string{"Properties", "GameID"}).
+			Follow("messages", "Links").Success().
+			AssertLen(1, "Properties")
+
+		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env2.GetRoute(game.ListOpenGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListStartedGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListMyStartedGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		g = env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
+		g.Find(game.Muster, []string{"Properties", "NewestPhaseMeta"}, []string{"Type"})
+		g.Follow("phases", "Links").Success().
+			Find(game.Muster, []string{"Properties"}, []string{"Properties", "Type"}).
+			Follow("phase-states", "Links").Success().
+			Find(false, []string{"Properties"}, []string{"Properties", "ReadyToResolve"}).
+			Follow("update", "Links").Body(map[string]interface{}{
+			"ReadyToResolve": true,
+		}).Success()
+
+		env1.GetRoute(game.DevResolvePhaseTimeoutRoute).
+			RouteParams("game_id", gameID, "phase_ordinal", "1").Success()
+
+		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env2.GetRoute(game.ListOpenGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListMyStartedGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListMyStagingGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		WaitForEmptyQueue("game-asyncSendMsg")
+
+		g = env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
+		g.AssertNil("Properties", "NewestPhaseMeta")
+		g.Follow("channels", "Links").Success().
+			AssertLen(1, "Properties").
+			Find(gameID, []string{"Properties"}, []string{"Properties", "GameID"}).
+			Follow("messages", "Links").Success().
+			AssertLen(2, "Properties")
+	})
+	t.Run("Ready", func(t *testing.T) {
+		gameDesc := String("test-game")
+		env1 := NewEnv().SetUID(String("uid"))
+		gameID := env1.GetRoute(game.IndexRoute).Success().
+			Follow("create-game", "Links").Body(map[string]interface{}{
+			"Variant":            "France vs Austria",
+			"NoMerge":            true,
+			"Desc":               gameDesc,
+			"Private":            false,
+			"PhaseLengthMinutes": 60,
+		}).Success().GetValue("Properties", "ID").(string)
+
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env2 := NewEnv().SetUID(String("uid"))
+
+		env2.GetRoute(game.ListOpenGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListStartedGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListMyStartedGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			Follow("join", "Links").Body(map[string]interface{}{}).Success()
+
+		WaitForEmptyQueue("game-asyncStartGame")
+
+		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env2.GetRoute(game.ListOpenGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListStartedGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListMyStartedGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		g1 := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
+		g1.Find(game.Muster, []string{"Properties", "NewestPhaseMeta"}, []string{"Type"})
+		g1.Follow("phases", "Links").Success().
+			Find(game.Muster, []string{"Properties"}, []string{"Properties", "Type"}).
+			Follow("phase-states", "Links").Success().
+			Find(false, []string{"Properties"}, []string{"Properties", "ReadyToResolve"}).
+			Follow("update", "Links").Body(map[string]interface{}{
+			"ReadyToResolve": true,
+		}).Success()
+
+		g2 := env2.GetRoute("Game.Load").RouteParams("id", gameID).Success()
+		g2.Find(game.Muster, []string{"Properties", "NewestPhaseMeta"}, []string{"Type"})
+		g2.Follow("phases", "Links").Success().
+			Find(game.Muster, []string{"Properties"}, []string{"Properties", "Type"}).
+			Follow("phase-states", "Links").Success().
+			Find(false, []string{"Properties"}, []string{"Properties", "ReadyToResolve"}).
+			Follow("update", "Links").Body(map[string]interface{}{
+			"ReadyToResolve": true,
+		}).Success()
+
+		env1.GetRoute(game.DevResolvePhaseTimeoutRoute).
+			RouteParams("game_id", gameID, "phase_ordinal", "1").Success()
+
+		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env2.GetRoute(game.ListOpenGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListMyStartedGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+		env2.GetRoute(game.ListMyStagingGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		WaitForEmptyQueue("game-asyncSendMsg")
+
+		g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
+		g.Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
+		g.Follow("channels", "Links").Success().
+			AssertLen(1, "Properties").
+			Find(gameID, []string{"Properties"}, []string{"Properties", "GameID"}).
+			Follow("messages", "Links").Success().
+			AssertLen(1, "Properties")
+
+	})
+}
