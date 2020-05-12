@@ -30,4 +30,4 @@ jobs:
     - name: Start test server
       run: ${GITHUB_WORKSPACE}/diptest/start_test_server.sh
     - name: Run tests
-      run: cd diptest && go test -v
+      run: cd diptest && go test -v -timeout 20m
