@@ -920,7 +920,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 
 			messages := ""
 			if phase.Type != Muster {
-				messages = strings.Join(state.Phase().Messages(state, nat), ",")
+				messages = strings.Join(s.Phase().Messages(s, nat), ",")
 			}
 			phaseState := &PhaseState{
 				GameID:        g.ID,
