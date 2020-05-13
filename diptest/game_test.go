@@ -1138,10 +1138,28 @@ func TestMustering(t *testing.T) {
 		env2.GetRoute(game.ListMyStartedGamesRoute).Success().
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
+		msg1 := String("msg")
+
+		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			Follow("channels", "Links").Success().
+			AssertNotFind("message", []string{"Links"}, []string{"Rel"})
+		env1.GetRoute("Message.Create").RouteParams("game_id", gameID).Body(map[string]interface{}{
+			"Body":           msg1,
+			"ChannelMembers": []string{"Austria", "France"},
+		}).Failure()
+
 		env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 			Follow("join", "Links").Body(map[string]interface{}{}).Success()
 
 		WaitForEmptyQueue("game-asyncStartGame")
+
+		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			Follow("channels", "Links").Success().
+			AssertNotFind("message", []string{"Links"}, []string{"Rel"})
+		env1.GetRoute("Message.Create").RouteParams("game_id", gameID).Body(map[string]interface{}{
+			"Body":           msg1,
+			"ChannelMembers": []string{"Austria", "France"},
+		}).Failure()
 
 		g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
 		g.AssertLen(1, "Properties", "NewestPhaseMeta").
@@ -1190,6 +1208,14 @@ func TestMustering(t *testing.T) {
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
 		WaitForEmptyQueue("game-asyncSendMsg")
+
+		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			Follow("channels", "Links").Success().
+			AssertNotFind("message", []string{"Links"}, []string{"Rel"})
+		env1.GetRoute("Message.Create").RouteParams("game_id", gameID).Body(map[string]interface{}{
+			"Body":           msg1,
+			"ChannelMembers": []string{"Austria", "France"},
+		}).Failure()
 
 		g = env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
 		g.AssertNil("Properties", "NewestPhaseMeta")
@@ -1279,6 +1305,8 @@ func TestMustering(t *testing.T) {
 
 		WaitForEmptyQueue("game-asyncSendMsg")
 
+		msg1 := String("msg")
+
 		g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
 		g.Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
 		g.Follow("channels", "Links").Success().
@@ -1287,5 +1315,11 @@ func TestMustering(t *testing.T) {
 			Follow("messages", "Links").Success().
 			AssertLen(1, "Properties")
 
+		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			Follow("channels", "Links").Success().
+			Follow("message", "Links").Body(map[string]interface{}{
+			"Body":           msg1,
+			"ChannelMembers": []string{"Austria", "France"},
+		}).Success()
 	})
 }
