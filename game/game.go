@@ -393,7 +393,8 @@ type Game struct {
 	ID *datastore.Key `datastore:"-"`
 
 	Started  bool // Game has started.
-	Closed   bool // Game is no longer joinable..
+	Mustered bool // Game has mustered all players.
+	Closed   bool // Game is no longer joinable.
 	Finished bool // Game has reached its end.
 
 	Desc                          string           `methods:"POST" datastore:",noindex"`
@@ -414,7 +415,7 @@ type Game struct {
 	NationAllocation              AllocationMethod `methods:"POST"`
 	Anonymous                     bool             `methods:"POST"`
 	LastYear                      int              `methods:"POST"`
-	SkipMusterPhase               bool             `methods:"POST"`
+	SkipMuster                    bool             `methods:"POST"`
 
 	NMembers int
 	Members  Members
@@ -794,7 +795,7 @@ type Preferers interface {
 	Len() int
 }
 
-func Allocate(preferers Preferers, nations godip.Nations) ([]godip.Nation, error) {
+func AllocateNations(preferers Preferers, nations godip.Nations) ([]godip.Nation, error) {
 	validNation := map[godip.Nation]bool{}
 	for _, nation := range nations {
 		validNation[nation] = true
@@ -833,6 +834,26 @@ func Allocate(preferers Preferers, nations godip.Nations) ([]godip.Nation, error
 	return result, nil
 }
 
+func (g *Game) AllocateNations() error {
+	variant := variants.Variants[g.Variant]
+	if g.NationAllocation == RandomAllocation {
+		for memberIndex, nationIndex := range rand.Perm(len(variant.Nations)) {
+			g.Members[memberIndex].Nation = variant.Nations[nationIndex]
+		}
+	} else if g.NationAllocation == PreferenceAllocation {
+		alloc, err := AllocateNations(g.Members, variant.Nations)
+		if err != nil {
+			return fmt.Errorf("AllocateNations(%+v, %+v): %v", g.Members, variant.Nations, err)
+		}
+		for memberIdx := range g.Members {
+			g.Members[memberIdx].Nation = alloc[memberIdx]
+		}
+	} else {
+		return fmt.Errorf("unknown allocation method %v, pick %v or %v", g.NationAllocation, RandomAllocation, PreferenceAllocation)
+	}
+	return nil
+}
+
 func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) error {
 	log.Infof(ctx, "asyncStartGame(..., %v, %q)", gameID, host)
 
@@ -854,37 +875,20 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 		g.Started = true
 		g.StartedAt = time.Now()
 		g.Closed = true
-		if g.NationAllocation == RandomAllocation {
-			for memberIndex, nationIndex := range rand.Perm(len(variant.Nations)) {
-				g.Members[memberIndex].Nation = variant.Nations[nationIndex]
-			}
-		} else if g.NationAllocation == PreferenceAllocation {
-			alloc, err := Allocate(g.Members, variant.Nations)
-			if err != nil {
-				log.Errorf(ctx, "Allocate(%+v, %+v): %v; fix Allocate", g.Members, variant.Nations, err)
+		if g.SkipMuster {
+			g.Mustered = true
+			if err := g.AllocateNations(); err != nil {
+				log.Errorf(ctx, "g.AllocateNations(): %v; fix it?", err)
 				return err
 			}
-			for memberIdx := range g.Members {
-				g.Members[memberIdx].Nation = alloc[memberIdx]
-			}
-		} else {
-			msg := fmt.Sprintf("unknown allocation method %v, pick %v or %v", g.NationAllocation, RandomAllocation, PreferenceAllocation)
-			log.Errorf(ctx, msg)
-			return HTTPErr{msg, http.StatusBadRequest}
 		}
 
-		var phase *Phase
-		if g.SkipMusterPhase {
-			// To keep the phase ordinals in sync, we start at phase 2 when we skip the muster phase (1).
-			phase = NewPhase(s, g.ID, 2, host)
-		} else {
-			phase = MusterPhase(s, g.ID, host)
-		}
+		phase := NewPhase(s, g.ID, 1, host)
 		// To ensure we don't get 0 phase length games.
 		if g.PhaseLengthMinutes == 0 {
 			g.PhaseLengthMinutes = MAX_PHASE_DEADLINE
 		}
-		if phase.Type != godip.Movement && g.NonMovementPhaseLengthMinutes != 0 {
+		if (!g.Mustered || phase.Type != godip.Movement) && g.NonMovementPhaseLengthMinutes != 0 {
 			phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.NonMovementPhaseLengthMinutes)
 		} else {
 			phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.PhaseLengthMinutes)
@@ -903,10 +907,10 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 			phaseID,
 		}
 
-		for _, nat := range variant.Nations {
+		for idx := range g.Members {
 			options := godip.Options{}
-			if phase.Type != Muster {
-				options = s.Phase().Options(s, nat)
+			if g.Members[idx].Nation != "" {
+				options = s.Phase().Options(s, g.Members[idx].Nation)
 				profile, counts := s.GetProfile()
 				for k, v := range profile {
 					log.Debugf(ctx, "Profiling state: %v => %v, %v", k, v, counts[k])
@@ -919,17 +923,21 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 			}
 
 			messages := ""
-			if phase.Type != Muster {
-				messages = strings.Join(s.Phase().Messages(s, nat), ",")
+			if g.Members[idx].Nation != "" {
+				messages = strings.Join(s.Phase().Messages(s, g.Members[idx].Nation), ",")
 			}
 			phaseState := &PhaseState{
 				GameID:        g.ID,
 				PhaseOrdinal:  phase.PhaseOrdinal,
-				Nation:        nat,
 				NoOrders:      len(options) == 0,
 				Messages:      messages,
 				ZippedOptions: zippedOptions,
 				Note:          fmt.Sprintf("Created by Diplicity at %v due to game start.", time.Now()),
+			}
+			if g.Members[idx].Nation != "" {
+				phaseState.Nation = g.Members[idx].Nation
+			} else {
+				phaseState.Nation = godip.Nation(g.Members[idx].User.Id)
 			}
 			phaseStateID, err := phaseState.ID(ctx)
 			if err != nil {
@@ -937,11 +945,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 				return err
 			}
 
-			for idx := range g.Members {
-				if g.Members[idx].Nation == phaseState.Nation {
-					g.Members[idx].NewestPhaseState = *phaseState
-				}
-			}
+			g.Members[idx].NewestPhaseState = *phaseState
 
 			toSave = append(toSave, phaseState)
 			keys = append(keys, phaseStateID)
@@ -999,23 +1003,32 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 			log.Errorf(ctx, "UpdateUserStatsASAP(..., %+v): %v; hope datastore gets fixed", uids, err)
 			return err
 		}
-		if phase.Type == Muster {
-			greetingBody := fmt.Sprintf("Welcome to the %q game %q! Before the game starts properly, all players must first declare themselves ready to play by checking 'ready to resolve'. If anyone doesn't do this within %v (before %v), they will be ejected from the game and it will re-enter the staging state. Have fun!", variant.Name, g.Desc, phase.DeadlineAt.Sub(time.Now()).Round(time.Minute), phase.DeadlineAt.Format(time.RFC822))
-			members := make([]string, len(variant.Nations))
-			for idx := range variant.Nations {
-				members[idx] = string(variant.Nations[idx])
-			}
-			if err := AsyncSendMsgFunc.EnqueueIn(
-				ctx, 0,
-				g.ID,
-				DiplicitySender,
-				members,
-				greetingBody,
-				host,
-			); err != nil {
-				log.Errorf(ctx, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", g.ID, DiplicitySender, variant.Nations, greetingBody, host)
-				return err
-			}
+		gameDesc := ""
+		if g.Desc != "" {
+			gameDesc = fmt.Sprintf("the %v game %v", variant.Name, g.Desc)
+		} else {
+			gameDesc = fmt.Sprintf("this %v game", variant.Name)
+		}
+		greetingBody := ""
+		if g.Mustered {
+			greetingBody = fmt.Sprintf("Welcome to %v. Have fun!", gameDesc)
+		} else {
+			greetingBody = fmt.Sprintf("Welcome to %v. Before the game starts properly, all players must first declare themselves ready to play by checking 'ready to resolve'. If anyone doesn't do this within %v (before %v), they will be ejected from the game (and all other staging games) and it will re-enter the staging state. Have fun!", gameDesc, phase.DeadlineAt.Sub(time.Now()).Round(time.Minute), phase.DeadlineAt.Format(time.RFC822))
+		}
+		members := make([]string, len(variant.Nations))
+		for idx := range variant.Nations {
+			members[idx] = string(variant.Nations[idx])
+		}
+		if err := AsyncSendMsgFunc.EnqueueIn(
+			ctx, 0,
+			g.ID,
+			DiplicitySender,
+			members,
+			greetingBody,
+			host,
+		); err != nil {
+			log.Errorf(ctx, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", g.ID, DiplicitySender, variant.Nations, greetingBody, host)
+			return err
 		}
 
 		return nil

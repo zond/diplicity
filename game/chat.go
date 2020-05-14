@@ -393,7 +393,7 @@ func sendMsgNotificationsToUsers(ctx context.Context, host string, gameID *datas
 			log.Errorf(ctx, "%v isn't a member of %v, wtf? Giving up.", uids[0], gameID)
 			return nil
 		}
-		// If the member doesn't have a nation assigned (which happens during reset of mustering games)
+		// If the member doesn't have a nation assigned (which happens in mustering games)
 		// then we don't keep track of unread messages either.
 		if member.Nation != "" {
 			channels, err := loadChannels(ctx, game, member.Nation)
@@ -779,6 +779,7 @@ func validateMessage(ctx context.Context, message *Message) error {
 		return HTTPErr{"can not create empty messages", http.StatusBadRequest}
 	}
 
+	log.Infof(ctx, "wanting to send from %v to %+v", message.Sender, message.ChannelMembers)
 	if !message.ChannelMembers.Includes(message.Sender) {
 		return HTTPErr{"can only send messages to member channels", http.StatusForbidden}
 	}
@@ -790,7 +791,7 @@ func validateMessage(ctx context.Context, message *Message) error {
 	if !game.Started {
 		return HTTPErr{"game not yet started", http.StatusBadRequest}
 	}
-	if len(game.NewestPhaseMeta) == 0 || game.NewestPhaseMeta[0].Type == Muster {
+	if !game.Mustered {
 		return HTTPErr{"game is mustering", http.StatusBadRequest}
 	}
 	if !game.Finished {
@@ -874,7 +875,7 @@ func listMessages(w ResponseWriter, r Request) error {
 
 	var nation godip.Nation
 	mutedNats := map[godip.Nation]struct{}{}
-	if member, found := game.GetMemberByUserId(user.Id); game.Started && found {
+	if member, found := game.GetMemberByUserId(user.Id); game.Started && game.Mustered && found {
 		nation = member.Nation
 		gameStateID, err := GameStateID(ctx, gameID, nation)
 		if err != nil {
@@ -914,7 +915,7 @@ func listMessages(w ResponseWriter, r Request) error {
 			messages[i].ID = messageIDs[i]
 			messages[i].Age = time.Now().Sub(messages[i].CreatedAt)
 		}
-		if game.Started && nation != "" {
+		if game.Started && game.Mustered && nation != "" {
 			seenMarkerID, err := SeenMarkerID(ctx, channelID, nation)
 			if err != nil {
 				return err
@@ -934,7 +935,7 @@ func listMessages(w ResponseWriter, r Request) error {
 
 	var member *Member
 	isMember := false
-	if game.Started && nation != "" && len(messages) > 0 && (seenMarker == nil || seenMarker.At.Before(messages[0].CreatedAt)) {
+	if game.Started && game.Mustered && nation != "" && len(messages) > 0 && (seenMarker == nil || seenMarker.At.Before(messages[0].CreatedAt)) {
 		seenMarker = &SeenMarker{
 			GameID:  gameID,
 			Owner:   nation,
@@ -1120,7 +1121,7 @@ func listChannels(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	if game.Started && isMember {
+	if game.Started && game.Mustered && isMember {
 		if err := countUnreadMessages(ctx, channels, nation); err != nil {
 			return err
 		}
@@ -1133,7 +1134,7 @@ func listChannels(w ResponseWriter, r Request) error {
 	w.SetContent(channels.Item(
 		r,
 		gameID,
-		game.Started && len(game.NewestPhaseMeta) > 0 && game.NewestPhaseMeta[0].Type != Muster && isMember,
+		game.Started && game.Mustered && isMember,
 	))
 	return nil
 }

@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 )
@@ -25,7 +26,7 @@ var PhaseStateResource *Resource
 func init() {
 	PhaseStateResource = &Resource{
 		Update:   updatePhaseState,
-		FullPath: "/Game/{game_id}/Phase/{phase_ordinal}/PhaseState/{nation}",
+		FullPath: "/Game/{game_id}/Phase/{phase_ordinal}/PhaseState",
 		Listers: []Lister{
 			{
 				Path:    "/Game/{game_id}/Phase/{phase_ordinal}/PhaseStates",
@@ -112,7 +113,7 @@ func (p *PhaseState) Save(ctx context.Context) error {
 func (p *PhaseState) Item(r Request) *Item {
 	phaseStateItem := NewItem(p).SetName(string(p.Nation))
 	if _, isUnresolved := r.Values()["is-unresolved"]; isUnresolved {
-		phaseStateItem.AddLink(r.NewLink(PhaseStateResource.Link("update", Update, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal), "nation", string(p.Nation)})))
+		phaseStateItem.AddLink(r.NewLink(PhaseStateResource.Link("update", Update, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)})))
 	}
 	return phaseStateItem
 }
@@ -134,8 +135,6 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	nation := godip.Nation(r.Vars()["nation"])
 
 	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
 	if err != nil {
@@ -159,15 +158,11 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 			return HTTPErr{"can only update phase state of member games", http.StatusNotFound}
 		}
 
-		if member.Nation != nation {
-			return HTTPErr{"can only update own phase state", http.StatusForbidden}
-		}
-
 		if phase.Resolved {
 			return HTTPErr{"can only update phase states of unresolved phases", http.StatusPreconditionFailed}
 		}
 
-		phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
+		phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation, member.User.Id)
 		if err != nil {
 			return err
 		}
@@ -185,9 +180,11 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		phaseState.GameID = gameID
 		phaseState.PhaseOrdinal = phaseOrdinal
 		phaseState.Nation = member.Nation
+		phaseState.UserId = member.User.Id
 		phaseState.OnProbation = false
 		member.NewestPhaseState = *phaseState
 
+		log.Infof(ctx, "Saving %+v", phaseState)
 		if err := phaseState.Save(ctx); err != nil {
 			return err
 		}
@@ -201,26 +198,19 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 				return err
 			}
 
-			phaseStates := map[godip.Nation]*PhaseState{}
-			readyNations := map[godip.Nation]struct{}{}
+			readyNations := 0
 			for i := range allStates {
-				phaseStates[allStates[i].Nation] = &allStates[i]
+				log.Infof(ctx, "SMURF comparing %v to %v", PP(allStates[i]), PP(phaseState))
+				if allStates[i].Nation == phaseState.Nation && allStates[i].UserId == phaseState.UserId {
+					allStates[i] = *phaseState
+				}
 				if allStates[i].ReadyToResolve {
-					readyNations[allStates[i].Nation] = struct{}{}
+					readyNations += 1
 				}
 			}
 
-			// Overwrite what we found with what we know, since the query will have fetched what was visible before
-			// the transaction.
-			phaseStates[phaseState.Nation] = phaseState
-			readyNations[phaseState.Nation] = struct{}{}
-
-			allStates = make([]PhaseState, 0, len(phaseStates))
-			for _, phaseState := range phaseStates {
-				allStates = append(allStates, *phaseState)
-			}
-
-			if len(readyNations) == len(variants.Variants[game.Variant].Nations) {
+			log.Infof(ctx, "SMURF readyNation %v", readyNations)
+			if readyNations == len(variants.Variants[game.Variant].Nations) {
 				if err := asyncResolvePhaseFunc.EnqueueIn(ctx, 0, game.ID, phase.PhaseOrdinal); err != nil {
 					return err
 				}
@@ -288,7 +278,7 @@ func listPhaseStates(w ResponseWriter, r Request) error {
 	} else {
 		member, isMember := game.GetMemberByUserId(user.Id)
 		if isMember {
-			phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
+			phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation, member.User.Id)
 			if err != nil {
 				return err
 			}

@@ -29,13 +29,13 @@ func testChat(t *testing.T) {
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(1), "UnreadMessages")
+			AssertEq(float64(2), "UnreadMessages")
 
 		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(1), "UnreadMessages")
+			AssertEq(float64(2), "UnreadMessages")
 
 		startedGames[0].Follow("channels", "Links").Success().
 			Follow("message", "Links").Body(map[string]interface{}{
@@ -49,13 +49,13 @@ func testChat(t *testing.T) {
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(2), "UnreadMessages")
+			AssertEq(float64(3), "UnreadMessages")
 
 		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(1), "UnreadMessages")
+			AssertEq(float64(2), "UnreadMessages")
 
 		startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"})

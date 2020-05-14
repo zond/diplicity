@@ -556,7 +556,7 @@ func createAllocation(w ResponseWriter, r Request) (*Allocation, error) {
 		return nil, HTTPErr{fmt.Sprintf("variant %q not found", a.Variant), http.StatusNotFound}
 	}
 	log.Infof(ctx, "Allocating for %+v, %+v", a, variant.Nations)
-	alloc, err := Allocate(a.Members, variant.Nations)
+	alloc, err := AllocateNations(a.Members, variant.Nations)
 	if err != nil {
 		return nil, err
 	}
@@ -1280,6 +1280,16 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Options", []string{"GET"}, ListOptionsRoute, listOptions)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Map", []string{"GET"}, RenderPhaseMapRoute, renderPhaseMap)
 	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
+	// TODO(zond): Remove this when the Android client no longer uses the old API.
+	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/PhaseState/{nation}", []string{"PUT"}, "deprecatedUpdatePhaseState",
+		func(w ResponseWriter, r Request) error {
+			phaseState, err := updatePhaseState(w, r)
+			if err != nil {
+				return err
+			}
+			w.SetContent(phaseState.Item(r))
+			return nil
+		})
 	Handle(r, "/Rss", []string{"GET"}, RssRoute, handleRss)
 	HandleResource(r, GameResource)
 	HandleResource(r, AllocationResource)

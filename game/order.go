@@ -284,6 +284,9 @@ func createOrder(w ResponseWriter, r Request) (*Order, error) {
 			return err
 		}
 		game.ID = gameID
+		if !game.Mustered {
+			return HTTPErr{"can only create orders for mustered games", http.StatusPreconditionFailed}
+		}
 		if phase.Resolved {
 			return HTTPErr{"can only create orders for unresolved phases", http.StatusPreconditionFailed}
 		}
