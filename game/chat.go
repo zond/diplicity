@@ -49,6 +49,7 @@ var (
 	sendMsgNotificationsToUsersFunc *DelayFunc
 	sendMsgNotificationsToFCMFunc   *DelayFunc
 	sendMsgNotificationsToMailFunc  *DelayFunc
+	AsyncSendMsgFunc                *DelayFunc
 
 	MessageResource *Resource
 )
@@ -57,6 +58,7 @@ func init() {
 	sendMsgNotificationsToUsersFunc = NewDelayFunc("game-sendMsgNotificationsToUsers", sendMsgNotificationsToUsers)
 	sendMsgNotificationsToFCMFunc = NewDelayFunc("game-sendMsgNotificationsToFCM", sendMsgNotificationsToFCM)
 	sendMsgNotificationsToMailFunc = NewDelayFunc("game-sendMsgNotificationsToMail", sendMsgNotificationsToMail)
+	AsyncSendMsgFunc = NewDelayFunc("game-asyncSendMsg", asyncSendMsg)
 
 	MessageResource = &Resource{
 		Create:     createMessage,
@@ -69,6 +71,33 @@ func init() {
 			},
 		},
 	}
+}
+
+func asyncSendMsg(
+	ctx context.Context,
+	gameID *datastore.Key,
+	sender string,
+	channelMembers []string,
+	body string,
+	host string,
+) error {
+	log.Infof(ctx, "asyncSendMsg(..., %v, %v, %+v, %q)", gameID, sender, channelMembers, body)
+	nats := make(Nations, len(channelMembers))
+	for idx := range channelMembers {
+		nats[idx] = godip.Nation(channelMembers[idx])
+	}
+	newMessage := &Message{
+		GameID:         gameID,
+		ChannelMembers: nats,
+		Sender:         godip.Nation(sender),
+		Body:           body,
+	}
+	if err := createMessageHelper(ctx, host, newMessage); err != nil {
+		log.Errorf(ctx, "createMessageHelper(..., %v, %+v): %v; fix it?", host, newMessage, err)
+		return err
+	}
+	log.Infof(ctx, "asyncSendMsg(..., %v, %v, %+v, %q) *** SUCCESS ***", gameID, sender, channelMembers, body)
+	return nil
 }
 
 type msgNotificationContext struct {
@@ -364,23 +393,27 @@ func sendMsgNotificationsToUsers(ctx context.Context, host string, gameID *datas
 			log.Errorf(ctx, "%v isn't a member of %v, wtf? Giving up.", uids[0], gameID)
 			return nil
 		}
-		channels, err := loadChannels(ctx, game, member.Nation)
-		if err != nil {
-			log.Errorf(ctx, "Unable to load channels for %v in %v: %v; hope datastore gets fixed", member.Nation, gameID, err)
-			return err
-		}
-		if err := countUnreadMessages(ctx, channels, member.Nation); err != nil {
-			log.Errorf(ctx, "Unable to count unread messages for %v in %v: %v; hope datastore gets fixed", member.Nation, gameID, err)
-			return err
-		}
-		total := 0
-		for _, channel := range channels {
-			total += channel.NMessagesSince.NMessages
-		}
-		member.UnreadMessages = total
-		if err := game.Save(ctx); err != nil {
-			log.Errorf(ctx, "Unable to save %v after updating unread messages for %v: %v; hope datastore gets fixed", gameID, member.Nation, err)
-			return err
+		// If the member doesn't have a nation assigned (which happens during mustering)
+		// then we don't keep track of unread messages either.
+		if member.Nation != "" {
+			channels, err := loadChannels(ctx, game, member.Nation)
+			if err != nil {
+				log.Errorf(ctx, "Unable to load channels for %v in %v: %v; hope datastore gets fixed", member.Nation, gameID, err)
+				return err
+			}
+			if err := countUnreadMessages(ctx, channels, member.Nation); err != nil {
+				log.Errorf(ctx, "Unable to count unread messages for %v in %v: %v; hope datastore gets fixed", member.Nation, gameID, err)
+				return err
+			}
+			total := 0
+			for _, channel := range channels {
+				total += channel.NMessagesSince.NMessages
+			}
+			member.UnreadMessages = total
+			if err := game.Save(ctx); err != nil {
+				log.Errorf(ctx, "Unable to save %v after updating unread messages for %v: %v; hope datastore gets fixed", gameID, member.Nation, err)
+				return err
+			}
 		}
 
 		if err := sendMsgNotificationsToFCMFunc.EnqueueIn(ctx, 0, host, gameID, channelMembers, messageID, uids[0], map[string]struct{}{}); err != nil {
@@ -450,7 +483,7 @@ func (n Nations) String() string {
 
 type Channels []Channel
 
-func (c Channels) Item(r Request, gameID *datastore.Key, isMember bool) *Item {
+func (c Channels) Item(r Request, gameID *datastore.Key, createMessageLink bool) *Item {
 	channelItems := make(List, len(c))
 	for i := range c {
 		channelItems[i] = c[i].Item(r)
@@ -470,7 +503,7 @@ func (c Channels) Item(r Request, gameID *datastore.Key, isMember bool) *Item {
 		Route:       ListChannelsRoute,
 		RouteParams: []string{"game_id", gameID.Encode()},
 	}))
-	if isMember {
+	if createMessageLink {
 		channelsItem.AddLink(r.NewLink(MessageResource.Link("message", Create, []string{"game_id", gameID.Encode()})))
 	}
 	return channelsItem
@@ -757,6 +790,9 @@ func validateMessage(ctx context.Context, message *Message) error {
 	if !game.Started {
 		return HTTPErr{"game not yet started", http.StatusBadRequest}
 	}
+	if !game.Mustered {
+		return HTTPErr{"game is mustering", http.StatusBadRequest}
+	}
 	if !game.Finished {
 		if game.DisablePrivateChat && len(message.ChannelMembers) == 2 {
 			return HTTPErr{"private chat disabled", http.StatusBadRequest}
@@ -835,15 +871,10 @@ func listMessages(w ResponseWriter, r Request) error {
 		return err
 	}
 	game.ID = gameID
-	if !game.Started {
-		_, isMember := game.GetMemberByUserId(user.Id)
-		w.SetContent((Messages{}).Item(r, gameID, channelMembers, isMember))
-		return nil
-	}
 
 	var nation godip.Nation
 	mutedNats := map[godip.Nation]struct{}{}
-	if member, found := game.GetMemberByUserId(user.Id); found {
+	if member, found := game.GetMemberByUserId(user.Id); game.Started && found {
 		nation = member.Nation
 		gameStateID, err := GameStateID(ctx, gameID, nation)
 		if err != nil {
@@ -883,7 +914,7 @@ func listMessages(w ResponseWriter, r Request) error {
 			messages[i].ID = messageIDs[i]
 			messages[i].Age = time.Now().Sub(messages[i].CreatedAt)
 		}
-		if nation != "" {
+		if game.Started && nation != "" {
 			seenMarkerID, err := SeenMarkerID(ctx, channelID, nation)
 			if err != nil {
 				return err
@@ -903,7 +934,7 @@ func listMessages(w ResponseWriter, r Request) error {
 
 	var member *Member
 	isMember := false
-	if nation != "" && len(messages) > 0 && (seenMarker == nil || seenMarker.At.Before(messages[0].CreatedAt)) {
+	if game.Started && nation != "" && len(messages) > 0 && (seenMarker == nil || seenMarker.At.Before(messages[0].CreatedAt)) {
 		seenMarker = &SeenMarker{
 			GameID:  gameID,
 			Owner:   nation,
@@ -980,7 +1011,7 @@ func loadChannels(ctx context.Context, game *Game, viewer godip.Nation) (Channel
 		if err != nil {
 			return nil, err
 		}
-	} else if game.Started {
+	} else {
 		if viewer == "" {
 			channelID, err := ChannelID(ctx, game.ID, publicChannel(game.Variant))
 			if err != nil {
@@ -1089,7 +1120,7 @@ func listChannels(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	if isMember {
+	if game.Started && isMember {
 		if err := countUnreadMessages(ctx, channels, nation); err != nil {
 			return err
 		}
@@ -1099,7 +1130,11 @@ func listChannels(w ResponseWriter, r Request) error {
 		}
 	}
 
-	w.SetContent(channels.Item(r, gameID, isMember))
+	w.SetContent(channels.Item(
+		r,
+		gameID,
+		game.Started && game.Mustered && isMember,
+	))
 	return nil
 }
 

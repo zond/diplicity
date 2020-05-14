@@ -393,7 +393,8 @@ type Game struct {
 	ID *datastore.Key `datastore:"-"`
 
 	Started  bool // Game has started.
-	Closed   bool // Game is no longer joinable..
+	Mustered bool // Game has mustered all players.
+	Closed   bool // Game is no longer joinable.
 	Finished bool // Game has reached its end.
 
 	Desc                          string           `methods:"POST" datastore:",noindex"`
@@ -414,6 +415,7 @@ type Game struct {
 	NationAllocation              AllocationMethod `methods:"POST"`
 	Anonymous                     bool             `methods:"POST"`
 	LastYear                      int              `methods:"POST"`
+	SkipMuster                    bool             `methods:"POST"`
 
 	NMembers int
 	Members  Members
@@ -506,14 +508,15 @@ func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
 }
 
 func (g *Game) Refresh() {
+	now := time.Now()
 	if !g.CreatedAt.IsZero() {
-		g.CreatedAgo = g.CreatedAt.Sub(time.Now())
+		g.CreatedAgo = g.CreatedAt.Sub(now)
 	}
 	if !g.StartedAt.IsZero() {
-		g.StartedAgo = g.StartedAt.Sub(time.Now())
+		g.StartedAgo = g.StartedAt.Sub(now)
 	}
 	if !g.FinishedAt.IsZero() {
-		g.FinishedAgo = g.FinishedAt.Sub(time.Now())
+		g.FinishedAgo = g.FinishedAt.Sub(now)
 	}
 }
 
@@ -834,6 +837,25 @@ func Allocate(preferers Preferers, nations godip.Nations) ([]godip.Nation, error
 	return result, nil
 }
 
+func (g *Game) Allocate() error {
+	variant := variants.Variants[g.Variant]
+	if g.NationAllocation == RandomAllocation {
+		for memberIndex, nationIndex := range rand.Perm(len(variant.Nations)) {
+			g.Members[memberIndex].Nation = variant.Nations[nationIndex]
+		}
+	} else if g.NationAllocation == PreferenceAllocation {
+		alloc, err := Allocate(g.Members, variant.Nations)
+		if err != nil {
+			return fmt.Errorf(ctx, "Allocate(%+v, %+v): %v", g.Members, variant.Nations, err)
+		}
+		for memberIdx := range g.Members {
+			g.Members[memberIdx].Nation = alloc[memberIdx]
+		}
+	} else {
+		return fmt.Errorf("unknown allocation method %v, pick %v or %v", g.NationAllocation, RandomAllocation, PreferenceAllocation)
+	}
+}
+
 func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) error {
 	log.Infof(ctx, "asyncStartGame(..., %v, %q)", gameID, host)
 
@@ -855,23 +877,12 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 		g.Started = true
 		g.StartedAt = time.Now()
 		g.Closed = true
-		if g.NationAllocation == RandomAllocation {
-			for memberIndex, nationIndex := range rand.Perm(len(variant.Nations)) {
-				g.Members[memberIndex].Nation = variant.Nations[nationIndex]
-			}
-		} else if g.NationAllocation == PreferenceAllocation {
-			alloc, err := Allocate(g.Members, variant.Nations)
-			if err != nil {
-				log.Errorf(ctx, "Allocate(%+v, %+v): %v; fix Allocate", g.Members, variant.Nations, err)
+		if g.SkipMuster {
+			g.Mustered = true
+			if err := g.Allocate(); err != nil {
+				log.Errorf(ctx, "g.Allocate(): %v; fix it?", err)
 				return err
 			}
-			for memberIdx := range g.Members {
-				g.Members[memberIdx].Nation = alloc[memberIdx]
-			}
-		} else {
-			msg := fmt.Sprintf("unknown allocation method %v, pick %v or %v", g.NationAllocation, RandomAllocation, PreferenceAllocation)
-			log.Errorf(ctx, msg)
-			return HTTPErr{msg, http.StatusBadRequest}
 		}
 
 		phase := NewPhase(s, g.ID, 1, host)
@@ -879,7 +890,11 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 		if g.PhaseLengthMinutes == 0 {
 			g.PhaseLengthMinutes = MAX_PHASE_DEADLINE
 		}
-		phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.PhaseLengthMinutes)
+		if phase.Type != godip.Movement && g.NonMovementPhaseLengthMinutes != 0 {
+			phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.NonMovementPhaseLengthMinutes)
+		} else {
+			phase.DeadlineAt = phase.CreatedAt.Add(time.Minute * g.PhaseLengthMinutes)
+		}
 
 		toSave := []interface{}{
 			phase,
@@ -915,6 +930,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 				GameID:        g.ID,
 				PhaseOrdinal:  phase.PhaseOrdinal,
 				Nation:        nat,
+				NoOrders:      len(options) == 0,
 				Messages:      strings.Join(state.Phase().Messages(state, nat), ","),
 				ZippedOptions: zippedOptions,
 			}

@@ -1047,8 +1047,7 @@ func (p *PhaseResolver) Act() error {
 }
 
 const (
-	phaseKind        = "Phase"
-	memberNationFlag = "member-nation"
+	phaseKind = "Phase"
 )
 
 type UnitWrapper struct {
@@ -1087,10 +1086,10 @@ type Resolution struct {
 
 type Phases []Phase
 
-func (p Phases) Item(r Request, gameID *datastore.Key) *Item {
+func (p Phases) Item(r Request, gameID *datastore.Key, isMember bool, createOrder bool) *Item {
 	phaseItems := make(List, len(p))
 	for i := range p {
-		phaseItems[i] = p[i].Item(r)
+		phaseItems[i] = p[i].Item(r, isMember, createOrder)
 	}
 	phasesItem := NewItem(phaseItems).SetName("phases").AddLink(r.NewLink(Link{
 		Rel:         "self",
@@ -1311,14 +1310,11 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 	phase.Score(variants.Variants[game.Variant].Nations)
 
 	member, isMember := game.GetMemberByUserId(user.Id)
-	if isMember {
-		r.Values()[memberNationFlag] = member.Nation
-	}
 
 	return phase, nil
 }
 
-func (p *Phase) Item(r Request) *Item {
+func (p *Phase) Item(r Request, isMember bool, createOrder bool) *Item {
 	phaseItem := NewItem(p).SetName(fmt.Sprintf("%s %d, %s", p.Season, p.Year, p.Type))
 	phaseItem.
 		AddLink(r.NewLink(PhaseResource.Link("self", Load, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)}))).
@@ -1335,7 +1331,7 @@ func (p *Phase) Item(r Request) *Item {
 			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
 		}))
 	}
-	if isMember && !p.Resolved {
+	if createOrder {
 		phaseItem.AddLink(r.NewLink(Link{
 			Rel:         "options",
 			Route:       ListOptionsRoute,
