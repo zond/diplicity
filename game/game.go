@@ -761,6 +761,9 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 				},
 			},
 		}
+		if err := UpdateUserStatsASAP(ctx, []string{user.Id}); err != nil {
+			return err
+		}
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
@@ -875,12 +878,12 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 		g.Started = true
 		g.StartedAt = time.Now()
 		g.Closed = true
+		if err := g.AllocateNations(); err != nil {
+			log.Errorf(ctx, "g.AllocateNations(): %v; fix it?", err)
+			return err
+		}
 		if g.SkipMuster {
 			g.Mustered = true
-			if err := g.AllocateNations(); err != nil {
-				log.Errorf(ctx, "g.AllocateNations(): %v; fix it?", err)
-				return err
-			}
 		}
 
 		phase := NewPhase(s, g.ID, 1, host)
@@ -909,7 +912,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 
 		for idx := range g.Members {
 			options := godip.Options{}
-			if g.Members[idx].Nation != "" {
+			if g.Mustered {
 				options = s.Phase().Options(s, g.Members[idx].Nation)
 				profile, counts := s.GetProfile()
 				for k, v := range profile {
@@ -923,21 +926,17 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 			}
 
 			messages := ""
-			if g.Members[idx].Nation != "" {
+			if g.Mustered {
 				messages = strings.Join(s.Phase().Messages(s, g.Members[idx].Nation), ",")
 			}
 			phaseState := &PhaseState{
 				GameID:        g.ID,
+				Nation:        g.Members[idx].Nation,
 				PhaseOrdinal:  phase.PhaseOrdinal,
 				NoOrders:      len(options) == 0,
 				Messages:      messages,
 				ZippedOptions: zippedOptions,
 				Note:          fmt.Sprintf("Created by Diplicity at %v due to game start.", time.Now()),
-			}
-			if g.Members[idx].Nation != "" {
-				phaseState.Nation = g.Members[idx].Nation
-			} else {
-				phaseState.Nation = godip.Nation(g.Members[idx].User.Id)
 			}
 			phaseStateID, err := phaseState.ID(ctx)
 			if err != nil {

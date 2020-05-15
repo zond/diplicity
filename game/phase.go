@@ -628,7 +628,7 @@ func (p *PhaseResolver) Act() error {
 		// Find ready members.
 
 		phaseStateKeys := []*datastore.Key{}
-		readyUserMap := map[string]bool{}
+		readyNationMap := map[godip.Nation]bool{}
 		for _, phaseState := range p.PhaseStates {
 			stateID, err := phaseState.ID(p.Context)
 			if err != nil {
@@ -638,17 +638,13 @@ func (p *PhaseResolver) Act() error {
 			allKeys = append(allKeys, stateID)
 			phaseStateKeys = append(phaseStateKeys, stateID)
 			if phaseState.ReadyToResolve {
-				readyUserMap[string(phaseState.Nation)] = true
+				readyNationMap[phaseState.Nation] = true
 			}
 		}
 
 		// Depending on whether everyone is ready...
-		if len(readyUserMap) == len(variant.Nations) {
+		if len(readyNationMap) == len(variant.Nations) {
 			p.Game.Mustered = true
-			if err := p.Game.AllocateNations(); err != nil {
-				log.Errorf(p.Context, "p.Game.AllocateNations(): %v; fix it?", err)
-				return err
-			}
 			if p.Phase.Type != godip.Movement && p.Game.NonMovementPhaseLengthMinutes != 0 {
 				p.Phase.DeadlineAt = time.Now().Add(time.Minute * p.Game.NonMovementPhaseLengthMinutes)
 			} else {
