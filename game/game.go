@@ -761,6 +761,9 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 				},
 			},
 		}
+		if err := UpdateUserStatsASAP(ctx, []string{user.Id}); err != nil {
+			return err
+		}
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
