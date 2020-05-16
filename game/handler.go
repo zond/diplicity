@@ -110,6 +110,7 @@ const (
 	RemoveDIASFromSoloGamesRoute        = "RemoveDIASFromSoloGamesRoute"
 	ReComputeAllDIASUsersRoute          = "ReComputeAllDIASUsers"
 	SendSystemMessageRoute              = "SendSystemMessage"
+	RemoveZippedOptionsRoute            = "RemoveZippedOptions"
 )
 
 type userStatsHandler struct {
@@ -1124,6 +1125,73 @@ func handleSendSystemMessage(w ResponseWriter, r Request) error {
 	return createMessageHelper(ctx, r.Req().Host, newMessage)
 }
 
+func handleRemoveZippedOptions(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	log.Infof(ctx, "handleRemoveZippedOptions(...)")
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	gameIDs, err := datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).KeysOnly().GetAll(ctx, nil)
+	if err != nil {
+		return err
+	}
+	for _, gameID := range gameIDs {
+		log.Infof(ctx, "Looking at %v", gameID)
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			game := &Game{}
+			if err := datastore.Get(ctx, gameID, game); err != nil {
+				return err
+			}
+			game.ID = gameID
+			if !game.Started || game.Finished {
+				log.Infof(ctx, "Is finished, or not started. Odd.")
+				return nil
+			}
+			for idx := range game.Members {
+				game.Members[idx].NewestPhaseState.ZippedOptions = nil
+			}
+			phaseStates := PhaseStates{}
+			phaseStateIDs, err := datastore.NewQuery(phaseStateKind).Ancestor(gameID).Filter("PhaseOrdinal=", game.NewestPhaseMeta[0].PhaseOrdinal).GetAll(ctx, &phaseStates)
+			if err != nil {
+				return err
+			}
+			for idx := range phaseStates {
+				phaseStates[idx].ZippedOptions = nil
+			}
+			toSave := []interface{}{game}
+			for idx := range phaseStates {
+				toSave = append(toSave, &phaseStates[idx])
+			}
+			keys := []*datastore.Key{gameID}
+			keys = append(keys, phaseStateIDs...)
+			if _, err := datastore.PutMulti(ctx, keys, toSave); err != nil {
+				return err
+			}
+			log.Infof(ctx, "Successfully cleaned zipped options from %v", gameID)
+			return nil
+		}, &datastore.TransactionOptions{XG: false}); err != nil {
+			return err
+		}
+	}
+	log.Infof(ctx, "handleRemoveZippedOptions(...) DONE")
+	return nil
+}
+
 func handleReSchedule(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1269,6 +1337,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
+	Handle(r, "/_remove-zipped-options", []string{"GET"}, RemoveZippedOptionsRoute, handleRemoveZippedOptions)
 	Handle(r, "/_remove-dias-from-solo-games", []string{"GET"}, RemoveDIASFromSoloGamesRoute, handleRemoveDIASFromSoloGames)
 	Handle(r, "/Game/{game_id}/Channel/{recipient}/_system-message", []string{"POST"}, SendSystemMessageRoute, handleSendSystemMessage)
 	Handle(r, "/_re-compute-all-dias-users", []string{"GET"}, ReComputeAllDIASUsersRoute, handleReComputeAllDIASUsers)
