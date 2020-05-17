@@ -1002,21 +1002,30 @@ func loadChannels(ctx context.Context, game *Game, viewer godip.Nation) (Channel
 	return channels, nil
 }
 
-func countUnreadMessages(ctx context.Context, channels Channels, viewer godip.Nation) error {
-	seenMarkerTimes := make([]time.Time, len(channels))
-
-	seenMarkerIDs := make([]*datastore.Key, len(channels))
-	for i := range channels {
-		channelID, err := channels[i].ID(ctx)
-		if err != nil {
-			return err
-		}
-		seenMarkerIDs[i], err = SeenMarkerID(ctx, channelID, viewer)
-		if err != nil {
-			return err
+func countUnreadMessages(ctx context.Context, unfilteredChannels Channels, viewer godip.Nation) error {
+	seenMarkerIDs := []*datastore.Key{}
+	seenMarkers := []SeenMarker{}
+	channels := []*Channel{}
+	for i := range unfilteredChannels {
+		if unfilteredChannels[i].Members.Includes(viewer) {
+			log.Infof(ctx, "@@@@@@@@@@ found %v in %+v", viewer, unfilteredChannels[i].Members)
+			channelID, err := unfilteredChannels[i].ID(ctx)
+			if err != nil {
+				return err
+			}
+			seenMarkerID, err := SeenMarkerID(ctx, channelID, viewer)
+			if err != nil {
+				return err
+			}
+			channels = append(channels, &unfilteredChannels[i])
+			seenMarkerIDs = append(seenMarkerIDs, seenMarkerID)
+			seenMarkers = append(seenMarkers, SeenMarker{})
+		} else {
+			log.Infof(ctx, "@@@@@@@@ didn't find %v in %+v", viewer, unfilteredChannels[i].Members)
 		}
 	}
-	seenMarkers := make([]SeenMarker, len(channels))
+	seenMarkerTimes := make([]time.Time, len(channels))
+
 	err := datastore.GetMulti(ctx, seenMarkerIDs, seenMarkers)
 	if err == nil {
 		for i := range channels {
@@ -1043,7 +1052,7 @@ func countUnreadMessages(ctx context.Context, channels Channels, viewer godip.Na
 			} else {
 				results <- c.CountSince(ctx, since)
 			}
-		}(&channels[i], seenMarkerTimes[i])
+		}(channels[i], seenMarkerTimes[i])
 	}
 	merr := appengine.MultiError{}
 	for _ = range channels {
