@@ -1334,12 +1334,12 @@ func (p *Phase) Item(r Request) *Item {
 			Route:       ListOrdersRoute,
 			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
 		}))
-		phaseItem.AddLink(r.NewLink(Link{
-			Rel:         "corroborate",
-			Route:       CorroboratePhaseRoute,
-			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
-		}))
 	}
+	phaseItem.AddLink(r.NewLink(Link{
+		Rel:         "corroborate",
+		Route:       CorroboratePhaseRoute,
+		RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
+	}))
 	if isMember && !p.Resolved {
 		phaseItem.AddLink(r.NewLink(Link{
 			Rel:         "options",
@@ -1716,32 +1716,34 @@ func corroboratePhase(w ResponseWriter, r Request) error {
 	game.ID = gameID
 
 	member, isMember := game.GetMemberByUserId(user.Id)
-	if !isMember {
-		return HTTPErr{"can only corroborate member games", http.StatusUnauthorized}
-	}
 
-	orders := Orders{}
-	if _, err := datastore.NewQuery(orderKind).Ancestor(phaseID).Filter("Nation=", member.Nation).GetAll(ctx, &orders); err != nil {
-		return err
-	}
+	response := CorroborateResponse{}
+	if isMember || phase.Resolved {
+		query := datastore.NewQuery(orderKind).Ancestor(phaseID)
+		if isMember && !phase.Resolved {
+			query = query.Filter("Nation=", member.Nation)
+		}
+		if _, err := query.GetAll(ctx, &response.Orders); err != nil {
+			return err
+		}
 
-	orderPartsByProvince := map[godip.Province][]string{}
-	for _, order := range orders {
-		orderPartsByProvince[godip.Province(order.Parts[0])] = order.Parts[1:]
-	}
+		if isMember {
+			orderPartsByProvince := map[godip.Province][]string{}
+			for _, order := range response.Orders {
+				orderPartsByProvince[godip.Province(order.Parts[0])] = order.Parts[1:]
+			}
 
-	variant := variants.Variants[game.Variant]
+			variant := variants.Variants[game.Variant]
 
-	s, err := phase.State(ctx, variant, map[godip.Nation]map[godip.Province][]string{
-		member.Nation: orderPartsByProvince,
-	})
-	if err != nil {
-		return err
-	}
+			s, err := phase.State(ctx, variant, map[godip.Nation]map[godip.Province][]string{
+				member.Nation: orderPartsByProvince,
+			})
+			if err != nil {
+				return err
+			}
 
-	response := CorroborateResponse{
-		Orders:          orders,
-		Inconsistencies: s.Corroborate(member.Nation),
+			response.Inconsistencies = s.Corroborate(member.Nation)
+		}
 	}
 
 	w.SetContent(response.Item(r, gameID, int(phaseOrdinal)))

@@ -1331,14 +1331,59 @@ func testReadyResolution(t *testing.T) {
 
 func TestCorroborate(t *testing.T) {
 	withStartedGame(func() {
-		mosIncon := startedGameEnvs[startedGameIdxByNat["Russia"]].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+		russia := startedGameEnvs[startedGameIdxByNat["Russia"]]
+		russiaPhase := russia.GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
 			Follow("phases", "Links").Success().
-			Find("Movement", []string{"Properties"}, []string{"Properties", "Type"}).
+			Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
+		mosIncon := russiaPhase.
 			Follow("corroborate", "Links").Success().
 			Find("mos", []string{"Properties", "Inconsistencies"}, []string{"Province"}).GetValue("Inconsistencies").([]interface{})
 		if mosIncon[0].(string) != "InconsistencyMissingOrder" {
 			t.Errorf("Got %v, wanted %v", mosIncon[0], "InconsistencyMissingOrder")
 		}
+		england := startedGameEnvs[startedGameIdxByNat["England"]]
+		englandPhase := england.GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+			Follow("phases", "Links").Success().
+			Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
+		englandPhase.
+			Follow("corroborate", "Links").Success().
+			AssertNotFind("mos", []string{"Properties", "Inconsistencies"}, []string{"Province"})
+		russiaPhase.Follow("create-order", "Links").Body(map[string]interface{}{
+			"Parts": []string{"mos", "Move", "lvn"},
+		}).Success()
+		russiaCorr := russiaPhase.
+			Follow("corroborate", "Links").Success()
+		russiaCorr.
+			AssertNotFind("mos", []string{"Properties", "Inconsistencies"}, []string{"Province"})
+		russiaCorr.
+			Find("Russia", []string{"Properties", "Orders"}, []string{"Nation"})
+		englandCorr := englandPhase.
+			Follow("corroborate", "Links").Success()
+		englandCorr.
+			AssertNotFind("Russia", []string{"Properties", "Orders"}, []string{"Nation"})
+		observer := NewEnv().SetUID(String("fake"))
+		observer.GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+			Follow("phases", "Links").Success().
+			Find("Movement", []string{"Properties"}, []string{"Properties", "Type"}).
+			Follow("corroborate", "Links").Success().
+			AssertNotFind("Russia", []string{"Properties", "Orders"}, []string{"Nation"})
+		for _, env := range startedGameEnvs {
+			env.GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+				Follow("phases", "Links").Success().
+				Find("Movement", []string{"Properties"}, []string{"Properties", "Type"}).
+				Follow("phase-states", "Links").Success().
+				Find(false, []string{"Properties"}, []string{"Properties", "WantsDIAS"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"WantsDIAS":      true,
+				"ReadyToResolve": true,
+			}).Success()
+		}
+		WaitForEmptyQueue("game-asyncResolvePhase")
+		observer.GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+			Follow("phases", "Links").Success().
+			Find("Movement", []string{"Properties"}, []string{"Properties", "Type"}).
+			Follow("corroborate", "Links").Success().
+			Find("Russia", []string{"Properties", "Orders"}, []string{"Nation"})
 	})
 }
 
