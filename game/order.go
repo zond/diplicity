@@ -59,10 +59,11 @@ func (o Orders) Item(r Request, gameID *datastore.Key, phase *Phase) *Item {
 }
 
 type Order struct {
-	GameID       *datastore.Key
-	PhaseOrdinal int64
-	Nation       godip.Nation
-	Parts        []string `methods:"POST,PUT" separator:" "`
+	GameID          *datastore.Key
+	PhaseOrdinal    int64
+	Nation          godip.Nation
+	Parts           []string `methods:"POST,PUT" separator:" "`
+	Inconsistencies []string `datastore:"-"`
 }
 
 func OrderID(ctx context.Context, phaseID *datastore.Key, srcProvince godip.Province) (*datastore.Key, error) {

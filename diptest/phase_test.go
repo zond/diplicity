@@ -1329,6 +1329,19 @@ func testReadyResolution(t *testing.T) {
 
 }
 
+func TestCorroborate(t *testing.T) {
+	withStartedGame(func() {
+		mosIncon := startedGameEnvs[startedGameIdxByNat["Russia"]].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
+			Follow("phases", "Links").Success().
+			Find("Movement", []string{"Properties"}, []string{"Properties", "Type"}).
+			Follow("corroborate", "Links").Success().
+			Find("mos", []string{"Properties", "Inconsistencies"}, []string{"Province"}).GetValue("Inconsistencies").([]interface{})
+		if mosIncon[0].(string) != "InconsistencyMissingOrder" {
+			t.Errorf("Got %v, wanted %v", mosIncon[0], "InconsistencyMissingOrder")
+		}
+	})
+}
+
 func TestEliminatedNMRPlayer(t *testing.T) {
 	withStartedGameOpts(func(opts map[string]interface{}) {
 		opts["Variant"] = "Pure"

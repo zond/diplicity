@@ -1334,6 +1334,11 @@ func (p *Phase) Item(r Request) *Item {
 			Route:       ListOrdersRoute,
 			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
 		}))
+		phaseItem.AddLink(r.NewLink(Link{
+			Rel:         "corroborate",
+			Route:       CorroboratePhaseRoute,
+			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
+		}))
 	}
 	if isMember && !p.Resolved {
 		phaseItem.AddLink(r.NewLink(Link{
@@ -1666,6 +1671,82 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 	vPhase := phase.toVariantsPhase(game.Variant, ordersToDisplay)
 
 	return dvars.RenderPhaseMap(w, r, vPhase, userConfig.Colors)
+}
+
+type CorroborateResponse struct {
+	Orders          Orders
+	Inconsistencies []godip.Inconsistency
+}
+
+func (c *CorroborateResponse) Item(r Request, gameID *datastore.Key, phaseOrdinal int) *Item {
+	return NewItem(c).SetName("corroboration").AddLink(r.NewLink(Link{
+		Rel:         "self",
+		Route:       CorroboratePhaseRoute,
+		RouteParams: []string{"game_id", gameID.Encode(), "phase_ordinal", fmt.Sprint(phaseOrdinal)},
+	}))
+}
+func corroboratePhase(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return err
+	}
+
+	phaseOrdinal, err := strconv.ParseInt(r.Vars()["phase_ordinal"], 10, 64)
+	if err != nil {
+		return err
+	}
+
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		return err
+	}
+
+	game := &Game{}
+	phase := &Phase{}
+	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
+		return err
+	}
+	game.ID = gameID
+
+	member, isMember := game.GetMemberByUserId(user.Id)
+	if !isMember {
+		return HTTPErr{"can only corroborate member games", http.StatusUnauthorized}
+	}
+
+	orders := Orders{}
+	if _, err := datastore.NewQuery(orderKind).Ancestor(phaseID).Filter("Nation=", member.Nation).GetAll(ctx, &orders); err != nil {
+		return err
+	}
+
+	orderPartsByProvince := map[godip.Province][]string{}
+	for _, order := range orders {
+		orderPartsByProvince[godip.Province(order.Parts[0])] = order.Parts[1:]
+	}
+
+	variant := variants.Variants[game.Variant]
+
+	s, err := phase.State(ctx, variant, map[godip.Nation]map[godip.Province][]string{
+		member.Nation: orderPartsByProvince,
+	})
+	if err != nil {
+		return err
+	}
+
+	response := CorroborateResponse{
+		Orders:          orders,
+		Inconsistencies: s.Corroborate(member.Nation),
+	}
+
+	w.SetContent(response.Item(r, gameID, int(phaseOrdinal)))
+
+	return nil
 }
 
 func listPhases(w ResponseWriter, r Request) error {

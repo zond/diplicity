@@ -111,6 +111,7 @@ const (
 	ReComputeAllDIASUsersRoute          = "ReComputeAllDIASUsers"
 	SendSystemMessageRoute              = "SendSystemMessage"
 	RemoveZippedOptionsRoute            = "RemoveZippedOptions"
+	CorroboratePhaseRoute               = "CorroboratePhase"
 )
 
 type userStatsHandler struct {
@@ -1348,6 +1349,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/User/{user_id}/Stats/_dev_update", []string{"PUT"}, DevUserStatsUpdateRoute, devUserStatsUpdate)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Options", []string{"GET"}, ListOptionsRoute, listOptions)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Map", []string{"GET"}, RenderPhaseMapRoute, renderPhaseMap)
+	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Corroborate", []string{"GET"}, CorroboratePhaseRoute, corroboratePhase)
 	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
 	Handle(r, "/Rss", []string{"GET"}, RssRoute, handleRss)
 	HandleResource(r, GameResource)
