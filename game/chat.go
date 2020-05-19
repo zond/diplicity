@@ -212,8 +212,7 @@ func sendMsgNotificationsToMail(ctx context.Context, host string, gameID *datast
 			log.Errorf(ctx, "datastore.Get(..., %v, %+v): %v; hope datastore gets fixed", mailIdID, mailId, err)
 			return err
 		}
-		log.Infof(ctx, "*** Found mail identifier %+v", mailId)
-		newMailId := &MailIdentifier{Nation: msgContext.member.Nation, ChannelID: msgContext.channelID, Ordinal: mailId.Ordinal + 1}
+		newMailId := &MailIdentifier{Nation: msgContext.member.Nation, ChannelID: msgContext.channelID, Ordinal: mailId.Ordinal}
 		if _, err := datastore.Put(ctx, mailIdID, newMailId); err != nil {
 			log.Errorf(ctx, "datastore.Put(..., %v, %+v): %v; hope datastore gets fixed", mailIdID, newMailId, err)
 			return err
