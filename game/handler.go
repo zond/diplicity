@@ -571,7 +571,7 @@ func createAllocation(w ResponseWriter, r Request) (*Allocation, error) {
 type configuration struct {
 	OAuth      *auth.OAuth
 	FCMConf    *FCMConf
-	SendGrid   *SendGrid
+	SendGrid   *auth.SendGrid
 	Superusers *auth.Superusers
 }
 
@@ -593,7 +593,7 @@ func handleConfigure(w ResponseWriter, r Request) error {
 		}
 	}
 	if conf.SendGrid != nil {
-		if err := SetSendGrid(ctx, conf.SendGrid); err != nil {
+		if err := auth.SetSendGrid(ctx, conf.SendGrid); err != nil {
 			return err
 		}
 	}

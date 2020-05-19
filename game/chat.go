@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/aymerick/raymond"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/kvannotten/mailstrip"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/enmime"
 	"github.com/zond/go-fcm"
@@ -23,8 +23,6 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/urlfetch"
-	"gopkg.in/sendgrid/sendgrid-go.v2"
 
 	. "github.com/zond/goaeoas"
 )
@@ -40,9 +38,10 @@ func init() {
 }
 
 const (
-	messageKind    = "Message"
-	channelKind    = "Channel"
-	seenMarkerKind = "SeenMarker"
+	messageKind        = "Message"
+	channelKind        = "Channel"
+	seenMarkerKind     = "SeenMarker"
+	mailIdentifierKind = "MailIdentifier"
 )
 
 var (
@@ -156,24 +155,13 @@ func getMsgNotificationContext(ctx context.Context, host string, gameID *datasto
 }
 
 func sendEmailError(ctx context.Context, to string, errorMessage string) error {
-	sendGridConf, err := GetSendGrid(ctx)
-	if err != nil {
-		return err
-	}
-
-	msg := sendgrid.NewMail()
-	msg.SetText(fmt.Sprintf("Your recent mail to diplicity was not successfully parsed.\n\nAn error message follows.\n\n%v", errorMessage))
-	msg.SetSubject("Unsuccessfully parsed")
-	msg.AddTo(to)
-	msg.SetFrom(noreplyFromAddr)
-
-	client := sendgrid.NewSendGridClientWithApiKey(sendGridConf.APIKey)
-	client.Client = urlfetch.Client(ctx)
-	if err := client.Send(msg); err != nil {
-		return err
-	}
-
-	return nil
+	return (&auth.EMail{
+		FromAddr: noreplyFromAddr,
+		FromName: noreplyFromName,
+		ToAddr:   to,
+		TextBody: fmt.Sprintf("Your recent mail to diplicity was not successfully parsed.\n\nAn error message follows.\n\n%v", errorMessage),
+		Subject:  "Unsuccessfully parsed",
+	}).SendWithoutUnsubscribeHeader(ctx)
 }
 
 func sendMsgNotificationsToMail(ctx context.Context, host string, gameID *datastore.Key, channelMembers Nations, messageID *datastore.Key, userId string) error {
@@ -193,12 +181,6 @@ func sendMsgNotificationsToMail(ctx context.Context, host string, gameID *datast
 		return nil
 	}
 
-	sendGridConf, err := GetSendGrid(ctx)
-	if err != nil {
-		log.Errorf(ctx, "Unable to load sendgrid API key: %v; upload one or hope datastore gets fixed", err)
-		return err
-	}
-
 	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, host, userId)
 	if err != nil {
 		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix auth.GetUnsubscribeURL", userId, err)
@@ -207,17 +189,44 @@ func sendMsgNotificationsToMail(ctx context.Context, host string, gameID *datast
 
 	msgContext.mailData["unsubscribeURL"] = unsubscribeURL.String()
 
-	msg := sendgrid.NewMail()
-	msg.SetText(fmt.Sprintf("%s\n\nVisit %s to stop receiving email like this.\n\nVisit %s to see the latest phase in this game.", msgContext.message.Body, unsubscribeURL.String(), msgContext.mapURL.String()))
-	msg.SetSubject(
-		fmt.Sprintf(
-			"%s: %s => %s",
-			msgContext.game.DescFor(msgContext.member.Nation),
-			msgContext.game.AbbrNat(msgContext.message.Sender),
-			msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
-		),
+	msg := &auth.EMail{}
+	msg.TextBody = fmt.Sprintf("%s\n\nVisit %s to stop receiving email like this.\n\nVisit %s to see the latest phase in this game.", msgContext.message.Body, unsubscribeURL.String(), msgContext.mapURL.String())
+	msg.Subject = fmt.Sprintf(
+		"%s: %s => %s",
+		msgContext.game.DescFor(msgContext.member.Nation),
+		msgContext.game.AbbrNat(msgContext.message.Sender),
+		msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
 	)
-	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
+	msg.UnsubscribeURL = unsubscribeURL.String()
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		mailId := &MailIdentifier{Nation: msgContext.member.Nation, ChannelID: msgContext.channelID}
+		mailIdID, err := mailId.ID(ctx)
+		if err != nil {
+			log.Errorf(ctx, "%+v.ID(...): %v; wtf?", mailId, err)
+			return err
+		}
+		if err := datastore.Get(ctx, mailIdID, mailId); err == datastore.ErrNoSuchEntity {
+			log.Infof(ctx, "Found no mail identifier for %+v, creating a new one", mailId)
+		} else if err != nil {
+			log.Errorf(ctx, "datastore.Get(..., %v, %+v): %v; hope datastore gets fixed", mailIdID, mailId, err)
+			return err
+		}
+		log.Infof(ctx, "*** Found mail identifier %+v", mailId)
+		newMailId := &MailIdentifier{Nation: msgContext.member.Nation, ChannelID: msgContext.channelID, Ordinal: mailId.Ordinal + 1}
+		if _, err := datastore.Put(ctx, mailIdID, newMailId); err != nil {
+			log.Errorf(ctx, "datastore.Put(..., %v, %+v): %v; hope datastore gets fixed", mailIdID, newMailId, err)
+			return err
+		}
+		msg.MessageID = fmt.Sprintf("%v-%v", mailIdID.Encode(), newMailId.Ordinal)
+		if mailId.Ordinal > 0 {
+			msg.Reference = fmt.Sprintf("%v-%v", mailIdID.Encode(), mailId.Ordinal-1)
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		log.Errorf(ctx, "Unable to commit mail ID tx: %v", err)
+		return err
+	}
 
 	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.mailData)
 
@@ -226,8 +235,8 @@ func sendMsgNotificationsToMail(ctx context.Context, host string, gameID *datast
 		log.Errorf(ctx, "Unable to parse email address of %v: %v; unable to recover, exiting", PP(msgContext.user), err)
 		return nil
 	}
-	msg.AddRecipient(recipEmail)
-	msg.AddToName(channelMembers.String())
+	msg.ToAddr = recipEmail.Address
+	msg.ToName = channelMembers.String()
 
 	fromToken, err := auth.EncodeString(ctx, fmt.Sprintf("%s,%s", msgContext.member.Nation, messageID.Encode()))
 	if err != nil {
@@ -241,12 +250,10 @@ func sendMsgNotificationsToMail(ctx context.Context, host string, gameID *datast
 		log.Errorf(ctx, "Unable to parse reply email address %q: %v; fix the address generation", fromAddress, err)
 		return err
 	}
-	msg.SetFromEmail(fromEmail)
-	msg.SetFromName(string(msgContext.message.Sender))
+	msg.FromAddr = fromEmail.Address
+	msg.FromName = string(msgContext.message.Sender)
 
-	client := sendgrid.NewSendGridClientWithApiKey(sendGridConf.APIKey)
-	client.Client = urlfetch.Client(ctx)
-	if err := client.Send(msg); err != nil {
+	if err := msg.Send(ctx); err != nil {
 		log.Errorf(ctx, "Unable to send %v: %v; hope sendgrid gets fixed", msg, err)
 		return err
 	}
@@ -479,6 +486,23 @@ func (c Channels) Item(r Request, gameID *datastore.Key, isMember bool) *Item {
 type NMessagesSince struct {
 	Since     time.Time
 	NMessages int
+}
+
+type MailIdentifier struct {
+	Nation    godip.Nation
+	ChannelID *datastore.Key
+	Ordinal   int
+}
+
+func MailIdentifierID(ctx context.Context, channelID *datastore.Key, nation godip.Nation) *datastore.Key {
+	return datastore.NewKey(ctx, mailIdentifierKind, string(nation), 0, channelID)
+}
+
+func (m *MailIdentifier) ID(ctx context.Context) (*datastore.Key, error) {
+	if m.Nation == "" || m.ChannelID == nil {
+		return nil, fmt.Errorf("mail identifiers must have channels and nations")
+	}
+	return MailIdentifierID(ctx, m.ChannelID, m.Nation), nil
 }
 
 type Channel struct {
@@ -1178,46 +1202,11 @@ func receiveMail(w ResponseWriter, r Request) error {
 		return sendEmailError(ctx, from, e)
 	}
 
-	paragraphs := []string{}
-	paragraph := []string{}
-	for _, line := range strings.Split(enmsg.Text, "\n") {
-		paragraph = append(paragraph, line)
-		if strings.TrimSpace(line) == "" {
-			paragraphs = append(paragraphs, strings.Join(paragraph, "\n"))
-			paragraph = []string{}
-		}
-	}
-	paragraphs = append(paragraphs, strings.Join(paragraph, "\n"))
-
-	foundFirstLine := false
-	okLines := []string{}
-	for _, line := range paragraphs {
-		if !foundFirstLine {
-			if strings.TrimSpace(line) != "" {
-				foundFirstLine = true
-			} else {
-				continue
-			}
-		}
-
-		if strings.Contains(line, toAddress.Address) {
-			for i := len(okLines); i > 0; i-- {
-				if strings.TrimSpace(okLines[i-1]) == "" {
-					okLines = okLines[:i-1]
-				} else {
-					break
-				}
-			}
-			break
-		}
-		okLines = append(okLines, strings.TrimRightFunc(line, unicode.IsSpace))
-	}
-
 	newMessage := &Message{
 		GameID:         message.GameID,
 		ChannelMembers: message.ChannelMembers,
 		Sender:         godip.Nation(fromNation),
-		Body:           strings.Join(okLines, "\n"),
+		Body:           mailstrip.Parse(enmsg.Text).String(),
 	}
 
 	log.Infof(ctx, "Received %v via email", PP(newMessage))

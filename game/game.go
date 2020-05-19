@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -31,7 +30,6 @@ import (
 
 const (
 	gameKind           = "Game"
-	sendGridKind       = "SendGrid"
 	MAX_PHASE_DEADLINE = 30 * 24 * 60
 )
 
@@ -49,13 +47,11 @@ func init() {
 var (
 	asyncStartGameFunc *DelayFunc
 
-	prodSendGrid     *SendGrid
-	prodSendGridLock = sync.RWMutex{}
-
 	noConfigError      = errors.New("user has no config")
 	fromAddressPattern = "replies+%s@diplicity-engine.appspotmail.com"
 	fromAddressReg     = regexp.MustCompile("^replies\\+([^@]+)@diplicity-engine.appspotmail.com")
 	noreplyFromAddr    = "noreply@oort.se"
+	noreplyFromName    = "Diplicity"
 
 	GameResource *Resource
 )
@@ -141,44 +137,6 @@ func init() {
 }
 
 type AllocationMethod int
-
-type SendGrid struct {
-	APIKey string
-}
-
-func getSendGridKey(ctx context.Context) *datastore.Key {
-	return datastore.NewKey(ctx, sendGridKind, prodKey, 0, nil)
-}
-
-func SetSendGrid(ctx context.Context, sendGrid *SendGrid) error {
-	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		currentSendGrid := &SendGrid{}
-		if err := datastore.Get(ctx, getSendGridKey(ctx), currentSendGrid); err == nil {
-			return HTTPErr{"SendGrid already configured", http.StatusBadRequest}
-		}
-		if _, err := datastore.Put(ctx, getSendGridKey(ctx), sendGrid); err != nil {
-			return err
-		}
-		return nil
-	}, &datastore.TransactionOptions{XG: false})
-}
-
-func GetSendGrid(ctx context.Context) (*SendGrid, error) {
-	prodSendGridLock.RLock()
-	if prodSendGrid != nil {
-		defer prodSendGridLock.RUnlock()
-		return prodSendGrid, nil
-	}
-	prodSendGridLock.RUnlock()
-	prodSendGridLock.Lock()
-	defer prodSendGridLock.Unlock()
-	foundSendGrid := &SendGrid{}
-	if err := datastore.Get(ctx, getSendGridKey(ctx), foundSendGrid); err != nil {
-		return nil, err
-	}
-	prodSendGrid = foundSendGrid
-	return prodSendGrid, nil
-}
 
 func PP(i interface{}) string {
 	b, err := json.MarshalIndent(i, "  ", "  ")

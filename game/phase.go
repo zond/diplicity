@@ -22,8 +22,6 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/urlfetch"
-	"gopkg.in/sendgrid/sendgrid-go.v2"
 
 	dvars "github.com/zond/diplicity/variants"
 	vrt "github.com/zond/godip/variants/common"
@@ -213,12 +211,6 @@ func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *data
 		return nil
 	}
 
-	sendGridConf, err := GetSendGrid(ctx)
-	if err != nil {
-		log.Errorf(ctx, "Unable to load sendgrid API key: %v; upload one or hope datastore gets fixed", err)
-		return err
-	}
-
 	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, host, userId)
 	if err != nil {
 		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix auth.GetUnsubscribeURL", userId, err)
@@ -227,22 +219,20 @@ func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *data
 
 	msgContext.mailData["unsubscribeURL"] = unsubscribeURL.String()
 
-	msg := sendgrid.NewMail()
-	msg.SetText(fmt.Sprintf(
-		"%s has a new phase: %s.\n\nVisit %s to stop receiving email like this.",
+	msg := &auth.EMail{}
+	msg.TextBody = fmt.Sprintf(
+		"%s has a new phase: %s\n\nVisit %s to stop receiving email like this.",
 		msgContext.game.Desc,
 		msgContext.mapURL.String(),
-		unsubscribeURL.String()))
-	msg.SetSubject(
-		fmt.Sprintf(
-			"%s: %s %d, %s",
-			msgContext.game.DescFor(msgContext.member.Nation),
-			msgContext.phase.Season,
-			msgContext.phase.Year,
-			msgContext.phase.Type,
-		),
+		unsubscribeURL.String())
+	msg.Subject = fmt.Sprintf(
+		"%s: %s %d, %s",
+		msgContext.game.DescFor(msgContext.member.Nation),
+		msgContext.phase.Season,
+		msgContext.phase.Year,
+		msgContext.phase.Type,
 	)
-	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
+	msg.UnsubscribeURL = unsubscribeURL.String()
 
 	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.mailData)
 
@@ -251,14 +241,13 @@ func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *data
 		log.Errorf(ctx, "Unable to parse email address of %v: %v; unable to recover, exiting", PP(msgContext.user), err)
 		return nil
 	}
-	msg.AddRecipient(recipEmail)
-	msg.AddToName(string(msgContext.member.Nation))
+	msg.ToAddr = recipEmail.Address
+	msg.ToName = string(msgContext.member.Nation)
 
-	msg.SetFrom(noreplyFromAddr)
+	msg.FromAddr = noreplyFromAddr
+	msg.FromName = noreplyFromName
 
-	client := sendgrid.NewSendGridClientWithApiKey(sendGridConf.APIKey)
-	client.Client = urlfetch.Client(ctx)
-	if err := client.Send(msg); err != nil {
+	if err := msg.Send(ctx); err != nil {
 		log.Errorf(ctx, "Unable to send %v: %v; hope sendgrid gets fixed", msg, err)
 		return err
 	}
