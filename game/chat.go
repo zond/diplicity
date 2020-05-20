@@ -23,6 +23,7 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/memcache"
 
 	. "github.com/zond/goaeoas"
 )
@@ -664,6 +665,16 @@ func (m *Message) NotifyRecipients(ctx context.Context, host string, game *Game)
 		return nil
 	}
 
+	channelID, err := ChannelID(ctx, m.GameID, m.ChannelMembers)
+	if err != nil {
+		return err
+	}
+	if err := memcache.Delete(ctx, channelID.Encode()); err == memcache.ErrCacheMiss {
+		err = nil
+	} else if err != nil {
+		return err
+	}
+
 	if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, m.GameID, m.ChannelMembers, m.ID, memberIds); err != nil {
 		log.Errorf(ctx, "Unable to schedule notification tasks: %v", err)
 		return err
@@ -852,6 +863,8 @@ func listMessages(w ResponseWriter, r Request) error {
 		since = &sinceTime
 	}
 
+	wait := r.Req().URL.Query().Get("wait") == "true"
+
 	game := &Game{}
 	err = datastore.Get(ctx, gameID, game)
 	if err != nil {
@@ -891,37 +904,52 @@ func listMessages(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	messages := Messages{}
 	var seenMarker *SeenMarker
-	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		q := datastore.NewQuery(messageKind).Ancestor(channelID)
-		if since != nil {
-			q = q.Filter("CreatedAt>", *since)
-		}
-		messageIDs, err := q.Order("-CreatedAt").GetAll(ctx, &messages)
-		if err != nil {
-			return err
-		}
-		for i := range messages {
-			messages[i].ID = messageIDs[i]
-			messages[i].Age = time.Now().Sub(messages[i].CreatedAt)
-		}
-		if nation != "" {
-			seenMarkerID, err := SeenMarkerID(ctx, channelID, nation)
+	messages := Messages{}
+	for {
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			q := datastore.NewQuery(messageKind).Ancestor(channelID)
+			if since != nil {
+				q = q.Filter("CreatedAt>", *since)
+			}
+			messageIDs, err := q.Order("-CreatedAt").GetAll(ctx, &messages)
 			if err != nil {
 				return err
 			}
-			seenMarker = &SeenMarker{}
-			if err := datastore.Get(ctx, seenMarkerID, seenMarker); err == datastore.ErrNoSuchEntity {
-				err = nil
-				seenMarker = nil
-			} else if err != nil {
-				return err
+			for i := range messages {
+				messages[i].ID = messageIDs[i]
+				messages[i].Age = time.Now().Sub(messages[i].CreatedAt)
 			}
+			if nation != "" {
+				seenMarkerID, err := SeenMarkerID(ctx, channelID, nation)
+				if err != nil {
+					return err
+				}
+				seenMarker = &SeenMarker{}
+				if err := datastore.Get(ctx, seenMarkerID, seenMarker); err == datastore.ErrNoSuchEntity {
+					err = nil
+					seenMarker = nil
+				} else if err != nil {
+					return err
+				}
+			}
+			return nil
+		}, &datastore.TransactionOptions{XG: false}); err != nil {
+			return err
 		}
-		return nil
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
-		return err
+		if len(messages) > 0 || !wait {
+			break
+		}
+		if err := memcache.Set(ctx, &memcache.Item{
+			Key:        channelID.Encode(),
+			Value:      []byte{},
+			Expiration: time.Minute,
+		}); err != nil {
+			return err
+		}
+		for _, err := memcache.Get(ctx, channelID.Encode()); err == nil; _, err = memcache.Get(ctx, channelID.Encode()) {
+			time.Sleep(time.Second)
+		}
 	}
 
 	var member *Member
