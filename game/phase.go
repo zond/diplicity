@@ -639,6 +639,7 @@ func (p *PhaseResolver) Act() error {
 			} else {
 				p.Phase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
 			}
+			p.Game.NewestPhaseMeta = []PhaseMeta{p.Phase.PhaseMeta}
 			// Delete all the old phase states.
 			if err := datastore.DeleteMulti(p.Context, phaseStateKeys); err != nil {
 				log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", phaseStateKeys, err)

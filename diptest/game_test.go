@@ -1086,6 +1086,7 @@ func TestWithoutMustering(t *testing.T) {
 		Follow("join", "Links").Body(map[string]interface{}{}).Success()
 
 	WaitForEmptyQueue("game-asyncStartGame")
+	WaitForEmptyQueue("game-asyncSendMsg")
 
 	g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
 	g.AssertEq(true, "Properties", "Mustered")
@@ -1157,6 +1158,7 @@ func TestMustering(t *testing.T) {
 			Follow("join", "Links").Body(map[string]interface{}{}).Success()
 
 		WaitForEmptyQueue("game-asyncStartGame")
+		WaitForEmptyQueue("game-asyncSendMsg")
 
 		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 			Follow("channels", "Links").Success().
@@ -1214,6 +1216,7 @@ func TestMustering(t *testing.T) {
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
 		WaitForEmptyQueue("game-asyncSendMsg")
+		WaitForEmptyQueue("game-asyncSendMsg")
 
 		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 			Follow("channels", "Links").Success().
@@ -1261,6 +1264,7 @@ func TestMustering(t *testing.T) {
 			Follow("join", "Links").Body(map[string]interface{}{}).Success()
 
 		WaitForEmptyQueue("game-asyncStartGame")
+		WaitForEmptyQueue("game-asyncSendMsg")
 
 		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
@@ -1309,6 +1313,7 @@ func TestMustering(t *testing.T) {
 		env2.GetRoute(game.ListMyStagingGamesRoute).Success().
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
+		WaitForEmptyQueue("game-asyncSendMsg")
 		WaitForEmptyQueue("game-asyncSendMsg")
 
 		msg1 := String("msg")

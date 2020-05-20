@@ -56,7 +56,6 @@ func (set orderSet) execute(phaseOrdinal int) {
 		}
 	}
 	WaitForEmptyQueue("game-asyncResolvePhase")
-	fmt.Println("### resolved phase ", phaseOrdinal)
 }
 
 type orderSets []orderSet

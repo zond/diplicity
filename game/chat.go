@@ -1091,7 +1091,6 @@ func countUnreadMessages(ctx context.Context, unfilteredChannels Channels, viewe
 	channels := []*Channel{}
 	for i := range unfilteredChannels {
 		if unfilteredChannels[i].Members.Includes(viewer) {
-			log.Infof(ctx, "@@@@@@@@@@ found %v in %+v", viewer, unfilteredChannels[i].Members)
 			channelID, err := unfilteredChannels[i].ID(ctx)
 			if err != nil {
 				return err
@@ -1103,8 +1102,6 @@ func countUnreadMessages(ctx context.Context, unfilteredChannels Channels, viewe
 			channels = append(channels, &unfilteredChannels[i])
 			seenMarkerIDs = append(seenMarkerIDs, seenMarkerID)
 			seenMarkers = append(seenMarkers, SeenMarker{})
-		} else {
-			log.Infof(ctx, "@@@@@@@@ didn't find %v in %+v", viewer, unfilteredChannels[i].Members)
 		}
 	}
 	seenMarkerTimes := make([]time.Time, len(channels))
