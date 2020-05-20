@@ -724,7 +724,7 @@ func (p *PhaseResolver) Act() error {
 			for i := range p.Game.Members {
 				member := p.Game.Members[i]
 				allUIds = append(allUIds, member.User.Id)
-				if readyUserMap[member.User.Id] {
+				if readyNationMap[member.Nation] {
 					newMembers = append(newMembers, member)
 				} else {
 					probationUids = append(probationUids, member.User.Id)
@@ -752,7 +752,7 @@ func (p *PhaseResolver) Act() error {
 				log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", allKeys, err)
 				return err
 			}
-			notificationBody := fmt.Sprintf("Unfortunately %v players weren't ready, so the game has re-entered the staging state. Once it has enough players it will re-enter the mustering state again.", len(variant.Nations)-len(readyUserMap))
+			notificationBody := fmt.Sprintf("Unfortunately %v players weren't ready, so the game has re-entered the staging state. Once it has enough players it will re-enter the mustering state again.", len(variant.Nations)-len(readyNationMap))
 			if err := AsyncSendMsgFunc.EnqueueIn(
 				p.Context, 0,
 				p.Phase.GameID,

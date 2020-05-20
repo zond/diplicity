@@ -162,7 +162,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 			return HTTPErr{"can only update phase states of unresolved phases", http.StatusPreconditionFailed}
 		}
 
-		phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation, member.User.Id)
+		phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
 		if err != nil {
 			return err
 		}
@@ -180,7 +180,6 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		phaseState.GameID = gameID
 		phaseState.PhaseOrdinal = phaseOrdinal
 		phaseState.Nation = member.Nation
-		phaseState.UserId = member.User.Id
 		phaseState.OnProbation = false
 		member.NewestPhaseState = *phaseState
 
@@ -200,8 +199,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 
 			readyNations := 0
 			for i := range allStates {
-				log.Infof(ctx, "SMURF comparing %v to %v", PP(allStates[i]), PP(phaseState))
-				if allStates[i].Nation == phaseState.Nation && allStates[i].UserId == phaseState.UserId {
+				if allStates[i].Nation == phaseState.Nation {
 					allStates[i] = *phaseState
 				}
 				if allStates[i].ReadyToResolve {
@@ -209,7 +207,6 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 				}
 			}
 
-			log.Infof(ctx, "SMURF readyNation %v", readyNations)
 			if readyNations == len(variants.Variants[game.Variant].Nations) {
 				if err := asyncResolvePhaseFunc.EnqueueIn(ctx, 0, game.ID, phase.PhaseOrdinal); err != nil {
 					return err
@@ -278,7 +275,7 @@ func listPhaseStates(w ResponseWriter, r Request) error {
 	} else {
 		member, isMember := game.GetMemberByUserId(user.Id)
 		if isMember {
-			phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation, member.User.Id)
+			phaseStateID, err := PhaseStateID(ctx, phaseID, member.Nation)
 			if err != nil {
 				return err
 			}
