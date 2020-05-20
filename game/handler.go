@@ -1344,6 +1344,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-compute-all-dias-users", []string{"GET"}, ReComputeAllDIASUsersRoute, handleReComputeAllDIASUsers)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)
+	Handle(r, "/Game/{game_id}/GameResults/TrueSkills", []string{"GET"}, ListGameResultTrueSkillsRoute, listGameResultTrueSkills)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/_dev_resolve_timeout", []string{"GET"}, DevResolvePhaseTimeoutRoute, devResolvePhaseTimeout)
 	Handle(r, "/User/{user_id}/Stats/_dev_update", []string{"PUT"}, DevUserStatsUpdateRoute, devUserStatsUpdate)
@@ -1376,7 +1377,6 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(r, UserStatsResource)
 	HandleResource(r, MessageFlagResource)
 	HandleResource(r, FlaggedMessagesResource)
-	HandleResource(r, TrueSkillResource)
 	HeadCallback(func(head *Node) error {
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/7.9.2/firebase.js")
 		head.AddEl("script", "src", "https://www.gstatic.com/firebasejs/7.9.2/firebase-app.js")

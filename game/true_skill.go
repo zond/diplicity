@@ -22,15 +22,6 @@ const (
 
 var (
 	reRateTrueSkillsFunc *DelayFunc
-	TrueSkillResource    = &Resource{
-		Listers: []Lister{
-			{
-				Path:    "/Game/{game_id}/GameResult/TrueSkills",
-				Route:   ListGameResultTrueSkillsRoute,
-				Handler: listGameResultTrueSkills,
-			},
-		},
-	}
 )
 
 func init() {
