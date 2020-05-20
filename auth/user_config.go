@@ -9,7 +9,6 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
-	"gopkg.in/sendgrid/sendgrid-go.v2"
 
 	. "github.com/zond/goaeoas"
 )
@@ -100,7 +99,7 @@ func (m *MailNotificationConfig) Validate() error {
 	return nil
 }
 
-func (m *MailNotificationConfig) Customize(ctx context.Context, msg *sendgrid.SGMail, data interface{}) {
+func (m *MailNotificationConfig) Customize(ctx context.Context, msg *EMail, data interface{}) {
 	if m.SubjectTemplate != "" {
 		if customSubject, err := raymond.Render(m.SubjectTemplate, data); err == nil {
 			msg.Subject = customSubject
@@ -110,14 +109,14 @@ func (m *MailNotificationConfig) Customize(ctx context.Context, msg *sendgrid.SG
 	}
 	if m.TextBodyTemplate != "" {
 		if customTextBody, err := raymond.Render(m.TextBodyTemplate, data); err == nil {
-			msg.SetText(customTextBody)
+			msg.TextBody = customTextBody
 		} else {
 			log.Infof(ctx, "Broken TextBodyTemplate %q: %v", m.TextBodyTemplate, err)
 		}
 	}
 	if m.HTMLBodyTemplate != "" {
 		if customHTMLBody, err := raymond.Render(m.HTMLBodyTemplate, data); err == nil {
-			msg.SetHTML(customHTMLBody)
+			msg.HTMLBody = customHTMLBody
 		} else {
 			log.Infof(ctx, "Broken HTMLBodyTemplate %q: %v", m.HTMLBodyTemplate, err)
 		}

@@ -22,8 +22,6 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/urlfetch"
-	"gopkg.in/sendgrid/sendgrid-go.v2"
 
 	dvars "github.com/zond/diplicity/variants"
 	vrt "github.com/zond/godip/variants/common"
@@ -213,12 +211,6 @@ func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *data
 		return nil
 	}
 
-	sendGridConf, err := GetSendGrid(ctx)
-	if err != nil {
-		log.Errorf(ctx, "Unable to load sendgrid API key: %v; upload one or hope datastore gets fixed", err)
-		return err
-	}
-
 	unsubscribeURL, err := auth.GetUnsubscribeURL(ctx, router, host, userId)
 	if err != nil {
 		log.Errorf(ctx, "Unable to create unsubscribe URL for %q: %v; fix auth.GetUnsubscribeURL", userId, err)
@@ -227,22 +219,20 @@ func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *data
 
 	msgContext.mailData["unsubscribeURL"] = unsubscribeURL.String()
 
-	msg := sendgrid.NewMail()
-	msg.SetText(fmt.Sprintf(
-		"%s has a new phase: %s.\n\nVisit %s to stop receiving email like this.",
+	msg := &auth.EMail{}
+	msg.TextBody = fmt.Sprintf(
+		"%s has a new phase: %s\n\nVisit %s to stop receiving email like this.",
 		msgContext.game.Desc,
 		msgContext.mapURL.String(),
-		unsubscribeURL.String()))
-	msg.SetSubject(
-		fmt.Sprintf(
-			"%s: %s %d, %s",
-			msgContext.game.DescFor(msgContext.member.Nation),
-			msgContext.phase.Season,
-			msgContext.phase.Year,
-			msgContext.phase.Type,
-		),
+		unsubscribeURL.String())
+	msg.Subject = fmt.Sprintf(
+		"%s: %s %d, %s",
+		msgContext.game.DescFor(msgContext.member.Nation),
+		msgContext.phase.Season,
+		msgContext.phase.Year,
+		msgContext.phase.Type,
 	)
-	msg.AddHeader("List-Unsubscribe", fmt.Sprintf("<%s>", unsubscribeURL.String()))
+	msg.UnsubscribeURL = unsubscribeURL.String()
 
 	msgContext.userConfig.MailConfig.MessageConfig.Customize(ctx, msg, msgContext.mailData)
 
@@ -251,14 +241,13 @@ func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *data
 		log.Errorf(ctx, "Unable to parse email address of %v: %v; unable to recover, exiting", PP(msgContext.user), err)
 		return nil
 	}
-	msg.AddRecipient(recipEmail)
-	msg.AddToName(string(msgContext.member.Nation))
+	msg.ToAddr = recipEmail.Address
+	msg.ToName = string(msgContext.member.Nation)
 
-	msg.SetFrom(noreplyFromAddr)
+	msg.FromAddr = noreplyFromAddr
+	msg.FromName = noreplyFromName
 
-	client := sendgrid.NewSendGridClientWithApiKey(sendGridConf.APIKey)
-	client.Client = urlfetch.Client(ctx)
-	if err := client.Send(msg); err != nil {
+	if err := msg.Send(ctx); err != nil {
 		log.Errorf(ctx, "Unable to send %v: %v; hope sendgrid gets fixed", msg, err)
 		return err
 	}
@@ -1520,6 +1509,11 @@ func (p *Phase) Item(r Request) *Item {
 			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
 		}))
 	}
+	phaseItem.AddLink(r.NewLink(Link{
+		Rel:         "corroborate",
+		Route:       CorroboratePhaseRoute,
+		RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
+	}))
 	if isMember && !p.Resolved {
 		phaseItem.AddLink(r.NewLink(Link{
 			Rel:         "options",
@@ -1851,6 +1845,84 @@ func renderPhaseMap(w ResponseWriter, r Request) error {
 	vPhase := phase.toVariantsPhase(game.Variant, ordersToDisplay)
 
 	return dvars.RenderPhaseMap(w, r, vPhase, userConfig.Colors)
+}
+
+type CorroborateResponse struct {
+	Orders          Orders
+	Inconsistencies []godip.Inconsistency
+}
+
+func (c *CorroborateResponse) Item(r Request, gameID *datastore.Key, phaseOrdinal int) *Item {
+	return NewItem(c).SetName("corroboration").AddLink(r.NewLink(Link{
+		Rel:         "self",
+		Route:       CorroboratePhaseRoute,
+		RouteParams: []string{"game_id", gameID.Encode(), "phase_ordinal", fmt.Sprint(phaseOrdinal)},
+	}))
+}
+func corroboratePhase(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return err
+	}
+
+	phaseOrdinal, err := strconv.ParseInt(r.Vars()["phase_ordinal"], 10, 64)
+	if err != nil {
+		return err
+	}
+
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		return err
+	}
+
+	game := &Game{}
+	phase := &Phase{}
+	if err := datastore.GetMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
+		return err
+	}
+	game.ID = gameID
+
+	member, isMember := game.GetMemberByUserId(user.Id)
+
+	response := CorroborateResponse{}
+	if isMember || phase.Resolved {
+		query := datastore.NewQuery(orderKind).Ancestor(phaseID)
+		if isMember && !phase.Resolved {
+			query = query.Filter("Nation=", member.Nation)
+		}
+		if _, err := query.GetAll(ctx, &response.Orders); err != nil {
+			return err
+		}
+
+		if isMember {
+			orderPartsByProvince := map[godip.Province][]string{}
+			for _, order := range response.Orders {
+				orderPartsByProvince[godip.Province(order.Parts[0])] = order.Parts[1:]
+			}
+
+			variant := variants.Variants[game.Variant]
+
+			s, err := phase.State(ctx, variant, map[godip.Nation]map[godip.Province][]string{
+				member.Nation: orderPartsByProvince,
+			})
+			if err != nil {
+				return err
+			}
+
+			response.Inconsistencies = s.Corroborate(member.Nation)
+		}
+	}
+
+	w.SetContent(response.Item(r, gameID, int(phaseOrdinal)))
+
+	return nil
 }
 
 func listPhases(w ResponseWriter, r Request) error {
