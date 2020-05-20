@@ -731,18 +731,17 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 }
 
 func (g *Game) Redact(viewer *auth.User, r Request) {
-	_, isMember := g.GetMemberByUserId(viewer.Id)
 	if !g.Finished && ((g.Private && g.Anonymous) || (!g.Private && g.DisablePrivateChat && g.DisableGroupChat && g.DisableConferenceChat)) {
 		for index := range g.Members {
 			if g.Members[index].User.Id == viewer.Id {
-				g.Members[index].Redact(viewer, isMember, g.Started)
+				g.Members[index].Redact(viewer, g.Mustered && g.Started)
 			} else {
 				g.Members[index].Anonymize(r)
 			}
 		}
 	} else {
 		for index := range g.Members {
-			g.Members[index].Redact(viewer, isMember, g.Started)
+			g.Members[index].Redact(viewer, g.Mustered && g.Started)
 		}
 	}
 }
