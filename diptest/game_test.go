@@ -1130,6 +1130,9 @@ func TestMustering(t *testing.T) {
 			"PhaseLengthMinutes": 60,
 		}).Success().GetValue("Properties", "ID").(string)
 
+		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			AssertEq(false, "Properties", "Mustered")
+
 		env1.GetRoute(game.ListMyStagingGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
@@ -1155,10 +1158,19 @@ func TestMustering(t *testing.T) {
 		}).Failure()
 
 		env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			AssertEq(false, "Properties", "Mustered")
+
+		env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 			Follow("join", "Links").Body(map[string]interface{}{}).Success()
 
 		WaitForEmptyQueue("game-asyncStartGame")
 		WaitForEmptyQueue("game-asyncSendMsg")
+
+		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			AssertEq(false, "Properties", "Mustered")
+
+		env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			AssertEq(false, "Properties", "Mustered")
 
 		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 			Follow("channels", "Links").Success().
@@ -1202,6 +1214,12 @@ func TestMustering(t *testing.T) {
 
 		env1.GetRoute(game.DevResolvePhaseTimeoutRoute).
 			RouteParams("game_id", gameID, "phase_ordinal", "1").Success()
+
+		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			AssertEq(false, "Properties", "Mustered")
+
+		env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			AssertEq(false, "Properties", "Mustered")
 
 		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
@@ -1298,10 +1316,14 @@ func TestMustering(t *testing.T) {
 			"ReadyToResolve": true,
 		}).Success()
 
+		WaitForEmptyQueue("game-asyncResolvePhase")
 		WaitForEmptyQueue("game-asyncSendMsg")
 
-		env1.GetRoute(game.DevResolvePhaseTimeoutRoute).
-			RouteParams("game_id", gameID, "phase_ordinal", "1").Success()
+		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			AssertEq(true, "Properties", "Mustered")
+
+		env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			AssertEq(true, "Properties", "Mustered")
 
 		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
@@ -1318,7 +1340,7 @@ func TestMustering(t *testing.T) {
 		msg1 := String("msg")
 
 		g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
-		g.Find(2, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
+		g.Find(1, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
 		g.Follow("channels", "Links").Success().
 			AssertLen(1, "Properties").
 			Find(gameID, []string{"Properties"}, []string{"Properties", "GameID"}).

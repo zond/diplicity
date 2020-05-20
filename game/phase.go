@@ -525,6 +525,7 @@ func resolvePhaseHelper(ctx context.Context, gameID *datastore.Key, phaseOrdinal
 			return err
 		}
 
+		log.Infof(ctx, "resolvePhaseHelper(..., %v, %v, %v) running PhaseResolver.Act()", gameID, phaseOrdinal, timeoutTriggered)
 		return (&PhaseResolver{
 			Context:          ctx,
 			Game:             game,
@@ -1119,6 +1120,7 @@ func (p *PhaseResolver) Act() error {
 			p.Phase = newPhase
 			p.PhaseStates = newPhaseStates
 			// Note that we are reusing the same resolver, which means the nonEliminatedUserIds will be the same, and not replaced when we Act().
+			log.Infof(p.Context, "PhaseResolver running PhaseResolver.Act() due to fast forward")
 			if err := p.Act(); err != nil {
 				log.Errorf(p.Context, "Unable to continue rolling forward: %v; fix the resolver!", err)
 				return err
