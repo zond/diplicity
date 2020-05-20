@@ -173,7 +173,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		if err != nil {
 			return err
 		}
-		if phaseState.NoOrders {
+		if game.Mustered && phaseState.NoOrders {
 			phaseState.ReadyToResolve = true
 		}
 		phaseState.GameID = gameID
