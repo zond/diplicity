@@ -408,7 +408,7 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 
 	member, found := game.GetMemberByNation(godip.Nation(nation))
 	if !found {
-		log.Errorf(ctx, "game.GetMemberBy(Nation|UserId)(%v): %v, %v; wtf?", nation, member, found)
+		log.Errorf(ctx, "game.GetMemberByNation(%v): %v, %v; wtf?", nation, member, found)
 		return nil
 	}
 
