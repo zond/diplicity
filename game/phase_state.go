@@ -183,7 +183,6 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		phaseState.OnProbation = false
 		member.NewestPhaseState = *phaseState
 
-		log.Infof(ctx, "Saving %+v", phaseState)
 		if err := phaseState.Save(ctx); err != nil {
 			return err
 		}

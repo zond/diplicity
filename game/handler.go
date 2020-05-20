@@ -1351,16 +1351,6 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Map", []string{"GET"}, RenderPhaseMapRoute, renderPhaseMap)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Corroborate", []string{"GET"}, CorroboratePhaseRoute, corroboratePhase)
 	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
-	// TODO(zond): Remove this when the Android client no longer uses the old API.
-	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/PhaseState/{nation}", []string{"PUT"}, "deprecatedUpdatePhaseState",
-		func(w ResponseWriter, r Request) error {
-			phaseState, err := updatePhaseState(w, r)
-			if err != nil {
-				return err
-			}
-			w.SetContent(phaseState.Item(r))
-			return nil
-		})
 	Handle(r, "/Rss", []string{"GET"}, RssRoute, handleRss)
 	HandleResource(r, GameResource)
 	HandleResource(r, AllocationResource)

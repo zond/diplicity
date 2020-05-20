@@ -813,7 +813,6 @@ func validateMessage(ctx context.Context, message *Message) error {
 		return HTTPErr{"can not create empty messages", http.StatusBadRequest}
 	}
 
-	log.Infof(ctx, "wanting to send from %v to %+v", message.Sender, message.ChannelMembers)
 	if !message.ChannelMembers.Includes(message.Sender) {
 		return HTTPErr{"can only send messages to member channels", http.StatusForbidden}
 	}
