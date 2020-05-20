@@ -1298,6 +1298,8 @@ func TestMustering(t *testing.T) {
 			"ReadyToResolve": true,
 		}).Success()
 
+		WaitForEmptyQueue("game-asyncSendMsg")
+
 		env1.GetRoute(game.DevResolvePhaseTimeoutRoute).
 			RouteParams("game_id", gameID, "phase_ordinal", "1").Success()
 
@@ -1308,13 +1310,10 @@ func TestMustering(t *testing.T) {
 
 		env2.GetRoute(game.ListOpenGamesRoute).Success().
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
-		env2.GetRoute(game.ListMyStartedGamesRoute).Success().
-			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 		env2.GetRoute(game.ListMyStagingGamesRoute).Success().
 			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
-
-		WaitForEmptyQueue("game-asyncSendMsg")
-		WaitForEmptyQueue("game-asyncSendMsg")
+		env2.GetRoute(game.ListMyStartedGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 
 		msg1 := String("msg")
 
