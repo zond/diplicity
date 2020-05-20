@@ -1347,6 +1347,16 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/_dev_resolve_timeout", []string{"GET"}, DevResolvePhaseTimeoutRoute, devResolvePhaseTimeout)
 	Handle(r, "/User/{user_id}/Stats/_dev_update", []string{"PUT"}, DevUserStatsUpdateRoute, devUserStatsUpdate)
+	// TODO(zond): Remove this when the Android client no longer uses the old API.
+	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/PhaseState/{nation}", []string{"PUT"}, "deprecatedUpdatePhaseState",
+		func(w ResponseWriter, r Request) error {
+			phaseState, err := updatePhaseState(w, r)
+			if err != nil {
+				return err
+			}
+			w.SetContent(phaseState.Item(r))
+			return nil
+		})
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Options", []string{"GET"}, ListOptionsRoute, listOptions)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Map", []string{"GET"}, RenderPhaseMapRoute, renderPhaseMap)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Corroborate", []string{"GET"}, CorroboratePhaseRoute, corroboratePhase)
