@@ -1947,7 +1947,6 @@ func listPhases(w ResponseWriter, r Request) error {
 	if isMember {
 		r.Values()[memberNationFlag] = member.Nation
 	}
-	log.Infof(ctx, "member, isMember = %v, %v", member, isMember)
 
 	phases := Phases{}
 	_, err = datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
