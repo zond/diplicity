@@ -697,6 +697,37 @@ func TestPhaseLengths(t *testing.T) {
 	})
 }
 
+func TestBackwardsCompatiblePhaseStateAPI(t *testing.T) {
+	withStartedGame(func() {
+		for _, env := range startedGameEnvs {
+			game := env.GetRoute("Game.Load").RouteParams("id", startedGameID).Success()
+			game.Find(1.0, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
+			phaseOrdinal := game.
+				Follow("phases", "Links").Success().
+				Find(1.0, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).GetValue("Properties", "PhaseOrdinal").(float64)
+			env.PutURL("http://localhost:8080/Game/" + startedGameID + "/Phase/" + fmt.Sprint(phaseOrdinal) + "/PhaseState").Body(map[string]interface{}{
+				"ReadyToResolve": true,
+			}).Success()
+		}
+		WaitForEmptyQueue("game-asyncResolvePhase")
+		for idx, env := range startedGameEnvs {
+			game := env.GetRoute("Game.Load").RouteParams("id", startedGameID).Success()
+			game.Find(3.0, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
+			phaseOrdinal := game.
+				Follow("phases", "Links").Success().
+				Find(3.0, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).GetValue("Properties", "PhaseOrdinal").(float64)
+			env.PutURL("http://localhost:8080/Game/" + startedGameID + "/Phase/" + fmt.Sprint(phaseOrdinal) + "/PhaseState/" + startedGameNats[idx]).Body(map[string]interface{}{
+				"ReadyToResolve": true,
+			}).Success()
+		}
+		WaitForEmptyQueue("game-asyncResolvePhase")
+		for _, env := range startedGameEnvs {
+			game := env.GetRoute("Game.Load").RouteParams("id", startedGameID).Success()
+			game.Find(6.0, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
+		}
+	})
+}
+
 func TestDIASEnding(t *testing.T) {
 	withStartedGame(func() {
 		WaitForEmptyQueue("game-updateUserStats")
