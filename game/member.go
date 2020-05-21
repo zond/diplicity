@@ -81,6 +81,7 @@ func (m *Member) Anonymize(r Request) {
 func (m *Member) Redact(viewer *auth.User, mustered bool) {
 	if !mustered {
 		m.Nation = ""
+		m.NewestPhaseState.Nation = ""
 	}
 	if viewer.Id != m.User.Id {
 		m.GameAlias = ""

@@ -196,6 +196,10 @@ func loadGameState(w ResponseWriter, r Request) (*GameState, error) {
 	}
 	game.ID = gameID
 
+	if !game.Mustered {
+		gameState.Nation = ""
+	}
+
 	member, isMember := game.GetMemberByUserId(user.Id)
 	if isMember {
 		r.Values()[memberNationFlag] = member.Nation
@@ -245,6 +249,12 @@ func listGameStates(w ResponseWriter, r Request) error {
 				GameID: gameID,
 				Nation: nat,
 			})
+		}
+	}
+
+	if !game.Mustered {
+		for idx := range gameStates {
+			gameStates[idx].Nation = ""
 		}
 	}
 

@@ -289,6 +289,12 @@ func listPhaseStates(w ResponseWriter, r Request) error {
 		}
 	}
 
+	if !game.Mustered {
+		for idx := range phaseStates {
+			phaseStates[idx].Nation = ""
+		}
+	}
+
 	w.SetContent(phaseStates.Item(r, phase))
 	return nil
 }
