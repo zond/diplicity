@@ -1452,7 +1452,10 @@ func devResolvePhaseTimeout(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	return timeoutResolvePhase(ctx, gameID, phaseOrdinal)
+	for err = timeoutResolvePhase(ctx, gameID, phaseOrdinal); err == datastore.ErrConcurrentTransaction; err = timeoutResolvePhase(ctx, gameID, phaseOrdinal) {
+		time.Sleep(time.Second)
+	}
+	return err
 }
 
 func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
