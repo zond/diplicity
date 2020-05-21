@@ -702,7 +702,7 @@ func (p *PhaseResolver) Act() error {
 				return err
 			}
 			// Notify everyone that the game has properly started.
-			notificationBody := "All players are ready, the game has started properly, and all players are free to chat and create orders."
+			notificationBody := "All players are ready, and the game has started for real. Be nice to each other, and have fun!"
 			if err := AsyncSendMsgFunc.EnqueueIn(
 				p.Context, 0,
 				p.Phase.GameID,
