@@ -112,6 +112,7 @@ const (
 	SendSystemMessageRoute              = "SendSystemMessage"
 	RemoveZippedOptionsRoute            = "RemoveZippedOptions"
 	CorroboratePhaseRoute               = "CorroboratePhase"
+	GetUserRatingHistogramRoute         = "GetUserRatingHistogram"
 )
 
 type userStatsHandler struct {
@@ -1363,6 +1364,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Corroborate", []string{"GET"}, CorroboratePhaseRoute, corroboratePhase)
 	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
 	Handle(r, "/Rss", []string{"GET"}, RssRoute, handleRss)
+	Handle(r, "/Users/Ratings/Histogram", []string{"GET"}, GetUserRatingHistogramRoute, getUserRatingHistogram)
 	HandleResource(r, GameResource)
 	HandleResource(r, AllocationResource)
 	HandleResource(r, MemberResource)
