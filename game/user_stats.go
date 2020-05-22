@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
@@ -382,15 +383,27 @@ func getUserRatingHistogram(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	userStatsIDs := []*datastore.Key{}
+	userIds := map[string]bool{}
 	for _, game := range games {
 		for _, member := range game.Members {
-			userStatsIDs = append(userStatsIDs, UserStatsID(ctx, member.User.Id))
+			userIds[member.User.Id] = true
 		}
 	}
-	userStats := make([]UserStats, len(userStatsIDs))
+	userStatsIDs := make([]*datastore.Key, 0, len(userIds))
+	for userId := range userIds {
+		userStatsIDs = append(userStatsIDs, UserStatsID(ctx, userId))
+	}
 
-	if err := datastore.GetMulti(ctx, userStatsIDs, userStats); err != nil {
+	userStatsIDsToUse := make([]*datastore.Key, 0, 1000)
+	for _, idx := range rand.Perm(len(userStatsIDs)) {
+		userStatsIDsToUse = append(userStatsIDsToUse, userStatsIDs[idx])
+		if len(userStatsIDsToUse) == 1000 {
+			break
+		}
+	}
+	userStats := make([]UserStats, len(userStatsIDsToUse))
+
+	if err := datastore.GetMulti(ctx, userStatsIDsToUse, userStats); err != nil {
 		return err
 	}
 
