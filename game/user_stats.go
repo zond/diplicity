@@ -425,7 +425,7 @@ func getUserRatingHistogram(w ResponseWriter, r Request) error {
 	}
 
 	histogram.FirstBucketRating = int(math.Floor(minRating))
-	histogram.Counts = make([]int, int(math.Floor(maxRating)-math.Floor(minRating)))
+	histogram.Counts = make([]int, int(math.Floor(maxRating)-math.Floor(minRating))+1)
 	for _, stats := range userStats {
 		histogram.Counts[int(math.Floor(stats.TrueSkill.Rating))-histogram.FirstBucketRating] += 1
 	}
