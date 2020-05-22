@@ -404,7 +404,17 @@ func getUserRatingHistogram(w ResponseWriter, r Request) error {
 	userStats := make([]UserStats, len(userStatsIDsToUse))
 
 	if err := datastore.GetMulti(ctx, userStatsIDsToUse, userStats); err != nil {
-		return err
+		if merr, ok := err.(appengine.MultiError); ok {
+			for _, serr := range merr {
+				if serr != nil && serr != datastore.ErrNoSuchEntity {
+					return err
+				}
+			}
+		} else if err == datastore.ErrNoSuchEntity {
+			err = nil
+		} else {
+			return err
+		}
 	}
 
 	minRating := math.MaxFloat64
