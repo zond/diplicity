@@ -433,7 +433,7 @@ func getUserRatingHistogram(w ResponseWriter, r Request) error {
 	if err := memcache.JSON.Set(ctx, &memcache.Item{
 		Key:        userRatingHistogramKey,
 		Object:     histogram,
-		Expiration: time.Hour,
+		Expiration: time.Hour * 24,
 	}); err != nil {
 		return err
 	}
