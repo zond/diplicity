@@ -663,6 +663,7 @@ func (p *PhaseResolver) Act() error {
 	// Create the new phase.
 
 	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1, p.Phase.Host)
+	newPhase.SoloSCCount = variant.SoloSCCount(s)
 	// To make old games work.
 	if p.Game.PhaseLengthMinutes == 0 {
 		p.Game.PhaseLengthMinutes = MAX_PHASE_DEADLINE
@@ -1153,6 +1154,7 @@ type Phase struct {
 	Bounces           []Bounce
 	Resolutions       []Resolution
 	Host              string
+	SoloSCCount       int
 	PreliminaryScores GameScores `datastore:"-"`
 }
 
