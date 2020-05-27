@@ -3,6 +3,8 @@ package game
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
@@ -12,12 +14,14 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/memcache"
 
 	. "github.com/zond/goaeoas"
 )
 
 const (
-	userStatsKind = "UserStats"
+	userStatsKind          = "UserStats"
+	userRatingHistogramKey = "userRatingsHistogram"
 )
 
 var (
@@ -351,4 +355,89 @@ func (u *UserStats) Redact() {
 
 func (u *UserStats) ID(ctx context.Context) *datastore.Key {
 	return UserStatsID(ctx, u.UserId)
+}
+
+type UserRatingHistogram struct {
+	FirstBucketRating int
+	Counts            []int
+}
+
+func (uh *UserRatingHistogram) Item(r Request) *Item {
+	return NewItem(uh).SetName("UserRatingHistogram")
+}
+
+func getUserRatingHistogram(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	histogram := &UserRatingHistogram{}
+	_, err := memcache.JSON.Get(ctx, userRatingHistogramKey, histogram)
+	if err == nil {
+		w.SetContent(histogram.Item(r))
+		return nil
+	} else if err != nil && err != memcache.ErrCacheMiss {
+		return err
+	}
+
+	games := Games{}
+	if _, err := datastore.NewQuery(gameKind).Filter("Finished=", false).GetAll(ctx, &games); err != nil {
+		return err
+	}
+
+	userIds := map[string]bool{}
+	for _, game := range games {
+		for _, member := range game.Members {
+			userIds[member.User.Id] = true
+		}
+	}
+	userStatsIDs := make([]*datastore.Key, 0, len(userIds))
+	for userId := range userIds {
+		userStatsIDs = append(userStatsIDs, UserStatsID(ctx, userId))
+	}
+
+	userStatsIDsToUse := make([]*datastore.Key, 0, 1000)
+	for _, idx := range rand.Perm(len(userStatsIDs)) {
+		userStatsIDsToUse = append(userStatsIDsToUse, userStatsIDs[idx])
+		if len(userStatsIDsToUse) == 1000 {
+			break
+		}
+	}
+	userStats := make([]UserStats, len(userStatsIDsToUse))
+
+	if err := datastore.GetMulti(ctx, userStatsIDsToUse, userStats); err != nil {
+		if merr, ok := err.(appengine.MultiError); ok {
+			for _, serr := range merr {
+				if serr != nil && serr != datastore.ErrNoSuchEntity {
+					return err
+				}
+			}
+		} else if err == datastore.ErrNoSuchEntity {
+			err = nil
+		} else {
+			return err
+		}
+	}
+
+	minRating := math.MaxFloat64
+	maxRating := -math.MaxFloat64
+	for _, stats := range userStats {
+		minRating = math.Min(minRating, stats.TrueSkill.Rating)
+		maxRating = math.Max(maxRating, stats.TrueSkill.Rating)
+	}
+
+	histogram.FirstBucketRating = int(math.Floor(minRating))
+	histogram.Counts = make([]int, int(math.Floor(maxRating)-math.Floor(minRating))+1)
+	for _, stats := range userStats {
+		histogram.Counts[int(math.Floor(stats.TrueSkill.Rating))-histogram.FirstBucketRating] += 1
+	}
+
+	if err := memcache.JSON.Set(ctx, &memcache.Item{
+		Key:        userRatingHistogramKey,
+		Object:     histogram,
+		Expiration: time.Hour * 24,
+	}); err != nil {
+		return err
+	}
+
+	w.SetContent(histogram.Item(r))
+	return nil
 }

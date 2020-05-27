@@ -53,6 +53,9 @@ func handleIndex(w ResponseWriter, r Request) error {
 		Rel:   "variants",
 		Route: variants.ListVariantsRoute,
 	})).AddLink(r.NewLink(Link{
+		Rel:   "ratings-histogram",
+		Route: GetUserRatingHistogramRoute,
+	})).AddLink(r.NewLink(Link{
 		Rel:   "global-stats",
 		Route: GlobalStatsRoute,
 	})).AddLink(r.NewLink(Link{

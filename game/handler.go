@@ -112,6 +112,8 @@ const (
 	SendSystemMessageRoute              = "SendSystemMessage"
 	RemoveZippedOptionsRoute            = "RemoveZippedOptions"
 	CorroboratePhaseRoute               = "CorroboratePhase"
+	GetUserRatingHistogramRoute         = "GetUserRatingHistogram"
+	GlobalSystemMessageRoute            = "GlobalSystemMessage"
 )
 
 type userStatsHandler struct {
@@ -1083,6 +1085,53 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 	return nil
 }
 
+func handleGlobalSystemMessage(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	games := Games{}
+	ids, err := datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).GetAll(ctx, &games)
+	if err != nil {
+		return err
+	}
+	for idx := range ids {
+		games[idx].ID = ids[idx]
+
+		newMessage := &Message{
+			GameID:         games[idx].ID,
+			ChannelMembers: dipVariants.Variants[games[idx].Variant].Nations,
+			Sender:         DiplicitySender,
+			Body:           r.Req().FormValue("body"),
+		}
+
+		if r.Req().FormValue("really") == "yes" {
+			if err := createMessageHelper(ctx, r.Req().Host, newMessage); err != nil {
+				return err
+			}
+			log.Infof(ctx, "Successfully sent %+v", newMessage)
+		} else {
+			log.Infof(ctx, "Would have sent %+v", newMessage)
+		}
+	}
+
+	return nil
+}
+
 func handleSendSystemMessage(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1340,6 +1389,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
 	Handle(r, "/_remove-zipped-options", []string{"GET"}, RemoveZippedOptionsRoute, handleRemoveZippedOptions)
 	Handle(r, "/_remove-dias-from-solo-games", []string{"GET"}, RemoveDIASFromSoloGamesRoute, handleRemoveDIASFromSoloGames)
+	Handle(r, "/_global-system-message", []string{"POST"}, GlobalSystemMessageRoute, handleGlobalSystemMessage)
 	Handle(r, "/Game/{game_id}/Channel/{recipient}/_system-message", []string{"POST"}, SendSystemMessageRoute, handleSendSystemMessage)
 	Handle(r, "/_re-compute-all-dias-users", []string{"GET"}, ReComputeAllDIASUsersRoute, handleReComputeAllDIASUsers)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
@@ -1363,6 +1413,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Corroborate", []string{"GET"}, CorroboratePhaseRoute, corroboratePhase)
 	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
 	Handle(r, "/Rss", []string{"GET"}, RssRoute, handleRss)
+	Handle(r, "/Users/Ratings/Histogram", []string{"GET"}, GetUserRatingHistogramRoute, getUserRatingHistogram)
 	HandleResource(r, GameResource)
 	HandleResource(r, AllocationResource)
 	HandleResource(r, MemberResource)
