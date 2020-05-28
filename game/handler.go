@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1160,14 +1161,19 @@ func handleSendSystemMessage(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	recipient := r.Vars()["recipient"]
-	if !Nations(dipVariants.Variants[game.Variant].Nations).Includes(godip.Nation(recipient)) {
-		return HTTPErr{"unknown recipient", http.StatusNotFound}
+	recipients := strings.Split(r.Vars()["recipients"], ",")
+	sort.Sort(sort.StringSlice(recipients))
+	recipientNations := Nations{}
+	for _, recipient := range recipients {
+		if !Nations(dipVariants.Variants[game.Variant].Nations).Includes(godip.Nation(recipient)) {
+			return HTTPErr{"unknown recipient", http.StatusNotFound}
+		}
+		recipientNations = append(recipientNations, godip.Nation(recipient))
 	}
 
 	newMessage := &Message{
 		GameID:         gameID,
-		ChannelMembers: Nations{godip.Nation(recipient), DiplicitySender},
+		ChannelMembers: recipientNations,
 		Sender:         DiplicitySender,
 		Body:           r.Req().FormValue("body"),
 	}
@@ -1390,7 +1396,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_remove-zipped-options", []string{"GET"}, RemoveZippedOptionsRoute, handleRemoveZippedOptions)
 	Handle(r, "/_remove-dias-from-solo-games", []string{"GET"}, RemoveDIASFromSoloGamesRoute, handleRemoveDIASFromSoloGames)
 	Handle(r, "/_global-system-message", []string{"POST"}, GlobalSystemMessageRoute, handleGlobalSystemMessage)
-	Handle(r, "/Game/{game_id}/Channel/{recipient}/_system-message", []string{"POST"}, SendSystemMessageRoute, handleSendSystemMessage)
+	Handle(r, "/Game/{game_id}/Channel/{recipients}/_system-message", []string{"POST"}, SendSystemMessageRoute, handleSendSystemMessage)
 	Handle(r, "/_re-compute-all-dias-users", []string{"GET"}, ReComputeAllDIASUsersRoute, handleReComputeAllDIASUsers)
 	Handle(r, "/_ah/mail/{recipient}", []string{"POST"}, ReceiveMailRoute, receiveMail)
 	Handle(r, "/", []string{"GET"}, IndexRoute, handleIndex)

@@ -457,7 +457,7 @@ func (n Nations) String() string {
 
 type Channels []Channel
 
-func (c Channels) Item(r Request, gameID *datastore.Key, isMember bool) *Item {
+func (c Channels) Item(r Request, gameID *datastore.Key, createMessage bool) *Item {
 	channelItems := make(List, len(c))
 	for i := range c {
 		channelItems[i] = c[i].Item(r)
@@ -477,7 +477,7 @@ func (c Channels) Item(r Request, gameID *datastore.Key, isMember bool) *Item {
 		Route:       ListChannelsRoute,
 		RouteParams: []string{"game_id", gameID.Encode()},
 	}))
-	if isMember {
+	if createMessage {
 		channelsItem.AddLink(r.NewLink(MessageResource.Link("message", Create, []string{"game_id", gameID.Encode()})))
 	}
 	return channelsItem
@@ -1059,7 +1059,6 @@ func countUnreadMessages(ctx context.Context, unfilteredChannels Channels, viewe
 	channels := []*Channel{}
 	for i := range unfilteredChannels {
 		if unfilteredChannels[i].Members.Includes(viewer) {
-			log.Infof(ctx, "@@@@@@@@@@ found %v in %+v", viewer, unfilteredChannels[i].Members)
 			channelID, err := unfilteredChannels[i].ID(ctx)
 			if err != nil {
 				return err
@@ -1071,8 +1070,6 @@ func countUnreadMessages(ctx context.Context, unfilteredChannels Channels, viewe
 			channels = append(channels, &unfilteredChannels[i])
 			seenMarkerIDs = append(seenMarkerIDs, seenMarkerID)
 			seenMarkers = append(seenMarkers, SeenMarker{})
-		} else {
-			log.Infof(ctx, "@@@@@@@@ didn't find %v in %+v", viewer, unfilteredChannels[i].Members)
 		}
 	}
 	seenMarkerTimes := make([]time.Time, len(channels))
@@ -1159,7 +1156,7 @@ func listChannels(w ResponseWriter, r Request) error {
 		}
 	}
 
-	w.SetContent(channels.Item(r, gameID, isMember))
+	w.SetContent(channels.Item(r, gameID, isMember && !(game.DisableConferenceChat && game.DisableGroupChat && game.DisablePrivateChat)))
 	return nil
 }
 
