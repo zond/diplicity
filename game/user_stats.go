@@ -386,7 +386,9 @@ func getUserRatingHistogram(w ResponseWriter, r Request) error {
 	userIds := map[string]bool{}
 	for _, game := range games {
 		for _, member := range game.Members {
-			userIds[member.User.Id] = true
+			if member.User.Id != "" {
+				userIds[member.User.Id] = true
+			}
 		}
 	}
 	userStatsIDs := make([]*datastore.Key, 0, len(userIds))
