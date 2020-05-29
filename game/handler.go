@@ -1241,7 +1241,7 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 		if _, err := datastore.Put(ctx, gameID, game); err != nil {
 			return err
 		}
-		log.Infof(ctx, "Successfully saved the %v with the reinstated members and a new NewestPhaseMeta", gameID)
+		log.Infof(ctx, "Successfully saved %v with the reinstated members and a new NewestPhaseMeta (%+v)", gameID, game.NewestPhaseMeta)
 
 	}
 	return nil
