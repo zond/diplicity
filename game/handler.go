@@ -1102,6 +1102,10 @@ var (
 				Nation: "USA",
 				Email:  "martijnscholten1@gmail.com",
 			},
+			{
+				Nation: "Spain",
+				Email:  "sfogz81@gmail.com",
+			},
 		},
 		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmYDNrgkM": {
 			{
@@ -1109,7 +1113,12 @@ var (
 				Email:  "rob.hall198686@gmail.com",
 			},
 		},
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA0ZGkkwsM": {},
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA0ZGkkwsM": {
+			{
+				Nation: godip.France,
+				Email:  "dan.muldoon77@gmail.com",
+			},
+		},
 		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA2eTglwoM": {},
 		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAyd3xqwsM": {
 			{
@@ -1129,7 +1138,12 @@ var (
 				Email:  "thijs@thijshoutenbosdesign.nl",
 			},
 		},
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmeCZqQkM": {},
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmeCZqQkM": {
+			{
+				Nation: "South Vietnam",
+				Email:  "nckelly2@illinois.edu",
+			},
+		},
 	}
 )
 
