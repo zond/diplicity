@@ -1197,14 +1197,14 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 			}
 			if hasUser {
 				log.Infof(ctx, "%+v already found among %+v", resetMember, game.Members)
-				return nil
+				continue
 			}
 			if foundMember == nil {
 				return fmt.Errorf("Didn't found a member of the right nation for %+v among %+v, what's wrong?", resetMember, game.Members)
 			}
 			foundMember.User = *user
 			if _, err := datastore.Put(ctx, gameID, game); err != nil {
-				return nil
+				return err
 			}
 			log.Infof(ctx, "Successfully reinstated %+v among %+v", resetMember, game.Members)
 		}
