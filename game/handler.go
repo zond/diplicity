@@ -1194,6 +1194,8 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 		}
 		log.Infof(ctx, "Schedule %v to resolve at %v", gameID, lastPhase.DeadlineAt)
 
+		game.NewestPhaseMeta = []PhaseMeta{lastPhase.PhaseMeta}
+
 		for _, resetMember := range resetMembers {
 			log.Infof(ctx, "Looking at user %+v", resetMember)
 			foundNation := false
