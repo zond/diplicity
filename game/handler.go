@@ -1130,21 +1130,24 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 		game.ID = gameID
 
 		phases := Phases{}
-		_, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
+		_, err = datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
 		if err != nil {
 			return err
 		}
 
 		var phase *Phase
-		for _, loopPhase := range phases {
-			phase := loopPhase
-			if phase == nil || phase.PhaseOrdinal > phase.PhaseOrdinal {
-				phase = &phase
+		for idx := range phases {
+			if phase == nil || phases[idx].PhaseOrdinal > phase.PhaseOrdinal {
+				phase = &phases[idx]
 			}
 		}
 
 		phase.DeadlineAt = time.Now().Add(time.Hour * 24 * 30)
 
+		phaseID, err := PhaseID(ctx, gameID, phase.PhaseOrdinal)
+		if err != nil {
+			return err
+		}
 		if _, err := datastore.Put(ctx, phaseID, phase); err != nil {
 			return err
 		}
