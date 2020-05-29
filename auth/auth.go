@@ -45,7 +45,7 @@ const (
 )
 
 const (
-	userKind        = "User"
+	UserKind        = "User"
 	naClKind        = "NaCl"
 	oAuthKind       = "OAuth"
 	redirectURLKind = "RedirectURL"
@@ -218,7 +218,7 @@ type User struct {
 }
 
 func UserID(ctx context.Context, userID string) *datastore.Key {
-	return datastore.NewKey(ctx, userKind, userID, 0, nil)
+	return datastore.NewKey(ctx, UserKind, userID, 0, nil)
 }
 
 func (u *User) ID(ctx context.Context) *datastore.Key {

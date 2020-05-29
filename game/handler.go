@@ -1089,13 +1089,47 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 }
 
 var (
-	badlyResetGameIDStrings = []string{
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAydfV4wgM",
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmYDNrgkM",
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA0ZGkkwsM",
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA2eTglwoM",
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAyd3xqwsM",
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmeCZqQkM",
+	badlyResetGameMembersByGameIDString = map[string][]struct {
+		Nation godip.Nation
+		Email  string
+	}{
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAydfV4wgM": {
+			{
+				Nation: "Kenya",
+				Email:  "dnlwht84@gmail.com",
+			},
+			{
+				Nation: "USA",
+				Email:  "martijnscholten1@gmail.com",
+			},
+		},
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmYDNrgkM": {
+			{
+				Nation: godip.Italy,
+				Email:  "rob.hall198686@gmail.com",
+			},
+		},
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA0ZGkkwsM": {},
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA2eTglwoM": {},
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAyd3xqwsM": {
+			{
+				Nation: godip.Turkey,
+				Email:  "j.bredman@gmail.com",
+			},
+			{
+				Nation: godip.Austria,
+				Email:  "gingertheworld@gmail.com",
+			},
+			{
+				Nation: godip.England,
+				Email:  "m.stumpel@gmail.com",
+			},
+			{
+				Nation: godip.France,
+				Email:  "thijs@thijshoutenbosdesign.nl",
+			},
+		},
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmeCZqQkM": {},
 	}
 )
 
@@ -1118,40 +1152,62 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 		}
 	}
 
-	for _, idString := range badlyResetGameIDStrings {
-		gameID, err := datastore.DecodeKey(idString)
+	for gameIDString, resetMembers := range badlyResetGameMembersByGameIDString {
+		gameID, err := datastore.DecodeKey(gameIDString)
 		if err != nil {
 			return err
 		}
+		log.Infof(ctx, "Looking at broken game %v", gameID)
 		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}
 		game.ID = gameID
 
-		phases := Phases{}
-		_, err = datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
-		if err != nil {
-			return err
-		}
-
-		var phase *Phase
-		for idx := range phases {
-			if phase == nil || phases[idx].PhaseOrdinal > phase.PhaseOrdinal {
-				phase = &phases[idx]
+		for _, resetMember := range resetMembers {
+			log.Infof(ctx, "Looking at user %+v", resetMember)
+			foundNation := false
+			for _, nat := range dipVariants.Variants[game.Variant].Nations {
+				if nat == resetMember.Nation {
+					foundNation = true
+					break
+				}
 			}
+			if !foundNation {
+				return fmt.Errorf("No nation for %+v found among %+v", resetMember, dipVariants.Variants[game.Variant].Nations)
+			}
+			users := []auth.User{}
+			_, err := datastore.NewQuery(auth.UserKind).Filter("Email=", resetMember.Email).GetAll(ctx, &users)
+			if err != nil {
+				return err
+			}
+			if len(users) != 1 {
+				return fmt.Errorf("Found %+v with Email %q, wtf?", users, resetMember.Email)
+			}
+			user := &users[0]
+			hasUser := false
+			var foundMember *Member
+			for idx := range game.Members {
+				if game.Members[idx].User.Id == user.Id {
+					hasUser = true
+				}
+				if game.Members[idx].Nation == resetMember.Nation {
+					foundMember = &game.Members[idx]
+				}
+			}
+			if hasUser {
+				log.Infof(ctx, "%+v already found among %+v", resetMember, game.Members)
+				return nil
+			}
+			if foundMember == nil {
+				return fmt.Errorf("Didn't found a member of the right nation for %+v among %+v, what's wrong?", resetMember, game.Members)
+			}
+			foundMember.User = *user
+			if _, err := datastore.Put(ctx, gameID, game); err != nil {
+				return nil
+			}
+			log.Infof(ctx, "Successfully reinstated %+v among %+v", resetMember, game.Members)
 		}
-
-		phase.DeadlineAt = time.Now().Add(time.Hour * 24 * 30)
-
-		phaseID, err := PhaseID(ctx, gameID, phase.PhaseOrdinal)
-		if err != nil {
-			return err
-		}
-		if _, err := datastore.Put(ctx, phaseID, phase); err != nil {
-			return err
-		}
-		log.Infof(ctx, "Pushed deadline of %v to in %v to avoid early resolution", gameID, phase.DeadlineAt)
 	}
 	return nil
 }
