@@ -115,6 +115,7 @@ const (
 	CorroboratePhaseRoute               = "CorroboratePhase"
 	GetUserRatingHistogramRoute         = "GetUserRatingHistogram"
 	GlobalSystemMessageRoute            = "GlobalSystemMessage"
+	MusterAllRunningGamesRoute          = "MusterAllRunningGames"
 )
 
 type userStatsHandler struct {
@@ -1086,6 +1087,68 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 	return nil
 }
 
+func handleMusterAllRunningGames(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	games := Games{}
+	ids, err := datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Mustered=", false).Filter("Finished=", false).GetAll(ctx, &games)
+	if err != nil {
+		return err
+	}
+	for idx := range ids {
+		games[idx].ID = ids[idx]
+	}
+
+	for idx := range games {
+		channels := Channels{}
+		_, err := datastore.NewQuery(channelKind).Ancestor(games[idx].ID).GetAll(ctx, &channels)
+		if err != nil {
+			return err
+		}
+		var foundMessage *Message
+		for _, channel := range channels {
+			if channel.LatestMessage.Sender == godip.Nation(DiplicitySender) && strings.Contains(channel.LatestMessage.Body, "Welcome to") {
+				foundMessage = &channel.LatestMessage
+				break
+			}
+		}
+		if foundMessage != nil {
+			log.Infof(ctx, "Not mustering %v since I found %+v", games[idx].ID, foundMessage)
+			continue
+		}
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			game := &Game{}
+			if err := datastore.Get(ctx, games[idx].ID, game); err != nil {
+				return err
+			}
+			game.Mustered = true
+			_, err := datastore.Put(ctx, games[idx].ID, game)
+			return err
+		}, &datastore.TransactionOptions{XG: true}); err != nil {
+			return err
+		}
+		log.Infof(ctx, "Forcefully mustered %v since it was started, not mustered, not finished, and didn't have the welcome message.", games[idx].ID)
+	}
+
+	return nil
+}
+
 func handleGlobalSystemMessage(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1391,6 +1454,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_update-all-user-stats", []string{"GET"}, UpdateAllUserStatsRoute, handleUpdateAllUserStats)
 	Handle(r, "/_re-game-result", []string{"GET"}, ReGameResultRoute, handleReGameResult)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
+	Handle(r, "/_muster-all-running-games", []string{"GET"}, MusterAllRunningGamesRoute, handleMusterAllRunningGames)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
 	Handle(r, "/_remove-zipped-options", []string{"GET"}, RemoveZippedOptionsRoute, handleRemoveZippedOptions)
