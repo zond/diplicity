@@ -1178,6 +1178,7 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 		}
 		game.ID = gameID
 
+		madeChanges := false
 		for _, resetMember := range resetMembers {
 			log.Infof(ctx, "Looking at user %+v", resetMember)
 			foundNation := false
@@ -1220,7 +1221,26 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 			if _, err := datastore.Put(ctx, gameID, game); err != nil {
 				return err
 			}
+			madeChanges = true
 			log.Infof(ctx, "Successfully reinstated %+v among %+v", resetMember, game.Members)
+		}
+
+		if madeChanges {
+			phases := Phases{}
+			if _, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases); err != nil {
+				return err
+			}
+			var lastPhase *Phase
+			for idx := range phases {
+				if lastPhase == nil || phases[idx].PhaseOrdinal > lastPhase.PhaseOrdinal {
+					lastPhase = &phases[idx]
+				}
+			}
+			lastPhase.DeadlineAt = time.Now().Add(time.Hour * 24 * 3)
+			if err := lastPhase.ScheduleResolution(ctx); err != nil {
+				return err
+			}
+			log.Infof(ctx, "Schedule %v to resolve at %v", gameID, lastPhase.DeadlineAt)
 		}
 	}
 	return nil
