@@ -1178,24 +1178,6 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 		}
 		game.ID = gameID
 
-		phases := Phases{}
-		if _, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases); err != nil {
-			return err
-		}
-		var lastPhase *Phase
-		for idx := range phases {
-			if lastPhase == nil || phases[idx].PhaseOrdinal > lastPhase.PhaseOrdinal {
-				lastPhase = &phases[idx]
-			}
-		}
-		lastPhase.DeadlineAt = time.Now().Add(time.Hour * 24 * 3)
-		if err := lastPhase.ScheduleResolution(ctx); err != nil {
-			return err
-		}
-		log.Infof(ctx, "Schedule %v to resolve at %v", gameID, lastPhase.DeadlineAt)
-
-		game.NewestPhaseMeta = []PhaseMeta{lastPhase.PhaseMeta}
-
 		for _, resetMember := range resetMembers {
 			log.Infof(ctx, "Looking at user %+v", resetMember)
 			foundNation := false
@@ -1237,11 +1219,42 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 			foundMember.User = *user
 			log.Infof(ctx, "Successfully reinstated %+v among %+v", resetMember, game.Members)
 		}
+		members := game.Members
 
-		if _, err := datastore.Put(ctx, gameID, game); err != nil {
+		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+			game = &Game{}
+			if err := datastore.Get(ctx, gameID, game); err != nil {
+				return err
+			}
+			game.ID = gameID
+			game.Members = members
+
+			phases := Phases{}
+			if _, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases); err != nil {
+				return err
+			}
+			var lastPhase *Phase
+			for idx := range phases {
+				if lastPhase == nil || phases[idx].PhaseOrdinal > lastPhase.PhaseOrdinal {
+					lastPhase = &phases[idx]
+				}
+			}
+			lastPhase.DeadlineAt = time.Now().Add(time.Hour * 24 * 3)
+			if err := lastPhase.ScheduleResolution(ctx); err != nil {
+				return err
+			}
+			log.Infof(ctx, "Schedule %v to resolve at %v", gameID, lastPhase.DeadlineAt)
+
+			game.NewestPhaseMeta = []PhaseMeta{lastPhase.PhaseMeta}
+
+			if _, err := datastore.Put(ctx, gameID, game); err != nil {
+				return err
+			}
+			log.Infof(ctx, "Successfully saved %v with the reinstated members and a new NewestPhaseMeta (%+v)", gameID, game.NewestPhaseMeta)
+			return nil
+		}, &datastore.TransactionOptions{XG: true}); err != nil {
 			return err
 		}
-		log.Infof(ctx, "Successfully saved %v with the reinstated members and a new NewestPhaseMeta (%+v)", gameID, game.NewestPhaseMeta)
 
 	}
 	return nil
