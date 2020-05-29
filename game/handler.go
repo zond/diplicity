@@ -116,6 +116,7 @@ const (
 	GetUserRatingHistogramRoute         = "GetUserRatingHistogram"
 	GlobalSystemMessageRoute            = "GlobalSystemMessage"
 	MusterAllRunningGamesRoute          = "MusterAllRunningGames"
+	FindBadlyResetGamesRoute            = "FindBadlyResetGames"
 )
 
 type userStatsHandler struct {
@@ -1087,6 +1088,71 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 	return nil
 }
 
+var (
+	badlyResetGameIDStrings = []string{
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAydfV4wgM",
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmYDNrgkM",
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA0ZGkkwsM",
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA2eTglwoM",
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAyd3xqwsM",
+		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmeCZqQkM",
+	}
+)
+
+func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	for _, idString := range badlyResetGameIDStrings {
+		gameID, err := datastore.DecodeKey(idString)
+		if err != nil {
+			return err
+		}
+		game := &Game{}
+		if err := datastore.Get(ctx, gameID, game); err != nil {
+			return err
+		}
+		game.ID = gameID
+
+		phases := Phases{}
+		_, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases)
+		if err != nil {
+			return err
+		}
+
+		var phase *Phase
+		for _, loopPhase := range phases {
+			phase := loopPhase
+			if phase == nil || phase.PhaseOrdinal > phase.PhaseOrdinal {
+				phase = &phase
+			}
+		}
+
+		phase.DeadlineAt = time.Now().Add(time.Hour * 24 * 30)
+
+		if _, err := datastore.Put(ctx, phaseID, phase); err != nil {
+			return err
+		}
+		log.Infof(ctx, "Pushed deadline of %v to in %v to avoid early resolution", gameID, phase.DeadlineAt)
+	}
+	return nil
+}
+
 func handleMusterAllRunningGames(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1459,6 +1525,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-game-result", []string{"GET"}, ReGameResultRoute, handleReGameResult)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_muster-all-running-games", []string{"GET"}, MusterAllRunningGamesRoute, handleMusterAllRunningGames)
+	Handle(r, "/_find-badly-reset-games", []string{"GET"}, FindBadlyResetGamesRoute, handleFindBadlyResetGames)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
 	Handle(r, "/_remove-zipped-options", []string{"GET"}, RemoveZippedOptionsRoute, handleRemoveZippedOptions)
