@@ -1107,7 +1107,7 @@ func handleMusterAllRunningGames(w ResponseWriter, r Request) error {
 	}
 
 	games := Games{}
-	ids, err := datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Mustered=", false).Filter("Finished=", false).GetAll(ctx, &games)
+	ids, err := datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).GetAll(ctx, &games)
 	if err != nil {
 		return err
 	}
@@ -1116,6 +1116,10 @@ func handleMusterAllRunningGames(w ResponseWriter, r Request) error {
 	}
 
 	for idx := range games {
+		if games[idx].Mustered {
+			log.Infof(ctx, "Not mustering %v since it's already mustered", games[idx].ID)
+			continue
+		}
 		channels := Channels{}
 		_, err := datastore.NewQuery(channelKind).Ancestor(games[idx].ID).GetAll(ctx, &channels)
 		if err != nil {
