@@ -1315,6 +1315,7 @@ func handleMusterAllFinishedGames(w ResponseWriter, r Request) error {
 	iterator := datastore.NewQuery(gameKind).Filter("Finished=", true).Run(ctx)
 	var id *datastore.Key
 	var err error
+	count := 0
 	for id, err = iterator.Next(&game); err == nil; id, err = iterator.Next(&game) {
 		if !game.Mustered {
 			game.ID = id
@@ -1326,6 +1327,13 @@ func handleMusterAllFinishedGames(w ResponseWriter, r Request) error {
 				}
 			}
 		}
+		count += 1
+		if count%100 == 0 {
+			log.Infof(ctx, "Looked at %v games", count)
+		}
+	}
+	if err != nil && err != datastore.Done {
+		return err
 	}
 	return saveGamesMustered()
 }
