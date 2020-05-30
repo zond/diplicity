@@ -39,6 +39,7 @@ var (
 	sendPhaseNotificationsToMailFunc  *DelayFunc
 	ejectProbationariesFunc           *DelayFunc
 	PhaseResource                     *Resource
+	gameOrPhaseMissingErr             = fmt.Errorf("loading game or phase caused datastore.ErrNoSuchEntity")
 )
 
 func init() {
@@ -385,7 +386,11 @@ func asyncResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal 
 }
 
 func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
-	return resolvePhaseHelper(ctx, gameID, phaseOrdinal, true)
+	if err := resolvePhaseHelper(ctx, gameID, phaseOrdinal, true); err == gameOrPhaseMissingErr {
+		log.Errorf(ctx, "timeoutResolvePhase(..., %v, %v): %v; give up", gameID, phaseOrdinal, err)
+		return nil
+	}
+	return nil
 }
 
 func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, nation string) error {
@@ -402,6 +407,18 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 	keys := []*datastore.Key{gameID, phaseID}
 	values := []interface{}{game, phase}
 	if err := datastore.GetMulti(ctx, keys, values); err != nil {
+		if err == datastore.ErrNoSuchEntity {
+			log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; give up", keys, values, err)
+			return nil
+		}
+		if merr, ok := err.(appengine.MultiError); ok {
+			for _, serr := range merr {
+				if serr == datastore.ErrNoSuchEntity {
+					log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; give up", keys, values, err)
+					return nil
+				}
+			}
+		}
 		log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, values, err)
 		return err
 	}
@@ -513,6 +530,18 @@ func resolvePhaseHelper(ctx context.Context, gameID *datastore.Key, phaseOrdinal
 		keys := []*datastore.Key{gameID, phaseID}
 		values := []interface{}{game, phase}
 		if err := datastore.GetMulti(ctx, keys, values); err != nil {
+			if err == datastore.ErrNoSuchEntity {
+				log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; game or phase gone", keys, values, err)
+				return gameOrPhaseMissingErr
+			}
+			if merr, ok := err.(appengine.MultiError); ok {
+				for _, serr := range merr {
+					if serr == datastore.ErrNoSuchEntity {
+						log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; game or phase gone", keys, values, err)
+						return gameOrPhaseMissingErr
+					}
+				}
+			}
 			log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; hope datastore will get fixed", keys, values, err)
 			return err
 		}
