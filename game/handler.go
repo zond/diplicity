@@ -116,6 +116,7 @@ const (
 	GetUserRatingHistogramRoute         = "GetUserRatingHistogram"
 	GlobalSystemMessageRoute            = "GlobalSystemMessage"
 	MusterAllRunningGamesRoute          = "MusterAllRunningGames"
+	MusterAllFinishedGamesRoute         = "MusterAllFinishedGame"
 	FindBadlyResetGamesRoute            = "FindBadlyResetGames"
 )
 
@@ -1273,6 +1274,62 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func handleMusterAllFinishedGames(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	games := Games{}
+	ids := []*datastore.Key{}
+	saveGamesMustered := func() error {
+		for idx := range games {
+			if !games[idx].Finished {
+				return fmt.Errorf("%+v isn't finished, wtf?", games[idx])
+			}
+			games[idx].Mustered = true
+		}
+		if _, err := datastore.PutMulti(ctx, ids, games); err != nil {
+			return err
+		}
+		log.Infof(ctx, "Saved %v finished games as mustered", len(games))
+		games = Games{}
+		ids = []*datastore.Key{}
+		return nil
+	}
+
+	game := Game{}
+	iterator := datastore.NewQuery(gameKind).Filter("Finished=", true).Run(ctx)
+	var id *datastore.Key
+	var err error
+	for id, err = iterator.Next(&game); err == nil; id, err = iterator.Next(&game) {
+		if !game.Mustered {
+			game.ID = id
+			games = append(games, game)
+			ids = append(ids, id)
+			if len(games) == 1000 {
+				if err := saveGamesMustered(); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return saveGamesMustered()
+}
+
 func handleMusterAllRunningGames(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1645,6 +1702,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-game-result", []string{"GET"}, ReGameResultRoute, handleReGameResult)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_muster-all-running-games", []string{"GET"}, MusterAllRunningGamesRoute, handleMusterAllRunningGames)
+	Handle(r, "/_muster-all-finished-games", []string{"GET"}, MusterAllFinishedGamesRoute, handleMusterAllFinishedGames)
 	Handle(r, "/_find-badly-reset-games", []string{"GET"}, FindBadlyResetGamesRoute, handleFindBadlyResetGames)
 	Handle(r, "/_re-schedule-all-broken", []string{"GET"}, ReScheduleAllBrokenRoute, handleReScheduleAllBroken)
 	Handle(r, "/_re-schedule-all", []string{"GET"}, ReScheduleAllRoute, handleReScheduleAll)
