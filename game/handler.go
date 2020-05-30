@@ -118,6 +118,7 @@ const (
 	MusterAllRunningGamesRoute          = "MusterAllRunningGames"
 	MusterAllFinishedGamesRoute         = "MusterAllFinishedGame"
 	FindBadlyResetGamesRoute            = "FindBadlyResetGames"
+	FixBrokenlyMusteredGamesRoute       = "FixBrokenlyMusteredGames"
 )
 
 type userStatsHandler struct {
@@ -1274,6 +1275,96 @@ func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
 	return nil
 }
 
+func handleFixBrokenlyMusteredGames(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	games := Games{}
+	ids, err := datastore.NewQuery(gameKind).Filter("Finished=", true).Filter("Mustered=", true).GetAll(ctx, &games)
+	if err != nil {
+		return err
+	}
+	for idx := range games {
+		games[idx].ID = ids[idx]
+		result := &GameResult{}
+		resultID := GameResultID(ctx, games[idx].ID)
+		if err := datastore.Get(ctx, resultID, result); err != nil {
+			log.Errorf(ctx, "unable to load game result: %v", err)
+			return err
+		}
+		correctMembers := map[godip.Nation]*Member{}
+
+		toLoadKeys := []*datastore.Key{}
+		toLoadObjects := []interface{}{}
+		for _, score := range result.Scores {
+			correctMember := &Member{
+				Nation: score.Member,
+			}
+			correctMembers[score.Member] = correctMember
+
+			toLoadKeys = append(toLoadKeys, auth.UserID(ctx, score.UserId))
+			toLoadObjects = append(toLoadObjects, &correctMember.User)
+
+			phaseID, err := PhaseID(ctx, games[idx].ID, games[idx].NewestPhaseMeta[0].PhaseOrdinal)
+			if err != nil {
+				log.Errorf(ctx, "unable to create phase id: %v", err)
+				return err
+			}
+			phaseStateID, err := PhaseStateID(ctx, phaseID, score.Member)
+			if err != nil {
+				log.Errorf(ctx, "unable to create phase state id: %v", err)
+				return err
+			}
+
+			toLoadKeys = append(toLoadKeys, phaseStateID)
+			toLoadObjects = append(toLoadObjects, &correctMember.NewestPhaseState)
+		}
+		if err := datastore.GetMulti(ctx, toLoadKeys, toLoadObjects); err != nil {
+			log.Errorf(ctx, "unable to load %+v: %v", toLoadKeys, err)
+			return err
+		}
+
+		isOK := true
+		for _, member := range games[idx].Members {
+			correctMember, found := correctMembers[member.Nation]
+			if !found {
+				isOK = false
+				break
+			}
+			if correctMember.Nation != member.Nation {
+				isOK = false
+				break
+			}
+			if correctMember.User.Id != member.User.Id {
+				isOK = false
+				break
+			}
+		}
+
+		if isOK {
+			log.Infof(ctx, "%v seems to have the correct members. Phew!", games[idx].ID)
+		} else {
+			log.Infof(ctx, "%v doesn't have the correct members!!! Gah!", games[idx].ID)
+		}
+	}
+	return nil
+}
+
 func handleMusterAllFinishedGames(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1311,15 +1402,20 @@ func handleMusterAllFinishedGames(w ResponseWriter, r Request) error {
 		return nil
 	}
 
-	game := Game{}
 	iterator := datastore.NewQuery(gameKind).Filter("Finished=", true).Run(ctx)
-	var id *datastore.Key
-	var err error
 	count := 0
-	for id, err = iterator.Next(&game); err == nil; id, err = iterator.Next(&game) {
+	for {
+		game := &Game{}
+		id, err := iterator.Next(game)
+		if err == datastore.Done {
+			break
+		}
+		if err != nil {
+			return err
+		}
 		if !game.Mustered {
 			game.ID = id
-			games = append(games, game)
+			games = append(games, *game)
 			ids = append(ids, id)
 			if len(games) == 50 {
 				if err := saveGamesMustered(); err != nil {
@@ -1331,9 +1427,6 @@ func handleMusterAllFinishedGames(w ResponseWriter, r Request) error {
 		if count%100 == 0 {
 			log.Infof(ctx, "Looked at %v games", count)
 		}
-	}
-	if err != nil && err != datastore.Done {
-		return err
 	}
 	return saveGamesMustered()
 }
@@ -1709,6 +1802,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_update-all-user-stats", []string{"GET"}, UpdateAllUserStatsRoute, handleUpdateAllUserStats)
 	Handle(r, "/_re-game-result", []string{"GET"}, ReGameResultRoute, handleReGameResult)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
+	Handle(r, "/_fix-brokenly-mustered-games", []string{"GET"}, FixBrokenlyMusteredGamesRoute, handleFixBrokenlyMusteredGames)
 	Handle(r, "/_muster-all-running-games", []string{"GET"}, MusterAllRunningGamesRoute, handleMusterAllRunningGames)
 	Handle(r, "/_muster-all-finished-games", []string{"GET"}, MusterAllFinishedGamesRoute, handleMusterAllFinishedGames)
 	Handle(r, "/_find-badly-reset-games", []string{"GET"}, FindBadlyResetGamesRoute, handleFindBadlyResetGames)
