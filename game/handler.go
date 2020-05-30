@@ -1320,7 +1320,7 @@ func handleMusterAllFinishedGames(w ResponseWriter, r Request) error {
 			game.ID = id
 			games = append(games, game)
 			ids = append(ids, id)
-			if len(games) == 1000 {
+			if len(games) == 50 {
 				if err := saveGamesMustered(); err != nil {
 					return err
 				}
