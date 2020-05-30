@@ -632,6 +632,12 @@ func (p *PhaseResolver) Act() error {
 			}
 		}
 
+		// Find all userIds.
+		allUserIds := []string{}
+		for _, member := range p.Game.Members {
+			allUserIds = append(allUserIds, member.User.Id)
+		}
+
 		// Depending on whether everyone is ready...
 		if len(readyNationMap) == len(variant.Nations) {
 			p.Game.Mustered = true
@@ -768,6 +774,18 @@ func (p *PhaseResolver) Act() error {
 			}
 			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY REVERTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
 		}
+		if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(
+			p.Context,
+			0,
+			p.Phase.Host,
+			p.Game.ID,
+			p.Phase.PhaseOrdinal,
+			allUserIds,
+		); err != nil {
+			log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
+			return err
+		}
+		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** Notified all members of the new phase state ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
 		return nil
 	}
 
