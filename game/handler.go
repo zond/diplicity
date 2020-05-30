@@ -1371,8 +1371,9 @@ func handleFixBrokenlyMusteredGames(w ResponseWriter, r Request) error {
 			if len(games[idx].Members) != len(correctNations) {
 				return fmt.Errorf("New generated members %+v doesn't have the same length as correct variant nations %+v", games[idx].Members, correctNations)
 			}
-			if _, err := datastore.Put(ctx, games[idx].ID, games[idx]); err != nil {
+			if _, err := datastore.Put(ctx, games[idx].ID, &games[idx]); err != nil {
 				log.Errorf(ctx, "Unable to store game %+v: %v", games[idx], err)
+				return err
 			}
 			log.Infof(ctx, "%v is updated with the correct members!", games[idx].ID)
 		}
