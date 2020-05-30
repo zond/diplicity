@@ -684,6 +684,11 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	}
 	game.CreatedAt = time.Now()
 
+	// TODO(zond): Remove this when we have client support for mustering properly.
+	if !appengine.IsDevAppServer {
+		game.SkipMuster = true
+	}
+
 	if !game.NoMerge && !game.Private {
 		mergedWith, err := merge(ctx, r, game, user)
 		if err != nil {
