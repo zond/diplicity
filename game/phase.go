@@ -386,11 +386,12 @@ func asyncResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal 
 }
 
 func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64) error {
-	if err := resolvePhaseHelper(ctx, gameID, phaseOrdinal, true); err == gameOrPhaseMissingErr {
+	err := resolvePhaseHelper(ctx, gameID, phaseOrdinal, true)
+	if err == gameOrPhaseMissingErr {
 		log.Errorf(ctx, "timeoutResolvePhase(..., %v, %v): %v; give up", gameID, phaseOrdinal, err)
 		return nil
 	}
-	return nil
+	return err
 }
 
 func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, nation string) error {
