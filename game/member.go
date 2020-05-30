@@ -84,6 +84,7 @@ func (m *Member) Redact(viewer *auth.User, mustered bool) {
 		m.NewestPhaseState.Nation = ""
 	}
 	if viewer.Id != m.User.Id {
+		m.User.Email = ""
 		m.GameAlias = ""
 		m.NewestPhaseState = PhaseState{}
 		m.UnreadMessages = 0
