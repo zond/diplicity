@@ -1309,16 +1309,15 @@ func handleFixBrokenlyMusteredGames(w ResponseWriter, r Request) error {
 		}
 		correctMembers := map[godip.Nation]*Member{}
 
-		toLoadKeys := []*datastore.Key{}
-		toLoadObjects := []interface{}{}
 		for _, score := range result.Scores {
 			correctMember := &Member{
 				Nation: score.Member,
 			}
 			correctMembers[score.Member] = correctMember
 
-			toLoadKeys = append(toLoadKeys, auth.UserID(ctx, score.UserId))
-			toLoadObjects = append(toLoadObjects, &correctMember.User)
+			if err := datastore.Get(ctx, auth.UserID(ctx, score.UserId), &correctMember.User); err != nil {
+				return err
+			}
 
 			phaseID, err := PhaseID(ctx, games[idx].ID, games[idx].NewestPhaseMeta[0].PhaseOrdinal)
 			if err != nil {
@@ -1331,12 +1330,7 @@ func handleFixBrokenlyMusteredGames(w ResponseWriter, r Request) error {
 				return err
 			}
 
-			toLoadKeys = append(toLoadKeys, phaseStateID)
-			toLoadObjects = append(toLoadObjects, &correctMember.NewestPhaseState)
-		}
-		if err := datastore.GetMulti(ctx, toLoadKeys, toLoadObjects); err != nil {
-			log.Errorf(ctx, "unable to load %+v: %v", toLoadKeys, err)
-			return err
+			datastore.Get(ctx, phaseStateID, &correctMember.NewestPhaseState)
 		}
 
 		isOK := true
