@@ -1387,6 +1387,7 @@ type Phase struct {
 	SCs               []SC
 	Dislodgeds        []Dislodged
 	Dislodgers        []Dislodger
+	ForceDisbands     []godip.Province
 	Bounces           []Bounce
 	Resolutions       []Resolution
 	Host              string
@@ -1649,6 +1650,9 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host st
 			bounceList = append(bounceList, string(prov))
 		}
 		p.Bounces = append(p.Bounces, Bounce{prov, strings.Join(bounceList, ",")})
+	}
+	for prov := range s.ForceDisbands() {
+		p.ForceDisbands = append(p.ForceDisbands, prov)
 	}
 	return p
 }
