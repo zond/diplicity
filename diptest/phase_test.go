@@ -3,6 +3,7 @@ package diptest
 import (
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/kr/pretty"
@@ -623,11 +624,20 @@ func TestPhaseMessages(t *testing.T) {
 			member := startedGameEnvs[idx].GetRoute("Game.Load").RouteParams("id", startedGameID).Success().
 				Find(nat, []string{"Properties", "Members"}, []string{"Nation"})
 			if startedGameNats[idx] == "Austria" {
-				member.AssertEq("MayBuild:1", "NewestPhaseState", "Messages")
+				msgs := member.GetValue("NewestPhaseState", "Messages").(string)
+				if !strings.Contains(msgs, "MayBuild:1") {
+					t.Errorf("Wanted MayBuild:1, didn't get it in %q", msgs)
+				}
 			} else if startedGameNats[idx] == "Italy" {
-				member.AssertEq("MustDisband:1", "NewestPhaseState", "Messages")
+				msgs := member.GetValue("NewestPhaseState", "Messages").(string)
+				if !strings.Contains(msgs, "MustDisband:1") {
+					t.Errorf("Wanted MustDisband:1, didn't get it in %q", msgs)
+				}
 			} else {
-				member.AssertEq("MayBuild:0", "NewestPhaseState", "Messages")
+				msgs := member.GetValue("NewestPhaseState", "Messages").(string)
+				if !strings.Contains(msgs, "MayBuild:0") {
+					t.Errorf("Wanted MayBuild:0, didn't get it in %q", msgs)
+				}
 			}
 		}
 	})
