@@ -1091,7 +1091,10 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 }
 
 var (
-	badlyResetGameMembersByGameIDString = map[string][]struct{}{}
+	badlyResetGameMembersByGameIDString = map[string][]struct {
+		Nation godip.Nation
+		Email  string
+	}{}
 )
 
 func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
