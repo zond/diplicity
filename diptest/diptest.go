@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -496,27 +497,36 @@ func (r *Req) do() *Result {
 	if r.body != nil {
 		req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
-	status, _, responseReader, err := T.Execute(req)
-	if err != nil {
-		panic(fmt.Errorf("executing %+v: %v", req, err))
-	}
-	responseBytes, err := ioutil.ReadAll(responseReader)
-	if err != nil {
-		panic(fmt.Errorf("reading body from %+v: %v", req, err))
-	}
-	var result interface{}
-	if status > 199 && status < 300 {
-		if len(responseBytes) > 0 {
-			if err := json.Unmarshal(responseBytes, &result); err != nil {
-				panic(fmt.Errorf("unmarshaling %q: %v", string(responseBytes), err))
+	var backoff time.Duration
+	for {
+		status, _, responseReader, err := T.Execute(req)
+		if err != nil && strings.Contains(err.Error(), "datastore: concurrent transaction") {
+			fmt.Printf("[Concurrent transaction retrying] in %v\n", backoff)
+			time.Sleep(backoff)
+			backoff = backoff*2 + time.Duration(1+rand.Intn(1000))*time.Millisecond
+			continue
+		}
+		if err != nil {
+			panic(fmt.Errorf("executing %+v: %v", req, err))
+		}
+		responseBytes, err := ioutil.ReadAll(responseReader)
+		if err != nil {
+			panic(fmt.Errorf("reading body from %+v: %v", req, err))
+		}
+		var result interface{}
+		if status > 199 && status < 300 {
+			if len(responseBytes) > 0 {
+				if err := json.Unmarshal(responseBytes, &result); err != nil {
+					panic(fmt.Errorf("unmarshaling %q: %v", string(responseBytes), err))
+				}
 			}
 		}
-	}
-	return &Result{
-		Env:       r.env,
-		URL:       r.url,
-		BodyBytes: responseBytes,
-		Body:      result,
-		Status:    status,
+		return &Result{
+			Env:       r.env,
+			URL:       r.url,
+			BodyBytes: responseBytes,
+			Body:      result,
+			Status:    status,
+		}
 	}
 }
