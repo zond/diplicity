@@ -884,6 +884,9 @@ func (p *PhaseResolver) Act() error {
 			p.Phase.Resolutions = append(p.Phase.Resolutions, Resolution{prov, err.Error()})
 		}
 	}
+	for prov := range s.ForceDisbands() {
+		p.Phase.ForceDisbands = append(p.Phase.ForceDisbands, prov)
+	}
 
 	// Finish and save old phase.
 
@@ -1650,9 +1653,6 @@ func NewPhase(s *state.State, gameID *datastore.Key, phaseOrdinal int64, host st
 			bounceList = append(bounceList, string(prov))
 		}
 		p.Bounces = append(p.Bounces, Bounce{prov, strings.Join(bounceList, ",")})
-	}
-	for prov := range s.ForceDisbands() {
-		p.ForceDisbands = append(p.ForceDisbands, prov)
 	}
 	return p
 }
