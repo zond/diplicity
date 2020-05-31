@@ -1091,71 +1091,7 @@ func recalculateDIASUsers(ctx context.Context, encodedCursor string) error {
 }
 
 var (
-	badlyResetGameMembersByGameIDString = map[string][]struct {
-		Nation godip.Nation
-		Email  string
-	}{
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAydfV4wgM": {
-			{
-				Nation: "Italy",
-				Email:  "goeaglesgo49@gmail.com",
-			},
-			{
-				Nation: "Kenya",
-				Email:  "dnlwht84@gmail.com",
-			},
-			{
-				Nation: "USA",
-				Email:  "martijnscholten1@gmail.com",
-			},
-			{
-				Nation: "Spain",
-				Email:  "sfogz81@gmail.com",
-			},
-		},
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmYDNrgkM": {
-			{
-				Nation: godip.Italy,
-				Email:  "rob.hall198686@gmail.com",
-			},
-		},
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA0ZGkkwsM": {
-			{
-				Nation: godip.France,
-				Email:  "dan.muldoon77@gmail.com",
-			},
-		},
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICA2eTglwoM": {
-			{
-				Nation: "Britons",
-				Email:  "baltaamaya@gmail.com",
-			},
-		},
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAyd3xqwsM": {
-			{
-				Nation: godip.Turkey,
-				Email:  "j.bredman@gmail.com",
-			},
-			{
-				Nation: godip.Austria,
-				Email:  "gingertheworld@gmail.com",
-			},
-			{
-				Nation: godip.England,
-				Email:  "m.stumpel@gmail.com",
-			},
-			{
-				Nation: godip.France,
-				Email:  "thijs@thijshoutenbosdesign.nl",
-			},
-		},
-		"ahJzfmRpcGxpY2l0eS1lbmdpbmVyEQsSBEdhbWUYgICAmeCZqQkM": {
-			{
-				Nation: "South Vietnam",
-				Email:  "nckelly2@illinois.edu",
-			},
-		},
-	}
+	badlyResetGameMembersByGameIDString = map[string][]struct{}{}
 )
 
 func handleFindBadlyResetGames(w ResponseWriter, r Request) error {
