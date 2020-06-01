@@ -148,7 +148,9 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 
 	activeUserStatsIDs := make([]*datastore.Key, 0, len(activeGameMemberUserIds))
 	for userId := range activeGameMemberUserIds {
-		activeUserStatsIDs = append(activeUserStatsIDs, UserStatsID(ctx, userId))
+		if userId != "" {
+			activeUserStatsIDs = append(activeUserStatsIDs, UserStatsID(ctx, userId))
+		}
 	}
 
 	userStatsSlice := make(UserStatsSlice, len(activeUserStatsIDs))
