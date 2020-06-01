@@ -1642,19 +1642,30 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}
-		if len(game.NewestPhaseMeta) == 0 {
+		phases := Phases{}
+		if _, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases); err != nil {
+			return err
+		}
+		var newestPhase *Phase
+		for idx := range phases {
+			if newestPhase == nil || newestPhase.PhaseOrdinal < phases[idx].PhaseOrdinal {
+				newestPhase = &phases[idx]
+			}
+		}
+		if len(phases) == 0 {
 			log.Infof(ctx, "%+v has no phases, can't re-schedule.", game)
 			return nil
 		}
-		phaseID, err := PhaseID(ctx, gameID, game.NewestPhaseMeta[0].PhaseOrdinal)
-		if err != nil {
+		if len(game.NewestPhaseMeta) == 0 {
+			log.Infof(ctx, "%+v has no NewestPhaseMeta, but we found phase %v. Fixing.", game, newestPhase.PhaseOrdinal)
+		} else if game.NewestPhaseMeta[0].PhaseOrdinal != newestPhase.PhaseOrdinal {
+			log.Infof(ctx, "%+v has NewestPhaseMeta %v, but we found phase %v. Fixing.", game, newestPhase.PhaseOrdinal)
+		}
+		game.NewestPhaseMeta = []PhaseMeta{newestPhase.PhaseMeta}
+		if _, err := datastore.Put(ctx, gameID, game); err != nil {
 			return err
 		}
-		phase := &Phase{}
-		if err := datastore.Get(ctx, phaseID, phase); err != nil {
-			return err
-		}
-		return phase.ScheduleResolution(ctx)
+		return newestPhase.ScheduleResolution(ctx)
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return err
 	}
