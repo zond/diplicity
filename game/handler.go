@@ -1653,19 +1653,23 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 			}
 		}
 		if len(phases) == 0 {
-			log.Infof(ctx, "%+v has no phases, can't re-schedule.", game)
+			log.Infof(ctx, "%v has no phases, can't re-schedule.", gameID)
 			return nil
 		}
 		if len(game.NewestPhaseMeta) == 0 {
-			log.Infof(ctx, "%+v has no NewestPhaseMeta, but we found phase %v. Fixing.", game, newestPhase.PhaseOrdinal)
+			log.Infof(ctx, "%v has no NewestPhaseMeta, but we found phase %v. Fixing.", gameID, newestPhase.PhaseOrdinal)
 		} else if game.NewestPhaseMeta[0].PhaseOrdinal != newestPhase.PhaseOrdinal {
-			log.Infof(ctx, "%+v has NewestPhaseMeta %v, but we found phase %v. Fixing.", game, newestPhase.PhaseOrdinal)
+			log.Infof(ctx, "%v has NewestPhaseMeta %v, but we found phase %v. Fixing.", gameID, newestPhase.PhaseOrdinal)
 		}
 		game.NewestPhaseMeta = []PhaseMeta{newestPhase.PhaseMeta}
 		if _, err := datastore.Put(ctx, gameID, game); err != nil {
 			return err
 		}
-		return newestPhase.ScheduleResolution(ctx)
+		if err := newestPhase.ScheduleResolution(ctx); err != nil {
+			return err
+		}
+		log.Infof(ctx, "Successfully fixed any NewestPhaseMeta problems with %v, and rescheduled it to resolve at %v", gameID, newestPhase.DeadlineAt)
+		return nil
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return err
 	}
