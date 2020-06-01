@@ -119,6 +119,7 @@ const (
 	MusterAllFinishedGamesRoute         = "MusterAllFinishedGame"
 	FindBadlyResetGamesRoute            = "FindBadlyResetGames"
 	FixBrokenlyMusteredGamesRoute       = "FixBrokenlyMusteredGames"
+	FindBrokenNewestPhaseMetaRoute      = "FindBrokenNewestPhaseMeta"
 )
 
 type userStatsHandler struct {
@@ -1386,6 +1387,66 @@ func handleMusterAllFinishedGames(w ResponseWriter, r Request) error {
 	return saveGamesMustered()
 }
 
+func handleFindBrokenNewestPhaseMeta(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	if !appengine.IsDevAppServer() {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
+
+		superusers, err := auth.GetSuperusers(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !superusers.Includes(user.Id) {
+			return HTTPErr{"unauthorized", http.StatusForbidden}
+		}
+	}
+
+	games := Games{}
+	ids, err := datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).GetAll(ctx, &games)
+	if err != nil {
+		return err
+	}
+	for idx := range games {
+		games[idx].ID = ids[idx]
+		newestPhase, err := newestPhaseForGame(ctx, games[idx].ID)
+		if err != nil {
+			return err
+		}
+		if len(games[idx].NewestPhaseMeta) == 0 && newestPhase == nil {
+			log.Infof(ctx, "%v is supposed to be started and not finished, but doesn't have a phase?", games[idx].ID)
+			continue
+		}
+		if (len(games[idx].NewestPhaseMeta) == 0) != (newestPhase == nil) {
+			log.Infof(ctx, "%v has %v NewestPhaseMeta's, and we found a newestPhase %p", games[idx].ID, len(games[idx].NewestPhaseMeta), newestPhase)
+			continue
+		}
+		if games[idx].NewestPhaseMeta[0].PhaseOrdinal != newestPhase.PhaseOrdinal {
+			log.Infof(ctx, "%v has NewestPhaseMeta with ordinal %v, and the newest phase we could find for it had ordinal %v", games[idx].ID, games[idx].NewestPhaseMeta[0].PhaseOrdinal, newestPhase.PhaseOrdinal)
+			continue
+		}
+	}
+	return nil
+}
+
+func newestPhaseForGame(ctx context.Context, gameID *datastore.Key) (*Phase, error) {
+	phases := Phases{}
+	if _, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases); err != nil {
+		return nil, err
+	}
+	var newestPhase *Phase
+	for idx := range phases {
+		if newestPhase == nil || newestPhase.PhaseOrdinal < phases[idx].PhaseOrdinal {
+			newestPhase = &phases[idx]
+		}
+	}
+	return newestPhase, nil
+}
+
 func handleMusterAllRunningGames(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1642,17 +1703,11 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}
-		phases := Phases{}
-		if _, err := datastore.NewQuery(phaseKind).Ancestor(gameID).GetAll(ctx, &phases); err != nil {
+		newestPhase, err := newestPhaseForGame(ctx, gameID)
+		if err != nil {
 			return err
 		}
-		var newestPhase *Phase
-		for idx := range phases {
-			if newestPhase == nil || newestPhase.PhaseOrdinal < phases[idx].PhaseOrdinal {
-				newestPhase = &phases[idx]
-			}
-		}
-		if len(phases) == 0 {
+		if newestPhase == nil {
 			log.Infof(ctx, "%v has no phases, can't re-schedule.", gameID)
 			return nil
 		}
@@ -1773,6 +1828,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_re-game-result", []string{"GET"}, ReGameResultRoute, handleReGameResult)
 	Handle(r, "/Game/{game_id}/_re-schedule", []string{"GET"}, ReScheduleRoute, handleReSchedule)
 	Handle(r, "/_fix-brokenly-mustered-games", []string{"GET"}, FixBrokenlyMusteredGamesRoute, handleFixBrokenlyMusteredGames)
+	Handle(r, "/_find-broken-newest-phase-meta", []string{"GET"}, FindBrokenNewestPhaseMetaRoute, handleFindBrokenNewestPhaseMeta)
 	Handle(r, "/_muster-all-running-games", []string{"GET"}, MusterAllRunningGamesRoute, handleMusterAllRunningGames)
 	Handle(r, "/_muster-all-finished-games", []string{"GET"}, MusterAllFinishedGamesRoute, handleMusterAllFinishedGames)
 	Handle(r, "/_find-badly-reset-games", []string{"GET"}, FindBadlyResetGamesRoute, handleFindBadlyResetGames)
