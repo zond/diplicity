@@ -1429,6 +1429,7 @@ func handleFindBrokenNewestPhaseMeta(w ResponseWriter, r Request) error {
 			log.Infof(ctx, "%v has NewestPhaseMeta with ordinal %v, and the newest phase we could find for it had ordinal %v", games[idx].ID, games[idx].NewestPhaseMeta[0].PhaseOrdinal, newestPhase.PhaseOrdinal)
 			continue
 		}
+		log.Infof(ctx, "%v is good!", games[idx].ID)
 	}
 	return nil
 }
