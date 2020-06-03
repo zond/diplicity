@@ -1190,7 +1190,7 @@ func listChannels(w ResponseWriter, r Request) error {
 	w.SetContent(channels.Item(
 		r,
 		gameID,
-		game.Started && game.Mustered && isMember && !(game.DisableConferenceChat && game.DisableGroupChat && game.DisablePrivateChat)),
+		game.Started && game.Mustered && isMember && (game.Finished || !game.DisableConferenceChat || !game.DisableGroupChat || !game.DisablePrivateChat)),
 	)
 	return nil
 }
