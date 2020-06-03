@@ -206,6 +206,36 @@ func testChat(t *testing.T) {
 }
 
 func TestDisabledChats(t *testing.T) {
+	t.Run("AllDisabled", func(t *testing.T) {
+		withStartedGameOpts(func(opts map[string]interface{}) {
+			opts["DisableConferenceChat"] = true
+			opts["DisableGroupChat"] = true
+			opts["DisablePrivateChat"] = true
+		}, func() {
+			channels := startedGames[1].Follow("channels", "Links").Success()
+			channels.AssertNotFind("message", []string{"Links"}, []string{"Rel"})
+			startedGameEnvs[1].GetRoute("Message.Create").RouteParams("game_id", startedGameID).Body(map[string]interface{}{
+				"Body":           String("body"),
+				"ChannelMembers": classical.Nations,
+			}).Failure()
+			for _, game := range startedGames {
+				game.Follow("phases", "Links").Success().
+					Find("Movement", []string{"Properties"}, []string{"Properties", "Type"}).
+					Follow("phase-states", "Links").Success().
+					Find(false, []string{"Properties"}, []string{"Properties", "ReadyToResolve"}).
+					Follow("update", "Links").Body(map[string]interface{}{
+					"ReadyToResolve": true,
+					"WantsDIAS":      true,
+				}).Success()
+			}
+		})
+		WaitForEmptyQueue("game-asyncResolvePhase")
+		startedGames[1].Follow("channels", "Links").Success().
+			Follow("message", "Links").Body(map[string]interface{}{
+			"Body":           String("body"),
+			"ChannelMembers": classical.Nations,
+		}).Success()
+	})
 	t.Run("ConferenceChat", func(t *testing.T) {
 		t.Run("Enabled", func(t *testing.T) {
 			withStartedGame(func() {
