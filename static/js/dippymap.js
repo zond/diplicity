@@ -290,8 +290,8 @@ function dippyMap(container) {
 				};
 				$(copy).bind("touchmove", touchmoveHandler);
 			}
+			$(copy).bind("touchstart", touchstartHandler);
 		}
-		$(copy).bind("touchstart", touchstartHandler);
 		if (!permanent) {
 			clickListenerRemovers.push(function() {
 				if (!nohighlight) {
