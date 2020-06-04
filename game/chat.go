@@ -161,7 +161,11 @@ func getMsgNotificationContext(ctx context.Context, host string, gameID *datasto
 		return nil, noConfigError
 	}
 
-	res.mapURL, err = router.Get(RenderPhaseMapRoute).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(res.game.NewestPhaseMeta[0].PhaseOrdinal))
+	phaseOrdinal := 1
+	if len(res.game.NewestPhaseMeta) > 0 {
+		phaseOrdinal = res.game.NewestPhaseMeta[0].PhaseOrdinal
+	}
+	res.mapURL, err = router.Get(RenderPhaseMapRoute).URL("game_id", res.game.ID.Encode(), "phase_ordinal", fmt.Sprint(phaseOrdinal))
 	if err != nil {
 		log.Errorf(ctx, "Unable to create map URL for game %v and phase %v: %v; wtf?", res.game.ID, res.game.NewestPhaseMeta[0].PhaseOrdinal, err)
 		return nil, err
