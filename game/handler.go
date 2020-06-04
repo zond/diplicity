@@ -921,14 +921,14 @@ func reScheduleAll(w ResponseWriter, r Request, onlyBroken bool) error {
 	}
 
 	games := Games{}
-	ids, err := datastore.NewQuery(gameKind).Filter("Finished=", false).GetAll(ctx, &games)
+	ids, err := datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).GetAll(ctx, &games)
 	if err != nil {
 		return err
 	}
 	for idx, id := range ids {
 		games[idx].ID = id
 	}
-	log.Infof(ctx, "Found %v unfinished games.", len(games))
+	log.Infof(ctx, "Found %v started and unfinished games.", len(games))
 	for _, game := range games {
 		if len(game.NewestPhaseMeta) > 0 {
 			if !onlyBroken || (game.NewestPhaseMeta[0].DeadlineAt.Before(time.Now()) && !game.NewestPhaseMeta[0].Resolved) {
