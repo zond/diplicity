@@ -1418,19 +1418,19 @@ func handleFindBrokenNewestPhaseMeta(w ResponseWriter, r Request) error {
 			return err
 		}
 		if len(games[idx].NewestPhaseMeta) == 0 && newestPhase == nil {
-			log.Infof(ctx, "%v is supposed to be started and not finished, but doesn't have a phase?", games[idx].ID)
+			log.Infof(ctx, "%v is supposed to be started and not finished, but doesn't have a phase?", games[idx].ID.Encode())
 			continue
 		}
 		if (len(games[idx].NewestPhaseMeta) == 0) != (newestPhase == nil) {
-			log.Infof(ctx, "%v has %v NewestPhaseMeta's, and we found a newestPhase %p", games[idx].ID, len(games[idx].NewestPhaseMeta), newestPhase)
+			log.Infof(ctx, "%v has %v NewestPhaseMeta's, and we found a newestPhase %p", games[idx].ID.Encode(), len(games[idx].NewestPhaseMeta), newestPhase)
 			continue
 		}
 		if games[idx].NewestPhaseMeta[0].PhaseOrdinal != newestPhase.PhaseOrdinal {
-			log.Infof(ctx, "%v has NewestPhaseMeta with ordinal %v, and the newest phase we could find for it had ordinal %v", games[idx].ID, games[idx].NewestPhaseMeta[0].PhaseOrdinal, newestPhase.PhaseOrdinal)
+			log.Infof(ctx, "%v has NewestPhaseMeta with ordinal %v, and the newest phase we could find for it had ordinal %v", games[idx].ID.Encode(), games[idx].NewestPhaseMeta[0].PhaseOrdinal, newestPhase.PhaseOrdinal)
 			continue
 		}
 		if !games[idx].Finished && newestPhase.Resolved {
-			log.Infof(ctx, "%v isn't finished, but it's newest phase is resolved", games[idx].ID)
+			log.Infof(ctx, "%v isn't finished, but it's newest phase is resolved", games[idx].ID.Encode())
 			continue
 		}
 		log.Infof(ctx, "%v is good!", games[idx].ID)
@@ -1708,6 +1708,10 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}
+		if game.Finished {
+			log.Infof(ctx, "%v is already finished, not doing anything more", gameID)
+			return nil
+		}
 		newestPhase, err := newestPhaseForGame(ctx, gameID)
 		if err != nil {
 			return err
@@ -1721,6 +1725,17 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 		} else if game.NewestPhaseMeta[0].PhaseOrdinal != newestPhase.PhaseOrdinal {
 			log.Infof(ctx, "%v has NewestPhaseMeta %v, but we found phase %v. Fixing.", gameID, newestPhase.PhaseOrdinal)
 		}
+		if newestPhase.Resolved {
+			log.Infof(ctx, "%v has a newest phase that is already resolved, fixing.", gameID)
+			newestPhase.Resolved = false
+			phaseID, err := PhaseID(ctx, gameID, newestPhase.PhaseOrdinal)
+			if err != nil {
+				return err
+			}
+			if _, err := datastore.Put(ctx, phaseID, newestPhase); err != nil {
+				return err
+			}
+		}
 		game.NewestPhaseMeta = []PhaseMeta{newestPhase.PhaseMeta}
 		if _, err := datastore.Put(ctx, gameID, game); err != nil {
 			return err
@@ -1728,7 +1743,7 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 		if err := newestPhase.ScheduleResolution(ctx); err != nil {
 			return err
 		}
-		log.Infof(ctx, "Successfully fixed any NewestPhaseMeta problems with %v, and rescheduled it to resolve at %v", gameID, newestPhase.DeadlineAt)
+		log.Infof(ctx, "Successfully fixed any NewestPhaseMeta- or latest phase already resolved-problems with %v, and rescheduled it to resolve at %v", gameID, newestPhase.DeadlineAt)
 		return nil
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return err
