@@ -17,10 +17,6 @@ queue:
       rate: 10/s
     - name: game-reSave
       rate: 10/s
-    - name: game-updateGlickos
-      rate: 10/s
-    - name: game-reRateGlickos
-      rate: 10/s
     - name: game-updateUserStats
       rate: 10/s
     - name: game-updateUserStat

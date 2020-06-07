@@ -95,7 +95,6 @@ const (
 	RenderPhaseMapRoute                 = "RenderPhaseMap"
 	ReGameResultRoute                   = "ReGameResult"
 	ReScoreRoute                        = "ReScore"
-	ReRateGlickosRoute                  = "ReRateGlickos"
 	ReRateTrueSkillsRoute               = "ReRateTrueSkills"
 	UpdateAllUserStatsRoute             = "UpdateAllUserStats"
 	DeleteTrueSkillsRoute               = "DeleteTrueSkills"
@@ -1840,7 +1839,6 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/_test_reap-inactive-waiting-players", []string{"GET"}, TestReapInactiveWaitingPlayersRoute, handleTestReapInactiveWaitingPlayers)
 	Handle(r, "/_re-save", []string{"GET"}, ReSaveRoute, handleReSave)
 	Handle(r, "/_configure", []string{"POST"}, ConfigureRoute, handleConfigure)
-	Handle(r, "/_re-rate-glickos", []string{"GET"}, ReRateGlickosRoute, handleReRateGlickos)
 	Handle(r, "/_delete-true-skills", []string{"GET"}, DeleteTrueSkillsRoute, handleDeleteTrueSkills)
 	Handle(r, "/_re-rate-true-skills", []string{"GET"}, ReRateTrueSkillsRoute, handleReRateTrueSkills)
 	Handle(r, "/_re-score", []string{"GET"}, ReScoreRoute, handleReScore)

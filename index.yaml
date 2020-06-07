@@ -201,12 +201,6 @@ indexes:
 
     # Manual
 
-    - kind: Glicko
-      properties:
-          - name: UserId
-          - name: CreatedAt
-            direction: desc
-
     - kind: TrueSkill
       properties:
           - name: UserId

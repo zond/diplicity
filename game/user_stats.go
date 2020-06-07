@@ -96,12 +96,6 @@ func updateUserStat(ctx context.Context, userId string) error {
 		log.Errorf(ctx, "Unable to recalculate private user stats %v: %v; fix UserStatsNumbers#Recalculate", PP(userStats), err)
 		return err
 	}
-	latestGlicko, err := GetGlicko(ctx, userId)
-	if err != nil {
-		log.Errorf(ctx, "Unable to get latest Glicko for %q: %v; fix GetGlicko", userId, err)
-		return err
-	}
-	userStats.Glicko = *latestGlicko
 	latestTrueSkill, err := GetTrueSkill(ctx, userId)
 	if err != nil {
 		log.Errorf(ctx, "Unable to get latest TrueSkill for %q: %v; fix GetTrueSkill", userId, err)
@@ -214,7 +208,6 @@ type UserStats struct {
 
 	PrivateStats UserStatsNumbers
 
-	Glicko    Glicko
 	TrueSkill TrueSkill
 
 	User auth.User

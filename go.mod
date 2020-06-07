@@ -3,7 +3,6 @@ module github.com/zond/diplicity
 go 1.14
 
 require (
-	github.com/Kashomon/goglicko v0.0.0-20150109031716-a753c9c676d4
 	github.com/aymerick/raymond v2.0.2+incompatible
 	github.com/davecgh/go-spew v1.1.1
 	github.com/golang/protobuf v1.4.0 // indirect

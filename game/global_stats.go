@@ -41,7 +41,6 @@ func bumpUserStatsHistograms(userStats UserStats, m map[string]Histogram) {
 	bumpNamedHistogram("NonOwnedBans", userStats.SharedBans-userStats.OwnedBans, m)
 	bumpNamedHistogram("Hated", int(userStats.Hated), m)
 	bumpNamedHistogram("Hater", int(userStats.Hater), m)
-	bumpNamedHistogram("GlickoRating", int(userStats.Glicko.Rating), m)
 	bumpNamedHistogram("TrueSkillRating", int(userStats.TrueSkill.Rating), m)
 }
 
@@ -69,7 +68,6 @@ func newUserStatsHistograms(userDesc string) map[string]Histogram {
 		"NonOwnedBans":    newHist(fmt.Sprintf("Number of bans involving but not created by %s (number of users banned user)", userDesc)),
 		"Hater":           newHist(fmt.Sprintf("Hater [OwnedBans / (StartedGames + 1)] attribute of %s", userDesc)),
 		"Hated":           newHist(fmt.Sprintf("Hated [(SharedBans - OwnedBans) / (StartedGames + 1)] attribute of %s", userDesc)),
-		"GlickoRating":    newHist(fmt.Sprintf("GlickoRating of %s", userDesc)),
 		"TrueSkillRating": newHist(fmt.Sprintf("TrueSkillRating of %s", userDesc)),
 	}
 }
