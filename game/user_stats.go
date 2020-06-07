@@ -418,6 +418,9 @@ func getUserRatingHistogram(w ResponseWriter, r Request) error {
 		minRating = math.Min(minRating, stats.TrueSkill.Rating)
 		maxRating = math.Max(maxRating, stats.TrueSkill.Rating)
 	}
+	if minRating > maxRating {
+		minRating, maxRating = 0, 0
+	}
 
 	histogram.FirstBucketRating = int(math.Floor(minRating))
 	histogram.Counts = make([]int, int(math.Floor(maxRating)-math.Floor(minRating))+1)
