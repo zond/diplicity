@@ -30,3 +30,5 @@ java/classes
 
 app/autotest
 app/localhost
+autotest
+game/game.debug
