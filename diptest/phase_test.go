@@ -917,14 +917,24 @@ func TestDIASEnding(t *testing.T) {
 
 func TestTimeoutResolution(t *testing.T) {
 	withStartedGame(func() {
-		gameDesc := String("game-desc")
-		t.Run("CreateStagingGamePlayer0", func(t *testing.T) {
+		publicGameDesc := String("game-desc")
+		privateGameDesc := String("game-desc")
+		t.Run("CreateStagingGamesPlayer0", func(t *testing.T) {
 			startedGameEnvs[0].GetRoute(game.IndexRoute).
 				Success().Follow("create-game", "Links").
 				Body(map[string]interface{}{
 					"Variant":            "Classical",
 					"NoMerge":            true,
-					"Desc":               gameDesc,
+					"Desc":               publicGameDesc,
+					"PhaseLengthMinutes": 60 * 24,
+				}).Success()
+			startedGameEnvs[0].GetRoute(game.IndexRoute).
+				Success().Follow("create-game", "Links").
+				Body(map[string]interface{}{
+					"Variant":            "Classical",
+					"Private":            true,
+					"NoMerge":            true,
+					"Desc":               privateGameDesc,
 					"PhaseLengthMinutes": 60 * 24,
 				}).Success()
 		})
@@ -1016,8 +1026,10 @@ func TestTimeoutResolution(t *testing.T) {
 		})
 
 		t.Run("TestStagingGamePlayer0Present", func(t *testing.T) {
-			startedGameEnvs[0].GetRoute(game.ListOpenGamesRoute).Success().
-				Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			startedGameEnvs[0].GetRoute(game.ListMyStagingGamesRoute).Success().
+				Find(publicGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			startedGameEnvs[0].GetRoute(game.ListMyStagingGamesRoute).Success().
+				Find(privateGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 		})
 
 		t.Run("TestNextPhaseNoProbation", func(t *testing.T) {
@@ -1200,8 +1212,10 @@ func TestTimeoutResolution(t *testing.T) {
 		t.Run("TestStagingGamePlayer0Gone", func(t *testing.T) {
 			WaitForEmptyQueue("game-ejectProbationaries")
 			WaitForEmptyQueue("game-ejectMember")
-			startedGameEnvs[0].GetRoute(game.ListOpenGamesRoute).Success().
-				AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			startedGameEnvs[0].GetRoute(game.ListMyStagingGamesRoute).Success().
+				AssertNotFind(publicGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			startedGameEnvs[0].GetRoute(game.ListMyStagingGamesRoute).Success().
+				Find(privateGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
 		})
 
 		t.Run("TestOldPhase-3", func(t *testing.T) {

@@ -176,7 +176,7 @@ func ejectProbationaries(ctx context.Context, probationaries []string) error {
 	log.Infof(ctx, "ejectProbationaries(..., %+v)", probationaries)
 
 	for _, probationary := range probationaries {
-		ids, err := datastore.NewQuery(gameKind).Filter("Started=", false).Filter("Members.User.Id=", probationary).KeysOnly().GetAll(ctx, nil)
+		ids, err := datastore.NewQuery(gameKind).Filter("Private=", false).Filter("Started=", false).Filter("Members.User.Id=", probationary).KeysOnly().GetAll(ctx, nil)
 		if err != nil {
 			log.Infof(ctx, "Unable to load staging games for %q: %v; hope datastore gets fixed", probationary, err)
 			return err
