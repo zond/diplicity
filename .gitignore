@@ -32,3 +32,6 @@ app/autotest
 app/localhost
 autotest
 game/game.debug
+
+# Diff tool files
+*.orig
