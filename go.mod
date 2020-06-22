@@ -19,7 +19,7 @@ require (
 	github.com/zond/enmime v0.6.1
 	github.com/zond/go-fcm v0.1.0
 	github.com/zond/goaeoas v0.1.4
-	github.com/zond/godip v0.1.68
+	github.com/zond/godip v0.1.71
 	golang.org/x/crypto v0.0.0-20200221231518-2aa609cf4a9d
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
