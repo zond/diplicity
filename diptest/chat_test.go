@@ -29,13 +29,13 @@ func testChat(t *testing.T) {
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(2), "UnreadMessages")
+			AssertEq(3.0, "UnreadMessages")
 
 		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(2), "UnreadMessages")
+			AssertEq(3.0, "UnreadMessages")
 
 		startedGames[0].Follow("channels", "Links").Success().
 			Follow("message", "Links").Body(map[string]interface{}{
@@ -49,13 +49,13 @@ func testChat(t *testing.T) {
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[1], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(3), "UnreadMessages")
+			AssertEq(5.0, "UnreadMessages")
 
 		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 			Follow("my-started-games", "Links").Success().
 			Find(startedGameID, []string{"Properties"}, []string{"Properties", "ID"}).
 			Find(startedGameNats[0], []string{"Properties", "Members"}, []string{"Nation"}).
-			AssertEq(float64(2), "UnreadMessages")
+			AssertEq(3.0, "UnreadMessages")
 
 		startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"})
@@ -132,7 +132,7 @@ func testChat(t *testing.T) {
 	t.Run("TestNMessages", func(t *testing.T) {
 		oldLatestMessage := startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"}).
-			AssertEq(1.0, "Properties", "NMessages").
+			AssertEq(2.0, "Properties", "NMessages").
 			AssertEq(0.0, "Properties", "NMessagesSince", "NMessages").
 			GetValue("Properties", "LatestMessage").(map[string]interface{})
 		bdy := String("body")
@@ -157,7 +157,7 @@ func testChat(t *testing.T) {
 		}
 		startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"}).
-			AssertEq(2.0, "Properties", "NMessages").
+			AssertEq(3.0, "Properties", "NMessages").
 			AssertEq(1.0, "Properties", "NMessagesSince", "NMessages").
 			Follow("messages", "Links").Success()
 		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
@@ -167,7 +167,7 @@ func testChat(t *testing.T) {
 			AssertEq(float64(0), "UnreadMessages")
 		startedGames[0].Follow("channels", "Links").Success().
 			Find(chanName, []string{"Properties"}, []string{"Name"}).
-			AssertEq(2.0, "Properties", "NMessages").
+			AssertEq(3.0, "Properties", "NMessages").
 			AssertEq(0.0, "Properties", "NMessagesSince", "NMessages")
 	})
 
@@ -194,12 +194,12 @@ func testChat(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			startedGames[i].Follow("channels", "Links").Success().
 				Find(chanName, []string{"Properties"}, []string{"Name"}).
-				AssertEq(1.0, "Properties", "NMessages").
-				AssertEq(1.0, "Properties", "NMessagesSince", "NMessages").
+				AssertEq(2.0, "Properties", "NMessages").
+				AssertEq(2.0, "Properties", "NMessagesSince", "NMessages").
 				Follow("messages", "Links").Success()
 			startedGames[i].Follow("channels", "Links").Success().
 				Find(chanName, []string{"Properties"}, []string{"Name"}).
-				AssertEq(1.0, "Properties", "NMessages").
+				AssertEq(2.0, "Properties", "NMessages").
 				AssertEq(0.0, "Properties", "NMessagesSince", "NMessages")
 		}
 	})
@@ -315,11 +315,20 @@ func TestDisabledChats(t *testing.T) {
 func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 	withStartedGame(func() {
 		msg := String("message")
+		chanMembers := sort.StringSlice{startedGameNats[0], startedGameNats[1]}
+		sort.Sort(chanMembers)
 		startedGames[0].Follow("channels", "Links").Success().
 			Follow("message", "Links").Body(map[string]interface{}{
 			"Body":           msg,
-			"ChannelMembers": []string{startedGameNats[0], startedGameNats[1]},
+			"ChannelMembers": chanMembers,
 		}).Success()
+
+		startedGames[0].Follow("channels", "Links").Success().
+			Find(strings.Join(chanMembers, ","), []string{"Properties"}, []string{"Name"}).
+			Find(2.0, []string{"Properties", "NMessages"}).
+			Follow("messages", "Links").Success().
+			Find(game.DiplicitySender, []string{"Properties"}, []string{"Properties", "Sender"}).
+			Find("Remember that all messages become public once the game finishes.", []string{"Properties", "Body"})
 
 		newEnv := NewEnv().SetUID(String("fake"))
 

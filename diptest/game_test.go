@@ -1092,12 +1092,13 @@ func TestWithoutMustering(t *testing.T) {
 	g.AssertEq(true, "Properties", "Mustered")
 	g.AssertLen(1, "Properties", "NewestPhaseMeta").
 		Find(1, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
-	g.Follow("channels", "Links").Success().
+	messages := g.Follow("channels", "Links").Success().
 		AssertLen(1, "Properties").
 		Find(gameID, []string{"Properties"}, []string{"Properties", "GameID"}).
-		Follow("messages", "Links").Success().
-		AssertLen(1, "Properties").
-		Find(game.DiplicitySender, []string{"Properties"}, []string{"Properties", "Sender"})
+		Follow("messages", "Links").Success()
+	messages.AssertLen(2, "Properties")
+	messages.Find(fmt.Sprintf("Welcome to the France vs Austria game %s. Have fun!", gameDesc), []string{"Properties"}, []string{"Properties", "Body"})
+	messages.Find("Remember that all messages become public once the game finishes.", []string{"Properties"}, []string{"Properties", "Body"})
 	phases := g.Follow("phases", "Links").Success()
 	phases.AssertLen(1, "Properties")
 	phases.Find(godip.Movement, []string{"Properties"}, []string{"Properties", "Type"}).
@@ -1183,12 +1184,14 @@ func TestMustering(t *testing.T) {
 		g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
 		g.AssertLen(1, "Properties", "NewestPhaseMeta").
 			Find(1, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
-		g.Follow("channels", "Links").Success().
+		messages := g.Follow("channels", "Links").Success().
 			AssertLen(1, "Properties").
 			Find(gameID, []string{"Properties"}, []string{"Properties", "GameID"}).
-			Follow("messages", "Links").Success().
-			AssertLen(1, "Properties").
-			Find(game.DiplicitySender, []string{"Properties"}, []string{"Properties", "Sender"})
+			Follow("messages", "Links").Success()
+		messages.AssertLen(2, "Properties")
+		messages.Find(regexp.MustCompile("^Welcome to the France vs Austria game"), []string{"Properties"}, []string{"Properties", "Body"})
+		messages.Find("Remember that all messages become public once the game finishes.", []string{"Properties"}, []string{"Properties", "Body"})
+		messages.Find(game.DiplicitySender, []string{"Properties"}, []string{"Properties", "Sender"})
 
 		env1.GetRoute(game.ListMyStartedGamesRoute).Success().
 			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
@@ -1246,11 +1249,14 @@ func TestMustering(t *testing.T) {
 
 		g = env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
 		g.AssertNil("Properties", "NewestPhaseMeta")
-		g.Follow("channels", "Links").Success().
+		messages = g.Follow("channels", "Links").Success().
 			AssertLen(1, "Properties").
 			Find(gameID, []string{"Properties"}, []string{"Properties", "GameID"}).
-			Follow("messages", "Links").Success().
-			AssertLen(2, "Properties")
+			Follow("messages", "Links").Success()
+		messages.AssertLen(3, "Properties")
+		messages.Find(regexp.MustCompile("^Welcome to the France vs Austria game"), []string{"Properties"}, []string{"Properties", "Body"})
+		messages.Find(regexp.MustCompile("^Unfortunately \\d+ players weren't ready"), []string{"Properties"}, []string{"Properties", "Body"})
+		messages.Find("Remember that all messages become public once the game finishes.", []string{"Properties"}, []string{"Properties", "Body"})
 	})
 	t.Run("Ready", func(t *testing.T) {
 		gameDesc := String("test-game")
@@ -1341,11 +1347,14 @@ func TestMustering(t *testing.T) {
 
 		g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
 		g.Find(1, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
-		g.Follow("channels", "Links").Success().
+		messages := g.Follow("channels", "Links").Success().
 			AssertLen(1, "Properties").
 			Find(gameID, []string{"Properties"}, []string{"Properties", "GameID"}).
-			Follow("messages", "Links").Success().
-			AssertLen(2, "Properties")
+			Follow("messages", "Links").Success()
+		messages.AssertLen(3, "Properties")
+		messages.Find(regexp.MustCompile("^Welcome to the France vs Austria game"), []string{"Properties"}, []string{"Properties", "Body"})
+		messages.Find(regexp.MustCompile("^All players are ready"), []string{"Properties"}, []string{"Properties", "Body"})
+		messages.Find("Remember that all messages become public once the game finishes.", []string{"Properties"}, []string{"Properties", "Body"})
 
 		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 			Follow("channels", "Links").Success().

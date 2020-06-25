@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -356,8 +357,14 @@ func (f findErr) Error() string {
 func (r *Result) find(match interface{}, paths [][]string) (*Result, error) {
 	if len(paths) == 1 {
 		if len(paths[0]) == 0 {
-			if diff := pretty.Diff(r.Body, match); fmt.Sprintf("%#v", r.Body) != fmt.Sprintf("%#v", match) && len(diff) > 0 {
-				return nil, fmt.Errorf(pp(diff))
+			if reg, ok := match.(*regexp.Regexp); ok {
+				if !reg.MatchString(fmt.Sprint(r.Body)) {
+					return nil, fmt.Errorf("%v doesn't match %s", reg, r.Body)
+				}
+			} else {
+				if diff := pretty.Diff(r.Body, match); fmt.Sprintf("%#v", r.Body) != fmt.Sprintf("%#v", match) && len(diff) > 0 {
+					return nil, fmt.Errorf(pp(diff))
+				}
 			}
 			return r, nil
 		} else {
@@ -368,8 +375,14 @@ func (r *Result) find(match interface{}, paths [][]string) (*Result, error) {
 				}
 				panic(err)
 			}
-			if diff := pretty.Diff(obj, match); fmt.Sprintf("%#v", obj) != fmt.Sprintf("%#v", match) && len(diff) > 0 {
-				return nil, fmt.Errorf(pp(diff))
+			if reg, ok := match.(*regexp.Regexp); ok {
+				if !reg.MatchString(fmt.Sprint(obj)) {
+					return nil, fmt.Errorf("%v doesn't match %s", reg, r.Body)
+				}
+			} else {
+				if diff := pretty.Diff(obj, match); fmt.Sprintf("%#v", obj) != fmt.Sprintf("%#v", match) && len(diff) > 0 {
+					return nil, fmt.Errorf(pp(diff))
+				}
 			}
 			return r, nil
 		}

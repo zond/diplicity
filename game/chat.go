@@ -738,9 +738,11 @@ func createMessageHelper(ctx context.Context, host string, message *Message) err
 	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
 		channel := &Channel{}
+		channelExisted := true
 		if err := datastore.GetMulti(ctx, []*datastore.Key{message.GameID, channelID}, []interface{}{game, channel}); err != nil {
 			if merr, ok := err.(appengine.MultiError); ok {
 				if merr[0] == nil && merr[1] == datastore.ErrNoSuchEntity {
+					channelExisted = false
 					channel.GameID = message.GameID
 					channel.Members = message.ChannelMembers
 					channel.NMessages = 0
@@ -754,10 +756,21 @@ func createMessageHelper(ctx context.Context, host string, message *Message) err
 		game.ID = message.GameID
 		channel.NMessages += 1
 		channel.LatestMessage = *message
+		toSave := []interface{}{channel, message}
+		saveKeys := []*datastore.Key{channelID, datastore.NewIncompleteKey(ctx, messageKind, channelID)}
+		if !channelExisted {
+			channel.NMessages += 1
+			channelIntro := *message
+			channelIntro.Sender = DiplicitySender
+			channelIntro.Body = "Remember that all messages become public once the game finishes."
+			channelIntro.CreatedAt = message.CreatedAt.Add(-time.Second)
+			toSave = append(toSave, &channelIntro)
+			saveKeys = append(saveKeys, datastore.NewIncompleteKey(ctx, messageKind, channelID))
+		}
 		ids, err := datastore.PutMulti(
 			ctx,
-			[]*datastore.Key{channelID, datastore.NewIncompleteKey(ctx, messageKind, channelID)},
-			[]interface{}{channel, message},
+			saveKeys,
+			toSave,
 		)
 		if err != nil {
 			return err
