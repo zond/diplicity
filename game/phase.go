@@ -128,12 +128,30 @@ func getPhaseNotificationContext(ctx context.Context, host string, gameID *datas
 	err = datastore.GetMulti(ctx, []*datastore.Key{gameID, res.phaseID, res.userConfigID, res.userID}, []interface{}{res.game, res.phase, res.userConfig, res.user})
 	if err != nil {
 		if merr, ok := err.(appengine.MultiError); ok {
-			if merr[2] == datastore.ErrNoSuchEntity {
-				log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
-				return nil, noConfigError
+			for idx, serr := range merr {
+				if serr != nil {
+					if idx == 2 && serr == datastore.ErrNoSuchEntity {
+						log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
+						return nil, noConfigError
+					} else if idx == 1 && serr == datastore.ErrNoSuchEntity {
+						log.Infof(ctx, "Phase doesn't exist, this must be a reverted mustering game, faking phase")
+						if res.game.Variant == "" {
+							log.Errorf(ctx, "Loaded game lacks variant. Errors: %+v", err)
+							return nil, err
+						}
+						variant := variants.Variants[res.game.Variant]
+						s, err := variant.Start()
+						if err != nil {
+							log.Errorf(ctx, "Unable to create state to generate fake phase for notification: %v", err)
+							return nil, err
+						}
+						res.phase = NewPhase(s, gameID, 1, host)
+					} else {
+						log.Errorf(ctx, "Unable to load game or user: %v; hope datastore gets fixed", err)
+						return nil, err
+					}
+				}
 			}
-			log.Errorf(ctx, "Unable to load game, phase, user and user config: %v; hope datastore gets fixed", err)
-			return nil, err
 		} else {
 			log.Errorf(ctx, "Unable to load game, phase, user and user config: %v; hope datastore gets fixed", err)
 			return nil, err
