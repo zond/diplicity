@@ -48,6 +48,7 @@ var (
 	asyncStartGameFunc *DelayFunc
 
 	noConfigError      = errors.New("user has no config")
+	noGameError        = errors.New("game does not exist")
 	fromAddressPattern = "replies+%s@diplicity-engine.appspotmail.com"
 	fromAddressReg     = regexp.MustCompile("^replies\\+([^@]+)@diplicity-engine.appspotmail.com")
 	noreplyFromAddr    = "noreply@oort.se"

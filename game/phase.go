@@ -133,6 +133,9 @@ func getPhaseNotificationContext(ctx context.Context, host string, gameID *datas
 					if idx == 2 && serr == datastore.ErrNoSuchEntity {
 						log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 						return nil, noConfigError
+					} else if idx == 0 && serr == datastore.ErrNoSuchEntity {
+						log.Warningf(ctx, "Game doesn't exist, this must be a manually deleted game")
+						return nil, noGameError
 					} else if idx == 1 && serr == datastore.ErrNoSuchEntity {
 						log.Infof(ctx, "Phase doesn't exist, this must be a reverted mustering game, faking phase")
 						if res.game.Variant == "" {
@@ -219,6 +222,9 @@ func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *data
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 		return nil
+	} else if err == noGameError {
+		log.Warningf(ctx, "%q doesn't exist, giving up", gameID)
+		return nil
 	} else if err != nil {
 		log.Errorf(ctx, "Unable to get msg notification context: %v; fix getPhaseNotificationContext or hope datastore gets fixed", err)
 		return err
@@ -282,6 +288,9 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datas
 	msgContext, err := getPhaseNotificationContext(ctx, host, gameID, phaseOrdinal, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
+		return nil
+	} else if err == noGameError {
+		log.Warningf(ctx, "%q doesn't exists, giving up", gameID)
 		return nil
 	} else if err != nil {
 		log.Errorf(ctx, "Unable to get phase notification context: %v; fix getPhaseNotificationContext or hope datastore gets fixed", err)
@@ -420,8 +429,25 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 	keys := []*datastore.Key{gameID, phaseID}
 	values := []interface{}{game, phase}
 	if err := datastore.GetMulti(ctx, keys, values); err != nil {
-		log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, values, err)
-		return err
+		if merr, ok := err.(appengine.MultiError); ok {
+			for idx, serr := range merr {
+				if serr != nil {
+					if idx == 1 && serr == datastore.ErrNoSuchEntity {
+						log.Infof(ctx, "Phase doesn't exist, assuming this is a mustering game that got reverted. Ignoring.")
+						return nil
+					} else if idx == 0 && serr == datastore.ErrNoSuchEntity {
+						log.Warningf(ctx, "Game doesn't exist, assuming this is a manually deleted game, giving up.")
+						return nil
+					} else {
+						log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, values, err)
+						return err
+					}
+				}
+			}
+		} else {
+			log.Errorf(ctx, "datastore.GetMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, values, err)
+			return err
+		}
 	}
 
 	member, found := game.GetMemberByNation(godip.Nation(nation))
@@ -431,18 +457,30 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 	}
 
 	if !game.Finished && !phase.Resolved && !member.NewestPhaseState.ReadyToResolve {
-		newMessage := &Message{
-			GameID:         gameID,
-			ChannelMembers: Nations{godip.Nation(nation), DiplicitySender},
-			Sender:         DiplicitySender,
-			Body: fmt.Sprintf(
-				"This is a reminder that the current phase will resolve in %v (at %v), and you haven't declared that you are ready for the next phase. If you don't declare ready you will lose Quickness score. If you don't declare ready and don't provide any orders you will lose Reliability score, and be evicted from all staging game queues.",
-				phase.DeadlineAt.Sub(time.Now()).Round(time.Minute),
-				phase.DeadlineAt.Format(time.RFC822)),
-		}
-		if err := createMessageHelper(ctx, phase.Host, newMessage); err != nil {
-			log.Errorf(ctx, "createMessageHelper(..., %v, %+v): %v; fix it?", phase.Host, newMessage, err)
+		userConfigKey := auth.UserConfigID(ctx, auth.UserID(ctx, member.User.Id))
+		userConfig := &auth.UserConfig{}
+		if err := datastore.Get(ctx, userConfigKey, userConfig); err != nil {
+			log.Errorf(ctx, "Unable to load user config for %v: %v", userConfigKey, err)
 			return err
+		} else if err == datastore.ErrNoSuchEntity {
+			log.Warningf(ctx, "UserConfig for %v is gone, assuming manual intervention", userConfigKey)
+			return nil
+		}
+		sendAt := phase.DeadlineAt.Add(-time.Minute * time.Duration(userConfig.PhaseDeadlineWarningMinutesAhead))
+		if sendAt.After(time.Now()) {
+			newMessage := &Message{
+				GameID:         gameID,
+				ChannelMembers: Nations{godip.Nation(nation), DiplicitySender},
+				Sender:         DiplicitySender,
+				Body: fmt.Sprintf(
+					"This is a reminder that the current phase will resolve in %v (at %v), and you haven't declared that you are ready for the next phase. If you don't declare ready you will lose Quickness score. If you don't declare ready and don't provide any orders you will lose Reliability score, and be evicted from all staging game queues.",
+					phase.DeadlineAt.Sub(time.Now()).Round(time.Minute),
+					phase.DeadlineAt.Format(time.RFC822)),
+			}
+			if err := createMessageHelper(ctx, phase.Host, newMessage); err != nil {
+				log.Errorf(ctx, "createMessageHelper(..., %v, %+v): %v; fix it?", phase.Host, newMessage, err)
+				return err
+			}
 		}
 	}
 
@@ -531,8 +569,20 @@ func resolvePhaseHelper(ctx context.Context, gameID *datastore.Key, phaseOrdinal
 		keys := []*datastore.Key{gameID, phaseID}
 		values := []interface{}{game, phase}
 		if err := datastore.GetMulti(ctx, keys, values); err != nil {
-			log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; hope datastore will get fixed", keys, values, err)
-			return err
+			if merr, ok := err.(appengine.MultiError); ok {
+				for idx, serr := range merr {
+					if idx == 1 && serr == datastore.ErrNoSuchEntity {
+						log.Warningf(ctx, "Phase is missing, assuming this is manually deleted, giving up")
+						return nil
+					} else {
+						log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; hope datastore will get fixed", keys, values, err)
+						return err
+					}
+				}
+			} else {
+				log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; hope datastore will get fixed", keys, values, err)
+				return err
+			}
 		}
 		game.ID = gameID
 
