@@ -894,6 +894,8 @@ func isPublic(variant string, members Nations) bool {
 func listMessages(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
+	deadline := time.Now().Add(9 * time.Minute)
+
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
 		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
@@ -985,7 +987,7 @@ func listMessages(w ResponseWriter, r Request) error {
 		}, &datastore.TransactionOptions{XG: false}); err != nil {
 			return err
 		}
-		if len(messages) > 0 || !wait {
+		if len(messages) > 0 || !wait || time.Now().After(deadline) {
 			break
 		}
 		if err := memcache.Set(ctx, &memcache.Item{
@@ -996,6 +998,9 @@ func listMessages(w ResponseWriter, r Request) error {
 			return err
 		}
 		for _, err := memcache.Get(ctx, channelID.Encode()); err == nil; _, err = memcache.Get(ctx, channelID.Encode()) {
+			if time.Now().After(deadline) {
+				break
+			}
 			time.Sleep(time.Second)
 		}
 	}
