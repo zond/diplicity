@@ -762,7 +762,7 @@ func createMessageHelper(ctx context.Context, host string, message *Message) err
 			channel.NMessages += 1
 			channelIntro := *message
 			channelIntro.Sender = DiplicitySender
-			channelIntro.Body = "Remember that all messages become public once the game finishes."
+			channelIntro.Body = "Please note that all messages become public after the game ends."
 			channelIntro.CreatedAt = message.CreatedAt.Add(-time.Second)
 			toSave = append(toSave, &channelIntro)
 			saveKeys = append(saveKeys, datastore.NewIncompleteKey(ctx, messageKind, channelID))
