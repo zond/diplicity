@@ -328,7 +328,7 @@ func TestNonMemberSeeingAllMessagesInFinishedGames(t *testing.T) {
 			Find(2.0, []string{"Properties", "NMessages"}).
 			Follow("messages", "Links").Success().
 			Find(game.DiplicitySender, []string{"Properties"}, []string{"Properties", "Sender"}).
-			Find("Remember that all messages become public once the game finishes.", []string{"Properties", "Body"})
+			Find("Please note that all messages become public after the game ends.", []string{"Properties", "Body"})
 
 		newEnv := NewEnv().SetUID(String("fake"))
 
