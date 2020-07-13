@@ -785,7 +785,7 @@ func (p *PhaseResolver) Act() error {
 				notificationBody,
 				p.Phase.Host,
 			); err != nil {
-				log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q); fix it?", p.Phase.GameID, DiplicitySender, variant.Nations, notificationBody, p.Phase.Host)
+				log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, variant.Nations, notificationBody, p.Phase.Host, err)
 				return err
 			}
 			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY PROMOTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
@@ -837,7 +837,7 @@ func (p *PhaseResolver) Act() error {
 				notificationBody,
 				p.Phase.Host,
 			); err != nil {
-				log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q); fix it?", p.Phase.GameID, DiplicitySender, variant.Nations, notificationBody, p.Phase.Host)
+				log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, variant.Nations, notificationBody, p.Phase.Host, err)
 				return err
 			}
 			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY REVERTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)

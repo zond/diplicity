@@ -993,7 +993,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 			greetingBody,
 			host,
 		); err != nil {
-			log.Errorf(ctx, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q); fix it?", g.ID, DiplicitySender, variant.Nations, greetingBody, host)
+			log.Errorf(ctx, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", g.ID, DiplicitySender, variant.Nations, greetingBody, host, err)
 			return err
 		}
 
