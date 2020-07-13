@@ -1722,7 +1722,7 @@ func handleReSchedule(w ResponseWriter, r Request) error {
 		if len(game.NewestPhaseMeta) == 0 {
 			log.Infof(ctx, "%v has no NewestPhaseMeta, but we found phase %v. Fixing.", gameID, newestPhase.PhaseOrdinal)
 		} else if game.NewestPhaseMeta[0].PhaseOrdinal != newestPhase.PhaseOrdinal {
-			log.Infof(ctx, "%v has NewestPhaseMeta %v, but we found phase %v. Fixing.", gameID, newestPhase.PhaseOrdinal)
+			log.Infof(ctx, "%v has NewestPhaseMeta %v, but we found phase %v. Fixing.", gameID, game.NewestPhaseMeta[0].PhaseOrdinal, newestPhase.PhaseOrdinal)
 		}
 		if newestPhase.Resolved {
 			log.Infof(ctx, "%v has a newest phase that is already resolved, fixing.", gameID)

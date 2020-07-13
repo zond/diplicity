@@ -102,6 +102,32 @@ func TestAssign_LargeLead(t *testing.T) {
 	assertScoresTo2DP(t, gameScores, []float64{83, 4, 4, 3, 3, 2, 1})
 }
 
+// Check the SC counts mentioned in letter column in Diplomacy World #150.
+func TestAssign_Monotonicity(t *testing.T) {
+	scores := []GameScore{}
+	scores = append(scores, GameScore{Member: "Austria", SCs: 16})
+	scores = append(scores, GameScore{Member: "England", SCs: 13})
+	scores = append(scores, GameScore{Member: "France", SCs: 4})
+	scores = append(scores, GameScore{Member: "Germany", SCs: 1})
+	oldGameScores := GameScores(scores)
+
+	oldGameScores.Assign()
+
+	assertScoresTo2DP(t, oldGameScores, []float64{50.5, 23.5, 14.5, 11.5})
+
+	scores = []GameScore{}
+	scores = append(scores, GameScore{Member: "Austria", SCs: 17})
+	scores = append(scores, GameScore{Member: "England", SCs: 13})
+	scores = append(scores, GameScore{Member: "France", SCs: 4})
+	newGameScores := GameScores(scores)
+
+	newGameScores.Assign()
+
+	assertScoresTo2DP(t, newGameScores, []float64{47, 31, 22})
+
+	// Note that Austria lost points gaining a center from Germany.
+}
+
 // Check that with SCs split almost evenly then the scores are distributed appropriately.
 func TestAssign_SevenNationsRemaining(t *testing.T) {
 	scores := []GameScore{}
