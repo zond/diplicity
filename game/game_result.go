@@ -125,11 +125,22 @@ type GameResult struct {
 	EliminatedUsers      []string
 	AllUsers             []string
 	Scores               GameScores
-	Rated                bool
 	TrueSkillRated       bool
 	TrueSkillProbability float64
 	Private              bool
 	CreatedAt            time.Time
+}
+
+func (r *GameResult) Load(props []datastore.Property) error {
+	err := datastore.LoadStruct(r, props)
+	if _, is := err.(*datastore.ErrFieldMismatch); is {
+		err = nil
+	}
+	return err
+}
+
+func (r *GameResult) Save() ([]datastore.Property, error) {
+	return datastore.SaveStruct(r)
 }
 
 type player struct {
@@ -398,7 +409,7 @@ func (g *GameResult) Repair(ctx context.Context, game *Game) error {
 	}
 	g.DIASMembers = convertUidsToNats(g.DIASUsers)
 
-	return g.Save(ctx, game)
+	return g.DBSave(ctx, game)
 }
 
 // I have seen some signs that there are broken GameResults in the database. Thus, some validation.
@@ -433,7 +444,7 @@ func (g *GameResult) Validate(game *Game) error {
 	return nil
 }
 
-func (g *GameResult) Save(ctx context.Context, game *Game) error {
+func (g *GameResult) DBSave(ctx context.Context, game *Game) error {
 	if err := g.Validate(game); err != nil {
 		return err
 	}

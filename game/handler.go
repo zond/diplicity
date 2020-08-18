@@ -719,7 +719,7 @@ func reScore(ctx context.Context, counter int, cursorString string) error {
 		return err
 	}
 
-	if err := gameResult.Save(ctx, game); err != nil {
+	if err := gameResult.DBSave(ctx, game); err != nil {
 		return err
 	}
 

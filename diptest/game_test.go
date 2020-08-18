@@ -1119,6 +1119,55 @@ func TestWithoutMustering(t *testing.T) {
 }
 
 func TestMustering(t *testing.T) {
+	t.Run("NobodyReady", func(t *testing.T) {
+		gameDesc := String("test-game")
+		env1 := NewEnv().SetUID(String("uid"))
+		gameID := env1.GetRoute(game.IndexRoute).Success().
+			Follow("create-game", "Links").Body(map[string]interface{}{
+			"Variant":            "France vs Austria",
+			"NoMerge":            true,
+			"Desc":               gameDesc,
+			"Private":            false,
+			"PhaseLengthMinutes": 60,
+		}).Success().GetValue("Properties", "ID").(string)
+
+		env1.GetRoute(game.ListOpenGamesRoute).Success().
+			Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		env1.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			AssertEq(false, "Properties", "Mustered")
+
+		env2 := NewEnv().SetUID(String("uid"))
+
+		env2.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+			Follow("join", "Links").Body(map[string]interface{}{}).Success()
+
+		WaitForEmptyQueue("game-asyncStartGame")
+		WaitForEmptyQueue("game-asyncSendMsg")
+
+		g := env1.GetRoute("Game.Load").RouteParams("id", gameID).Success()
+		g.AssertLen(1, "Properties", "NewestPhaseMeta").
+			Find(1, []string{"Properties", "NewestPhaseMeta"}, []string{"PhaseOrdinal"})
+		messages := g.Follow("channels", "Links").Success().
+			AssertLen(1, "Properties").
+			Find(gameID, []string{"Properties"}, []string{"Properties", "GameID"}).
+			Follow("messages", "Links").Success()
+		messages.AssertLen(2, "Properties")
+		messages.Find(regexp.MustCompile("^Welcome to the France vs Austria game"), []string{"Properties"}, []string{"Properties", "Body"})
+		messages.Find("Please note that all messages become public after the game ends.", []string{"Properties"}, []string{"Properties", "Body"})
+		messages.Find(game.DiplicitySender, []string{"Properties"}, []string{"Properties", "Sender"})
+
+		WaitForEmptyQueue("game-asyncSendMsg")
+		WaitForEmptyQueue("game-sendMsgNotificationsToUsers")
+		WaitForEmptyQueue("game-sendMsgNotificationsToFCM")
+		WaitForEmptyQueue("game-sendMsgNotificationsToMail")
+
+		env1.GetRoute(game.DevResolvePhaseTimeoutRoute).
+			RouteParams("game_id", gameID, "phase_ordinal", "1").Success()
+
+		env1.GetRoute(game.ListOpenGamesRoute).Success().
+			AssertNotFind(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+	})
 	t.Run("NotReady", func(t *testing.T) {
 		gameDesc := String("test-game")
 		env1 := NewEnv().SetUID(String("uid"))

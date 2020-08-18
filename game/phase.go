@@ -789,6 +789,15 @@ func (p *PhaseResolver) Act() error {
 				return err
 			}
 			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY PROMOTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+		} else if len(readyNationMap) == 0 {
+			allKeys = append(allKeys, p.Game.ID)
+			// Delete the game, the phase, and all it's phase states.
+			if err := datastore.DeleteMulti(p.Context, allKeys); err != nil {
+				log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", allKeys, err)
+				return err
+			}
+			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY DELETED MUSTERING ABANDONED GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+			return nil
 		} else {
 			p.Game.Started = false
 			p.Game.StartedAt = time.Time{}
@@ -1169,12 +1178,12 @@ func (p *PhaseResolver) Act() error {
 			EliminatedUsers:   eliminatedUsers,
 			Scores:            scores,
 			AllUsers:          oldPhaseResult.AllUsers,
-			Rated:             false,
+			TrueSkillRated:    false,
 			Private:           p.Game.Private,
 			CreatedAt:         time.Now(),
 		}
 		gameResult.AssignScores()
-		if err := gameResult.Save(p.Context, p.Game); err != nil {
+		if err := gameResult.DBSave(p.Context, p.Game); err != nil {
 			log.Errorf(p.Context, "Unable to save game result %v: %v; hope datastore gets fixed", PP(gameResult), err)
 			return err
 		}
