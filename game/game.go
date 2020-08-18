@@ -163,7 +163,6 @@ func NewDelayFunc(queue string, backend interface{}) *DelayFunc {
 		backend:     delay.Func(queue, backend),
 		backendType: typ,
 	}
-	log.Infof(appengine.BackgroundContext(), "Created DelayFunc with backen %#v", df.backend)
 	return df
 }
 
