@@ -158,11 +158,13 @@ func NewDelayFunc(queue string, backend interface{}) *DelayFunc {
 	if typ.Kind() != reflect.Func {
 		panic(fmt.Errorf("Can't create DelayFunc with non Func %#v", backend))
 	}
-	return &DelayFunc{
+	df := &DelayFunc{
 		queue:       queue,
 		backend:     delay.Func(queue, backend),
 		backendType: typ,
 	}
+	log.Infof(appengine.BackgroundContext(), "Created DelayFunc with backen %#v", df.backend)
+	return df
 }
 
 func (d *DelayFunc) EnqueueAt(ctx context.Context, taskETA time.Time, args ...interface{}) error {
