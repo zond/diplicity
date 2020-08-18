@@ -15,12 +15,12 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/diplicity/delayed"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/delay"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/taskqueue"
 
@@ -150,17 +150,20 @@ func PP(i interface{}) string {
 type DelayFunc struct {
 	queue       string
 	backendType reflect.Type
-	backend     *delay.Function
+	backend     *delayed.Function
 }
 
 func NewDelayFunc(queue string, backend interface{}) *DelayFunc {
+	if queue == "" {
+		panic(fmt.Errorf("Can't create DelayFunc without queue name!"))
+	}
 	typ := reflect.TypeOf(backend)
 	if typ.Kind() != reflect.Func {
 		panic(fmt.Errorf("Can't create DelayFunc with non Func %#v", backend))
 	}
 	df := &DelayFunc{
 		queue:       queue,
-		backend:     delay.Func(queue, backend),
+		backend:     delayed.Func(queue, backend),
 		backendType: typ,
 	}
 	return df

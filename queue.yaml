@@ -1,4 +1,6 @@
 queue:
+    - name: game-reCalculateDIASUsers
+      rate: 10/s
     - name: game-asyncSendMsg
       rate: 10/s
     - name: game-updateAllUserStats

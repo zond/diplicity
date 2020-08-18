@@ -46,7 +46,7 @@ func init() {
 	reScoreFunc = NewDelayFunc("game-reScore", reScore)
 	reGameResultFunc = NewDelayFunc("game-reGameResult", reGameResult)
 	ejectMemberFunc = NewDelayFunc("game-ejectMember", ejectMember)
-	recalculateDIASUsersFunc = NewDelayFunc("", recalculateDIASUsers)
+	recalculateDIASUsersFunc = NewDelayFunc("game-reCalculateDIASUsers", recalculateDIASUsers)
 	updateAllUserStatsFunc = NewDelayFunc("game-updateAllUserStats", updateAllUserStats)
 	AllocationResource = &Resource{
 		Create:      createAllocation,
