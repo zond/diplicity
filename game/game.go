@@ -827,6 +827,11 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 		g.ID = gameID
 
 		variant := variants.Variants[g.Variant]
+		if len(game.Members) != len(variant.Nations) {
+			log.Warningf(ctx, "Variant %v has %v nations, game %v has %v nations, someone must have dropped out before we got here?", game.Variant, len(variant.Nations), game.ID, len(game.Members))
+			return nil
+		}
+
 		s, err := variant.Start()
 		if err != nil {
 			log.Errorf(ctx, "variant.Start(): %v; fix godip", err)
