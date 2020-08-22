@@ -459,12 +459,12 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 	if !game.Finished && !phase.Resolved && !member.NewestPhaseState.ReadyToResolve {
 		userConfigKey := auth.UserConfigID(ctx, auth.UserID(ctx, member.User.Id))
 		userConfig := &auth.UserConfig{}
-		if err := datastore.Get(ctx, userConfigKey, userConfig); err != nil {
-			log.Errorf(ctx, "Unable to load user config for %v: %v", userConfigKey, err)
-			return err
-		} else if err == datastore.ErrNoSuchEntity {
+		if err := datastore.Get(ctx, userConfigKey, userConfig); err == datastore.ErrNoSuchEntity {
 			log.Warningf(ctx, "UserConfig for %v is gone, assuming manual intervention", userConfigKey)
 			return nil
+		} else if err != nil {
+			log.Errorf(ctx, "Unable to load user config for %v: %v", userConfigKey, err)
+			return err
 		}
 		sendAt := phase.DeadlineAt.Add(-time.Minute * time.Duration(userConfig.PhaseDeadlineWarningMinutesAhead))
 		if sendAt.After(time.Now()) {
