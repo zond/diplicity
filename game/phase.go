@@ -449,12 +449,14 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 			return err
 		}
 	}
+	log.Infof(ctx, "Loaded game %+v and phase %+v", game, phase)
 
 	member, found := game.GetMemberByNation(godip.Nation(nation))
 	if !found {
 		log.Errorf(ctx, "game.GetMemberByNation(%v): %v, %v; wtf?", nation, member, found)
 		return nil
 	}
+	log.Infof(ctx, "Found member %+v", member)
 
 	if !game.Finished && !phase.Resolved && !member.NewestPhaseState.ReadyToResolve {
 		userConfigKey := auth.UserConfigID(ctx, auth.UserID(ctx, member.User.Id))
@@ -467,22 +469,26 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 			return err
 		}
 		sendAt := phase.DeadlineAt.Add(-time.Minute * time.Duration(userConfig.PhaseDeadlineWarningMinutesAhead))
-		if sendAt.After(time.Now()) {
+		now := time.Now()
+		if sendAt.After(now) {
 			newMessage := &Message{
 				GameID:         gameID,
 				ChannelMembers: Nations{godip.Nation(nation), DiplicitySender},
 				Sender:         DiplicitySender,
 				Body: fmt.Sprintf(
 					"This is a reminder that the current phase will resolve in %v (at %v), and you haven't declared that you are ready for the next phase. If you don't declare ready you will lose Quickness score. If you don't declare ready and don't provide any orders you will lose Reliability score, and be evicted from all staging game queues.",
-					phase.DeadlineAt.Sub(time.Now()).Round(time.Minute),
+					phase.DeadlineAt.Sub(now).Round(time.Minute),
 					phase.DeadlineAt.Format(time.RFC822)),
 			}
 			if err := createMessageHelper(ctx, phase.Host, newMessage); err != nil {
 				log.Errorf(ctx, "createMessageHelper(..., %v, %+v): %v; fix it?", phase.Host, newMessage, err)
 				return err
 			}
+		} else {
+			log.Infof(ctx, "Want to send at %v, which isn't after now (%v)", sendAt, now)
 		}
 	}
+	log.Infof(ctx, "Game finished, phase resolved, or member already ready to resolve")
 
 	return nil
 }
