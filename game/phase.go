@@ -1637,6 +1637,12 @@ func (p *Phase) Item(r Request) *Item {
 			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
 		}))
 		phaseItem.AddLink(r.NewLink(OrderResource.Link("create-order", Create, []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)})))
+		phaseItem.AddLink(r.NewLink(Link{
+			Rel:         "create-and-corroborate",
+			Method:      "POST",
+			Route:       CreateAndCorroborateRoute,
+			RouteParams: []string{"game_id", p.GameID.Encode(), "phase_ordinal", fmt.Sprint(p.PhaseOrdinal)},
+		}))
 	}
 	if isMember || p.Resolved {
 		phaseItem.AddLink(r.NewLink(Link{

@@ -249,6 +249,15 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 	return order, nil
 }
 
+func createAndCorroborate(w ResponseWriter, r Request) error {
+	_, err := createOrder(w, r)
+	if err != nil {
+		return err
+	}
+
+	return corroboratePhase(w, r)
+}
+
 func createOrder(w ResponseWriter, r Request) (*Order, error) {
 	ctx := appengine.NewContext(r.Req())
 

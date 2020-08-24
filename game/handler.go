@@ -112,6 +112,7 @@ const (
 	SendSystemMessageRoute              = "SendSystemMessage"
 	RemoveZippedOptionsRoute            = "RemoveZippedOptions"
 	CorroboratePhaseRoute               = "CorroboratePhase"
+	CreateAndCorroborateRoute           = "CreateAndCorroborate"
 	GetUserRatingHistogramRoute         = "GetUserRatingHistogram"
 	GlobalSystemMessageRoute            = "GlobalSystemMessage"
 	MusterAllRunningGamesRoute          = "MusterAllRunningGames"
@@ -1876,6 +1877,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Options", []string{"GET"}, ListOptionsRoute, listOptions)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Map", []string{"GET"}, RenderPhaseMapRoute, renderPhaseMap)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/Corroborate", []string{"GET"}, CorroboratePhaseRoute, corroboratePhase)
+	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/CreateAndCorroborate", []string{"POST"}, CreateAndCorroborateRoute, createAndCorroborate)
 	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
 	Handle(r, "/Rss", []string{"GET"}, RssRoute, handleRss)
 	Handle(r, "/Users/Ratings/Histogram", []string{"GET"}, GetUserRatingHistogramRoute, getUserRatingHistogram)

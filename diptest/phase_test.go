@@ -1437,7 +1437,14 @@ func TestCorroborate(t *testing.T) {
 		englandPhase.
 			Follow("corroborate", "Links").Success().
 			AssertNotFind("mos", []string{"Properties", "Inconsistencies"}, []string{"Province"})
-		russiaPhase.Follow("create-order", "Links").Body(map[string]interface{}{
+		createCorr := russiaPhase.Follow("create-and-corroborate", "Links").Body(map[string]interface{}{
+			"Parts": []string{"war", "Support", "mos", "ukr"},
+		}).Success()
+		warIncon := createCorr.Find("war", []string{"Properties", "Inconsistencies"}, []string{"Province"}).GetValue("Inconsistencies").([]interface{})
+		if warIncon[0].(string) != "InconsistencyMismatchedSupporter:mos" {
+			t.Errorf("Got %v, wanted %v", warIncon[0], "InconsistencyMismatchedSupporter:mos")
+		}
+		russiaPhase.Follow("create-and-corroborate", "Links").Body(map[string]interface{}{
 			"Parts": []string{"mos", "Move", "lvn"},
 		}).Success()
 		russiaCorr := russiaPhase.
