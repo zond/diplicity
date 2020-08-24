@@ -484,6 +484,7 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 				log.Errorf(ctx, "createMessageHelper(..., %v, %+v): %v; fix it?", phase.Host, newMessage, err)
 				return err
 			}
+			log.Infof(ctx, "Successfully sent phase deadline warning!")
 		} else {
 			log.Infof(ctx, "Want to send at %v, which is after now (%v), rescheduling.", sendAt, now)
 			if err := sendPhaseDeadlineWarningFunc.EnqueueAt(ctx, sendAt, gameID, phaseOrdinal, nation); err != nil {
@@ -491,8 +492,9 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 				return err
 			}
 		}
+	} else {
+		log.Infof(ctx, "Game finished, phase resolved, or member already ready to resolve")
 	}
-	log.Infof(ctx, "Game finished, phase resolved, or member already ready to resolve")
 
 	return nil
 }
