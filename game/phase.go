@@ -470,7 +470,7 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 		}
 		sendAt := phase.DeadlineAt.Add(-time.Minute * time.Duration(userConfig.PhaseDeadlineWarningMinutesAhead))
 		now := time.Now()
-		if sendAt.After(now) {
+		if sendAt.Before(now) {
 			newMessage := &Message{
 				GameID:         gameID,
 				ChannelMembers: Nations{godip.Nation(nation), DiplicitySender},
@@ -485,7 +485,11 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 				return err
 			}
 		} else {
-			log.Infof(ctx, "Want to send at %v, which isn't after now (%v)", sendAt, now)
+			log.Infof(ctx, "Want to send at %v, which is after now (%v), rescheduling.", sendAt, now)
+			if err := sendPhaseDeadlineWarningFunc.EnqueueAt(ctx, sendAt, gameID, phaseOrdinal, nation); err != nil {
+				log.Errorf(ctx, "sendPhaseDeadlineWarningFunc.EnqueueAt(..., %v, %v, %v, %v): %v; hope taskqueues get fixed", sendAt, gameID, phaseOrdinal, nation, err)
+				return err
+			}
 		}
 	}
 	log.Infof(ctx, "Game finished, phase resolved, or member already ready to resolve")
@@ -544,8 +548,9 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 		if userConfig.PhaseDeadlineWarningMinutesAhead > 0 {
 			sendAt := phase.DeadlineAt.Add(-time.Minute * time.Duration(userConfig.PhaseDeadlineWarningMinutesAhead))
 			if sendAt.After(time.Now()) {
-				if err := sendPhaseDeadlineWarningFunc.EnqueueAt(ctx, sendAt, gameID, phase.PhaseOrdinal, string(game.Members[idx].Nation)); err != nil {
-					log.Errorf(ctx, "sendPhaseDeadlineWarningFunc.EnqueueAt(..., %v, %v, %v): %v; hope taskqueues get fixed", sendAt, gameID, phase.PhaseOrdinal, err)
+				nation := string(game.Members[idx].Nation)
+				if err := sendPhaseDeadlineWarningFunc.EnqueueAt(ctx, sendAt, gameID, phase.PhaseOrdinal, nation); err != nil {
+					log.Errorf(ctx, "sendPhaseDeadlineWarningFunc.EnqueueAt(..., %v, %v, %v, %v): %v; hope taskqueues get fixed", sendAt, gameID, phase.PhaseOrdinal, nation, err)
 					return err
 				}
 				log.Infof(ctx, "Successfully scheduled phase deadline warning for %+v at %v", game.Members[idx], sendAt)
