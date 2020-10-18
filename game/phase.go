@@ -674,7 +674,14 @@ func (p *PhaseResolver) Act() error {
 		return nil
 	}
 
-	variant := variants.Variants[p.Game.Variant]
+	variant, found := variants.Variants[p.Game.Variant]
+	if !found {
+		variantNames := []string{}
+		for name := range variants.Variants {
+			variantNames = append(variantNames, name)
+		}
+		log.Error(p.Context, "Variant %#v not recognized? We only know of %+v", p.Game.Variant, names)
+	}
 
 	// Make mustering games go back to staging after deleting their phases,
 	// all non-ready members, and all phase states - if not everyone is ready.
