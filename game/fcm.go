@@ -324,6 +324,9 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 		if delay < time.Second {
 			delay = time.Second
 		}
+		if delay > time.Hour {
+			delay = time.Hour
+		}
 		// Then, try to honor the Retry-After header.
 		if n, err := strconv.ParseInt(resp.RetryAfter, 10, 64); err == nil {
 			delay = time.Duration(n) * time.Minute
