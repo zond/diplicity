@@ -680,7 +680,7 @@ func (p *PhaseResolver) Act() error {
 		for name := range variants.Variants {
 			variantNames = append(variantNames, name)
 		}
-		log.Error(p.Context, "Variant %#v not recognized? We only know of %+v", p.Game.Variant, names)
+		log.Error(p.Context, "Variant %#v not recognized? We only know of %+v", p.Game.Variant, variantNames)
 	}
 
 	// Make mustering games go back to staging after deleting their phases,
