@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/auth"
+	"github.com/zond/goaeoas"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"github.com/zond/godip/variants/chaos"
@@ -71,7 +72,7 @@ func init() {
 			{
 				Path:    "/Variants",
 				Route:   ListVariantsRoute,
-				Handler: listVariants,
+				Handler: goaeoas.VersionETagCache(listVariants),
 			},
 		},
 	}
