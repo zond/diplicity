@@ -180,7 +180,7 @@ func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId strin
 				newMembers = append(newMembers, oldMember)
 			}
 		}
-		if len(newMembers) == 0 && !game.Started {
+		if !game.GameMasterEnabled && len(newMembers) == 0 && !game.Started {
 			return datastore.Delete(ctx, gameID)
 		}
 		game.Members = newMembers

@@ -98,21 +98,39 @@ func init() {
 				QueryParams: gameListerParams,
 			},
 			{
+				Path:        "/Games/Mastered/Staging",
+				Route:       ListMasteredStagingGamesRoute,
+				Handler:     stagingGamesHandler.handlePrivate(true),
+				QueryParams: gameListerParams,
+			},
+			{
+				Path:        "/Games/Mastered/Started",
+				Route:       ListMasteredStartedGamesRoute,
+				Handler:     startedGamesHandler.handlePrivate(true),
+				QueryParams: gameListerParams,
+			},
+			{
+				Path:        "/Games/Mastered/Finished",
+				Route:       ListMasteredFinishedGamesRoute,
+				Handler:     finishedGamesHandler.handlePrivate(true),
+				QueryParams: gameListerParams,
+			},
+			{
 				Path:        "/Games/My/Staging",
 				Route:       ListMyStagingGamesRoute,
-				Handler:     stagingGamesHandler.handlePrivate,
+				Handler:     stagingGamesHandler.handlePrivate(false),
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Started",
 				Route:       ListMyStartedGamesRoute,
-				Handler:     startedGamesHandler.handlePrivate,
+				Handler:     startedGamesHandler.handlePrivate(false),
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Finished",
 				Route:       ListMyFinishedGamesRoute,
-				Handler:     finishedGamesHandler.handlePrivate,
+				Handler:     finishedGamesHandler.handlePrivate(false),
 				QueryParams: gameListerParams,
 			},
 			{
@@ -274,6 +292,10 @@ func (g *Games) RemoveBanned(ctx context.Context, uid string) ([][]Ban, error) {
 			banIDs = append(banIDs, banID)
 		}
 	}
+	if len(banIDs) == 0 {
+		return [][]Ban{[]Ban{}}, nil
+	}
+
 	bans := make([]Ban, len(banIDs))
 	err := datastore.GetMulti(ctx, banIDs, bans)
 
@@ -380,6 +402,9 @@ type Game struct {
 	LastYear                      int              `methods:"POST"`
 	SkipMuster                    bool             `methods:"POST"`
 	ChatLanguageISO639_1          string           `methods:"POST"`
+	GameMasterEnabled             bool             `methods:"POST"`
+
+	GameMasterId string
 
 	NMembers int
 	Members  Members
@@ -588,6 +613,18 @@ func (g *Game) Item(r Request) *Item {
 				RouteParams: []string{"game_id", g.ID.Encode()},
 			}))
 		}
+		if user.Id == g.GameMasterId && len(g.NewestPhaseMeta) == 1 && !g.NewestPhaseMeta[0].Resolved {
+			gameItem.AddLink(r.NewLink(GameEditNewestPhaseDeadlineAtResource.Link(
+				"edit-newest-phase-deadline-at",
+				Create,
+				[]string{
+					"game_id",
+					g.ID.Encode(),
+					"phase_ordinal",
+					fmt.Sprint(g.NewestPhaseMeta[0].PhaseOrdinal),
+				},
+			)))
+		}
 	}
 	return gameItem
 }
@@ -688,6 +725,12 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	if game.PhaseLengthMinutes > MAX_PHASE_DEADLINE {
 		return nil, HTTPErr{"no games with more than 30 day deadlines allowed", http.StatusBadRequest}
 	}
+	if game.GameMasterEnabled {
+		if !game.Private {
+			return nil, HTTPErr{"only private games can have game master", http.StatusBadRequest}
+		}
+		game.GameMasterId = user.Id
+	}
 	game.CreatedAt = time.Now()
 
 	if !game.NoMerge && !game.Private {
@@ -715,18 +758,20 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		if err := game.Save(ctx); err != nil {
 			return err
 		}
-		game.Members = []Member{
-			{
-				User:              *user,
-				GameAlias:         game.FirstMember.GameAlias,
-				NationPreferences: game.FirstMember.NationPreferences,
-				NewestPhaseState: PhaseState{
-					GameID: game.ID,
+		if !game.GameMasterEnabled {
+			game.Members = []Member{
+				{
+					User:              *user,
+					GameAlias:         game.FirstMember.GameAlias,
+					NationPreferences: game.FirstMember.NationPreferences,
+					NewestPhaseState: PhaseState{
+						GameID: game.ID,
+					},
 				},
-			},
-		}
-		if err := UpdateUserStatsASAP(ctx, []string{user.Id}); err != nil {
-			return err
+			}
+			if err := UpdateUserStatsASAP(ctx, []string{user.Id}); err != nil {
+				return err
+			}
 		}
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: true}); err != nil {

@@ -30,15 +30,16 @@ import (
 )
 
 var (
-	asyncResolvePhaseFunc             *DelayFunc
-	timeoutResolvePhaseFunc           *DelayFunc
-	planPhaseTimeoutFunc              *DelayFunc
-	sendPhaseDeadlineWarningFunc      *DelayFunc
-	sendPhaseNotificationsToUsersFunc *DelayFunc
-	sendPhaseNotificationsToFCMFunc   *DelayFunc
-	sendPhaseNotificationsToMailFunc  *DelayFunc
-	ejectProbationariesFunc           *DelayFunc
-	PhaseResource                     *Resource
+	asyncResolvePhaseFunc                 *DelayFunc
+	timeoutResolvePhaseFunc               *DelayFunc
+	planPhaseTimeoutFunc                  *DelayFunc
+	sendPhaseDeadlineWarningFunc          *DelayFunc
+	sendPhaseNotificationsToUsersFunc     *DelayFunc
+	sendPhaseNotificationsToFCMFunc       *DelayFunc
+	sendPhaseNotificationsToMailFunc      *DelayFunc
+	ejectProbationariesFunc               *DelayFunc
+	PhaseResource                         *Resource
+	GameEditNewestPhaseDeadlineAtResource *Resource
 )
 
 func init() {
@@ -62,6 +63,20 @@ func init() {
 			},
 		},
 	}
+
+	GameEditNewestPhaseDeadlineAtResource = &Resource{
+		Create:     editNewestPhaseDeadlineAt,
+		CreatePath: "/Game/{game_id}/Phase/{phase_ordinal}",
+	}
+}
+
+type GameEditNewestPhaseDeadlineAtMock struct {
+	NextPhaseDeadlineInMinutes int `methods:"POST"`
+}
+
+func (g *GameEditNewestPhaseDeadlineAtMock) Item(r Request) *Item {
+	allocationItem := NewItem(g)
+	return allocationItem
 }
 
 func zipOptions(ctx context.Context, options interface{}) ([]byte, error) {
@@ -2088,4 +2103,81 @@ func listPhases(w ResponseWriter, r Request) error {
 
 	w.SetContent(phases.Item(r, gameID))
 	return nil
+}
+
+func editNewestPhaseDeadlineAt(w ResponseWriter, r Request) (*GameEditNewestPhaseDeadlineAtMock, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return nil, err
+	}
+
+	phaseOrdinal, err := strconv.ParseInt(r.Vars()["phase_ordinal"], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	phaseID, err := PhaseID(ctx, gameID, phaseOrdinal)
+	if err != nil {
+		return nil, err
+	}
+
+	genpdlim := &GameEditNewestPhaseDeadlineAtMock{}
+	err = Copy(genpdlim, r, "POST")
+	if err != nil {
+		return nil, err
+	}
+
+	wantedPhaseDeadlineAt := time.Now().Add(time.Minute * time.Duration(genpdlim.NextPhaseDeadlineInMinutes))
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		if err := datastore.Get(ctx, gameID, game); err != nil {
+			return err
+		}
+
+		if game.GameMasterId != user.Id {
+			return HTTPErr{"unauthorized", http.StatusUnauthorized}
+		}
+
+		if len(game.NewestPhaseMeta) != 1 {
+			return HTTPErr{"game unstarted", http.StatusPreconditionFailed}
+		}
+
+		if fmt.Sprint(game.NewestPhaseMeta[0].PhaseOrdinal) != r.Vars()["phase_ordinal"] {
+			return HTTPErr{"phase already resolved", http.StatusPreconditionFailed}
+		}
+
+		if game.NewestPhaseMeta[0].Resolved {
+			return HTTPErr{"phase already resolved", http.StatusPreconditionFailed}
+		}
+
+		phase := &Phase{}
+		if err := datastore.Get(ctx, phaseID, phase); err != nil {
+			return err
+		}
+
+		if phase.Resolved {
+			return HTTPErr{"phase already resolved", http.StatusPreconditionFailed}
+		}
+
+		phase.DeadlineAt = wantedPhaseDeadlineAt
+		game.NewestPhaseMeta = []PhaseMeta{phase.PhaseMeta}
+
+		if _, err := datastore.PutMulti(ctx, []*datastore.Key{gameID, phaseID}, []interface{}{game, phase}); err != nil {
+			return err
+		}
+
+		return phase.ScheduleResolution(ctx)
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		return nil, err
+	}
+
+	return genpdlim, nil
 }
