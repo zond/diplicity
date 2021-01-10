@@ -414,11 +414,9 @@ func (req *gamesReq) handle() error {
 		nextBatch.RemoveCustomFiltered(req.detailFilters)
 		if req.viewerStatsFilter {
 			nextBatch.RemoveFiltered(req.userStats)
-			log.Infof(req.ctx, "post user filter: %+v", nextBatch)
 			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
 				return filtErr
 			}
-			log.Infof(req.ctx, "post ban filter: %+v", nextBatch)
 		}
 		games = append(games, nextBatch...)
 	}
