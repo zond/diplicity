@@ -379,6 +379,7 @@ type Game struct {
 	Anonymous                     bool             `methods:"POST"`
 	LastYear                      int              `methods:"POST"`
 	SkipMuster                    bool             `methods:"POST"`
+	ChatLanguageISO639_1          string           `methods:"POST"`
 
 	NMembers int
 	Members  Members
