@@ -413,6 +413,9 @@ func (req *gamesReq) handle() error {
 		}
 		games = append(games, nextBatch...)
 	}
+	if err != nil && err != datastore.Done {
+		return err
+	}
 
 	curs, err := req.cursor(err)
 	if err != nil {
@@ -423,6 +426,7 @@ func (req *gamesReq) handle() error {
 	return nil
 }
 
+// handlePublic returns a renderer public games, filtering out games the viewer can view if viewerStatsFilter is true.
 func (h *gamesHandler) handlePublic(viewerStatsFilter bool) func(w ResponseWriter, r Request) error {
 	return func(w ResponseWriter, r Request) error {
 		req, err := h.prepare(w, r, nil, viewerStatsFilter)
@@ -434,6 +438,7 @@ func (h *gamesHandler) handlePublic(viewerStatsFilter bool) func(w ResponseWrite
 	}
 }
 
+// handleOther renders games belonging to the user_id parameter.
 func (h gamesHandler) handleOther(w ResponseWriter, r Request) error {
 	userId := r.Vars()["user_id"]
 
@@ -445,6 +450,7 @@ func (h gamesHandler) handleOther(w ResponseWriter, r Request) error {
 	return req.handle()
 }
 
+// handlePrivate renders games belonging to the viewer.
 func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
