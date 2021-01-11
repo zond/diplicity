@@ -123,6 +123,8 @@ const (
 	FindBadlyResetGamesRoute            = "FindBadlyResetGames"
 	FixBrokenlyMusteredGamesRoute       = "FixBrokenlyMusteredGames"
 	FindBrokenNewestPhaseMetaRoute      = "FindBrokenNewestPhaseMeta"
+	GameMasterDeleteGameRoute           = "GameMasterDeleteGame"
+	GameMasterKickMemberRoute           = "GameMasterKickMember"
 )
 
 type userStatsHandler struct {
@@ -1878,6 +1880,8 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Game/{game_id}/GameResults/TrueSkills", []string{"GET"}, ListGameResultTrueSkillsRoute, listGameResultTrueSkills)
 	Handle(r, "/Game/{game_id}/Channels", []string{"GET"}, ListChannelsRoute, listChannels)
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/_dev_resolve_timeout", []string{"GET"}, DevResolvePhaseTimeoutRoute, devResolvePhaseTimeout)
+	Handle(r, "/Game/{game_id}/GameMaster/Delete", []string{"DELETE"}, GameMasterDeleteGameRoute, gameMasterDeleteGame)
+	Handle(r, "/Game/{game_id}/GameMaster/Kick/{email}", []string{"DELETE"}, GameMasterKickMemberRoute, gameMasterKickMember)
 	Handle(r, "/User/{user_id}/Stats/_dev_update", []string{"PUT"}, DevUserStatsUpdateRoute, devUserStatsUpdate)
 	// TODO(zond): Remove this when the Android client no longer uses the old API.
 	Handle(r, "/Game/{game_id}/Phase/{phase_ordinal}/PhaseState/{nation}", []string{"PUT"}, "deprecatedUpdatePhaseState",
@@ -1898,7 +1902,8 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Users/Ratings/Histogram", []string{"GET"}, GetUserRatingHistogramRoute, getUserRatingHistogram)
 	HandleResource(r, GameResource)
 	HandleResource(r, AllocationResource)
-	HandleResource(r, GameEditNewestPhaseDeadlineAtResource)
+	HandleResource(r, GameMasterInvitationResource)
+	HandleResource(r, GameMasterEditNewestPhaseDeadlineAtResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)
 	HandleResource(r, OrderResource)

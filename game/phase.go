@@ -30,16 +30,16 @@ import (
 )
 
 var (
-	asyncResolvePhaseFunc                 *DelayFunc
-	timeoutResolvePhaseFunc               *DelayFunc
-	planPhaseTimeoutFunc                  *DelayFunc
-	sendPhaseDeadlineWarningFunc          *DelayFunc
-	sendPhaseNotificationsToUsersFunc     *DelayFunc
-	sendPhaseNotificationsToFCMFunc       *DelayFunc
-	sendPhaseNotificationsToMailFunc      *DelayFunc
-	ejectProbationariesFunc               *DelayFunc
-	PhaseResource                         *Resource
-	GameEditNewestPhaseDeadlineAtResource *Resource
+	asyncResolvePhaseFunc                       *DelayFunc
+	timeoutResolvePhaseFunc                     *DelayFunc
+	planPhaseTimeoutFunc                        *DelayFunc
+	sendPhaseDeadlineWarningFunc                *DelayFunc
+	sendPhaseNotificationsToUsersFunc           *DelayFunc
+	sendPhaseNotificationsToFCMFunc             *DelayFunc
+	sendPhaseNotificationsToMailFunc            *DelayFunc
+	ejectProbationariesFunc                     *DelayFunc
+	PhaseResource                               *Resource
+	GameMasterEditNewestPhaseDeadlineAtResource *Resource
 )
 
 func init() {
@@ -64,8 +64,8 @@ func init() {
 		},
 	}
 
-	GameEditNewestPhaseDeadlineAtResource = &Resource{
-		Create:     editNewestPhaseDeadlineAt,
+	GameMasterEditNewestPhaseDeadlineAtResource = &Resource{
+		Create:     gameMasterEditNewestPhaseDeadlineAt,
 		CreatePath: "/Game/{game_id}/Phase/{phase_ordinal}",
 	}
 }
@@ -2105,7 +2105,7 @@ func listPhases(w ResponseWriter, r Request) error {
 	return nil
 }
 
-func editNewestPhaseDeadlineAt(w ResponseWriter, r Request) (*GameEditNewestPhaseDeadlineAtMock, error) {
+func gameMasterEditNewestPhaseDeadlineAt(w ResponseWriter, r Request) (*GameEditNewestPhaseDeadlineAtMock, error) {
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*auth.User)
@@ -2141,6 +2141,7 @@ func editNewestPhaseDeadlineAt(w ResponseWriter, r Request) (*GameEditNewestPhas
 		if err := datastore.Get(ctx, gameID, game); err != nil {
 			return err
 		}
+		game.ID = gameID
 
 		if game.GameMasterId != user.Id {
 			return HTTPErr{"unauthorized", http.StatusUnauthorized}

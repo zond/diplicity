@@ -18,13 +18,38 @@ import (
 	. "github.com/zond/goaeoas"
 )
 
-var MemberResource = &Resource{
-	Create:     createMember,
-	Delete:     deleteMember,
-	Update:     updateMember,
-	CreatePath: "/Game/{game_id}/Member",
-	FullPath:   "/Game/{game_id}/Member/{user_id}",
+var (
+	MemberResource               *Resource
+	GameMasterInvitationResource *Resource
+)
+
+func init() {
+	MemberResource = &Resource{
+		Create:     createMember,
+		Delete:     deleteMember,
+		Update:     updateMember,
+		CreatePath: "/Game/{game_id}/Member",
+		FullPath:   "/Game/{game_id}/Member/{user_id}",
+	}
+	GameMasterInvitationResource = &Resource{
+		Create:     gameMasterCreateInvitation,
+		Delete:     gameMasterDeleteInvitation,
+		CreatePath: "/Game/{game_id}",
+		FullPath:   "/Game/{game_id}/{email}",
+	}
 }
+
+type GameMasterInvitation struct {
+	Email  string       `methods:"POST"`
+	Nation godip.Nation `methods:"POST"`
+}
+
+func (g *GameMasterInvitation) Item(r Request) *Item {
+	allocationItem := NewItem(g)
+	return allocationItem
+}
+
+type GameMasterInvitations []GameMasterInvitation
 
 type Member struct {
 	User              auth.User
@@ -33,6 +58,7 @@ type Member struct {
 	NationPreferences string `methods:"POST,PUT" datastore:",noindex"`
 	NewestPhaseState  PhaseState
 	UnreadMessages    int
+	Replaceable       bool
 }
 
 type Members []Member
@@ -228,28 +254,52 @@ func createMemberHelper(
 			return HTTPErr{"non existing game", http.StatusPreconditionFailed}
 		}
 		game.ID = gameID
+
 		isMember := false
 		_, isMember = game.GetMemberByUserId(user.Id)
 		if isMember {
 			return HTTPErr{"user already member", http.StatusBadRequest}
 		}
-		if !game.Joinable() {
+
+		if !game.Joinable(user) {
 			return HTTPErr{"game not joinable", http.StatusPreconditionFailed}
 		}
-		member.User = *user
-		member.NewestPhaseState = PhaseState{
-			GameID: gameID,
+
+		if game.Started {
+			replaced := false
+			for memberIdx := range game.Members {
+				oldMember := game.Members[memberIdx]
+				if oldMember.Replaceable {
+					oldMember.User = *user
+					oldMember.GameAlias = member.GameAlias
+					oldMember.Replaceable = false
+					replaced = true
+					break
+				}
+			}
+			if !replaced {
+				return fmt.Errorf("wtf? how could this even happen?")
+			}
+		} else {
+			member.User = *user
+			member.NewestPhaseState = PhaseState{
+				GameID: gameID,
+			}
+			game.Members = append(game.Members, *member)
+
+			if len(game.Members) == len(variants.Variants[game.Variant].Nations) {
+				if err := asyncStartGameFunc.EnqueueIn(ctx, 0, game.ID, r.Req().Host); err != nil {
+					return err
+				}
+			}
+
 		}
-		game.Members = append(game.Members, *member)
+
 		if err := game.Save(ctx); err != nil {
 			return err
 		}
-		if len(game.Members) == len(variants.Variants[game.Variant].Nations) {
-			if err := asyncStartGameFunc.EnqueueIn(ctx, 0, game.ID, r.Req().Host); err != nil {
-				return err
-			}
-		}
-		if err := UpdateUserStatsASAP(ctx, []string{member.User.Id}); err != nil {
+
+		if err := UpdateUserStatsASAP(ctx, []string{user.Id}); err != nil {
 			return err
 		}
 		return nil
@@ -258,6 +308,179 @@ func createMemberHelper(
 	}
 
 	return game, member, nil
+}
+
+func gameMasterKickMember(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return err
+	}
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		if err := datastore.Get(ctx, gameID, game); err != nil {
+			return err
+		}
+		game.ID = gameID
+
+		if game.GameMasterId != user.Id {
+			return HTTPErr{"unauthorized", http.StatusUnauthorized}
+		}
+
+		var removedMember Member
+		if !game.Started {
+			newMembers := []Member{}
+			for memberIdx := range game.Members {
+				oldMember := game.Members[memberIdx]
+				if oldMember.User.Email == r.Vars()["email"] {
+					removedMember = oldMember
+				} else {
+					newMembers = append(newMembers, oldMember)
+				}
+			}
+			game.Members = newMembers
+		} else if !game.Finished {
+			for memberIdx := range game.Members {
+				oldMember := game.Members[memberIdx]
+				if oldMember.User.Email == r.Vars()["email"] {
+					removedMember = oldMember
+					oldMember.GameAlias = ""
+					oldMember.User = auth.User{
+						Name: "Redacted",
+					}
+					oldMember.Replaceable = true
+				}
+			}
+		} else {
+			return HTTPErr{"game is finished", http.StatusPreconditionFailed}
+		}
+
+		if removedMember.User.Id != "" {
+			if _, err := datastore.Put(ctx, gameID, game); err != nil {
+				return err
+			}
+
+			if err := UpdateUserStatsASAP(ctx, []string{removedMember.User.Id}); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func gameMasterDeleteInvitation(w ResponseWriter, r Request) (*GameMasterInvitation, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return nil, err
+	}
+
+	gmi := GameMasterInvitation{}
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		if err := datastore.Get(ctx, gameID, game); err != nil {
+			return err
+		}
+		game.ID = gameID
+
+		if game.GameMasterId != user.Id {
+			return HTTPErr{"unauthorized", http.StatusUnauthorized}
+		}
+
+		newInvitations := GameMasterInvitations{}
+		for _, invitation := range game.GameMasterInvitations {
+			if invitation.Email != r.Vars()["email"] {
+				newInvitations = append(newInvitations, invitation)
+			} else {
+				gmi = invitation
+			}
+		}
+		game.GameMasterInvitations = newInvitations
+
+		if _, err := datastore.Put(ctx, gameID, game); err != nil {
+			return err
+		}
+
+		return nil
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		return nil, err
+	}
+
+	return &gmi, nil
+}
+
+func gameMasterCreateInvitation(w ResponseWriter, r Request) (*GameMasterInvitation, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
+	if err != nil {
+		return nil, err
+	}
+
+	gmi := &GameMasterInvitation{}
+	err = Copy(gmi, r, "POST")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game := &Game{}
+		if err := datastore.Get(ctx, gameID, game); err != nil {
+			return err
+		}
+		game.ID = gameID
+
+		if game.GameMasterId != user.Id {
+			return HTTPErr{"unauthorized", http.StatusUnauthorized}
+		}
+
+		if game.Started {
+			return HTTPErr{"game already started", http.StatusPreconditionFailed}
+		}
+
+		if game.IsGameMasterInvited(gmi.Email) {
+			return HTTPErr{"email already invited", http.StatusPreconditionFailed}
+		}
+
+		if gmi.Nation != "" && !game.ValidNation(gmi.Nation) {
+			return HTTPErr{"unrecognized nation in variant", http.StatusBadRequest}
+		}
+
+		game.GameMasterInvitations = append(game.GameMasterInvitations, *gmi)
+		if _, err := datastore.Put(ctx, gameID, game); err != nil {
+			return err
+		}
+
+		return nil
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		return nil, err
+	}
+
+	return gmi, nil
 }
 
 func createMember(w ResponseWriter, r Request) (*Member, error) {
@@ -288,6 +511,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 	userStats := &UserStats{}
 	if err := datastore.Get(ctx, UserStatsID(ctx, user.Id), userStats); err == datastore.ErrNoSuchEntity {
 		userStats.UserId = user.Id
+		userStats.User = *user
 	} else if err != nil {
 		return nil, err
 	}
