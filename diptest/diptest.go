@@ -216,6 +216,14 @@ func (e *Env) GetRoute(route string) *Req {
 	}
 }
 
+func (e *Env) DeleteRoute(route string) *Req {
+	return &Req{
+		env:    e,
+		route:  route,
+		method: "DELETE",
+	}
+}
+
 func (e *Env) PutURL(u string) *Req {
 	pu, err := url.Parse(u)
 	if err != nil {
@@ -463,7 +471,15 @@ func (r *Req) Success() *Result {
 func (r *Req) Status(i int) *Result {
 	res := r.do()
 	if res.Status != i {
-		panic(fmt.Errorf("fetching %q:%v", res.URL.String(), res.Status))
+		panic(fmt.Errorf("%sing %q:%v", r.method, res.URL.String(), res.Status))
+	}
+	return res
+}
+
+func (r *Req) AuthFailure() *Result {
+	res := r.do()
+	if res.Status != http.StatusUnauthorized {
+		panic(fmt.Errorf("%sing %q: %v", r.method, res.URL.String(), res.Status))
 	}
 	return res
 }
@@ -471,7 +487,7 @@ func (r *Req) Status(i int) *Result {
 func (r *Req) Failure() *Result {
 	res := r.do()
 	if res.Status > 199 && res.Status < 300 {
-		panic(fmt.Errorf("fetching %q: %v", res.URL.String(), res.Status))
+		panic(fmt.Errorf("%sing %q: %v", r.method, res.URL.String(), res.Status))
 	}
 	return res
 }

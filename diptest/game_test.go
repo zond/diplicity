@@ -542,6 +542,9 @@ func TestIndexCreation(t *testing.T) {
 		game.ListOpenGamesRoute,
 		game.ListStartedGamesRoute,
 		game.ListFinishedGamesRoute,
+		game.ListMasteredStagingGamesRoute,
+		game.ListMasteredStartedGamesRoute,
+		game.ListMasteredFinishedGamesRoute,
 	}
 	filterParams := map[string]func() *string{
 		"variant":                  randString,

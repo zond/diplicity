@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 )
@@ -181,7 +182,13 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 	return member, nil
 }
 
-func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId string, idempotent bool) (*Member, error) {
+type deleteMemberRequest struct {
+	actorId    string
+	toRemoveId string
+	systemReq  bool
+}
+
+func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, delReq deleteMemberRequest, idempotent bool) (*Member, error) {
 	var member *Member
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
@@ -189,31 +196,52 @@ func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, userId strin
 			return HTTPErr{"non existing game", http.StatusPreconditionFailed}
 		}
 		game.ID = gameID
+
 		isMember := false
-		member, isMember = game.GetMemberByUserId(userId)
+		member, isMember = game.GetMemberByUserId(delReq.toRemoveId)
 		if !isMember {
 			if idempotent {
 				return nil
 			}
-			return HTTPErr{"can only leave member games", http.StatusNotFound}
+			return HTTPErr{"can only remove existing members", http.StatusNotFound}
 		}
-		if !game.Leavable() {
-			return HTTPErr{"game not leavable", http.StatusPreconditionFailed}
+
+		if !delReq.systemReq && (!game.Leavable() || delReq.actorId != delReq.toRemoveId) && game.GameMasterId != delReq.actorId {
+			return HTTPErr{"member not removable, or actor not game master", http.StatusPreconditionFailed}
 		}
-		newMembers := []Member{}
-		for _, oldMember := range game.Members {
-			if oldMember.User.Id != member.User.Id {
-				newMembers = append(newMembers, oldMember)
+
+		if !game.Started {
+			newMembers := []Member{}
+			for memberIdx := range game.Members {
+				oldMember := game.Members[memberIdx]
+				if oldMember.User.Id != delReq.toRemoveId {
+					newMembers = append(newMembers, oldMember)
+				}
 			}
+			game.Members = newMembers
+		} else if !game.Finished {
+			member.GameAlias = ""
+			member.User = auth.User{
+				Name: "Redacted",
+			}
+			member.Replaceable = true
+		} else {
+			return HTTPErr{"game is finished", http.StatusPreconditionFailed}
 		}
-		if !game.GameMasterEnabled && len(newMembers) == 0 && !game.Started {
-			return datastore.Delete(ctx, gameID)
-		}
-		game.Members = newMembers
-		if err := UpdateUserStatsASAP(ctx, []string{member.User.Id}); err != nil {
+
+		if err := UpdateUserStatsASAP(ctx, []string{delReq.toRemoveId}); err != nil {
 			return err
 		}
-		return game.Save(ctx)
+
+		if !game.GameMasterEnabled && len(game.Members) == 0 && !game.Started {
+			return datastore.Delete(ctx, gameID)
+		}
+
+		if err := game.Save(ctx); err != nil {
+			return err
+		}
+
+		return nil
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
@@ -228,16 +256,12 @@ func deleteMember(w ResponseWriter, r Request) (*Member, error) {
 		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
-	if user.Id != r.Vars()["user_id"] {
-		return nil, HTTPErr{"can only delete yourself", http.StatusForbidden}
-	}
-
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
 	if err != nil {
 		return nil, err
 	}
 
-	return deleteMemberHelper(ctx, gameID, user.Id, false)
+	return deleteMemberHelper(ctx, gameID, deleteMemberRequest{actorId: user.Id, toRemoveId: r.Vars()["user_id"]}, false)
 }
 
 func createMemberHelper(
@@ -268,7 +292,7 @@ func createMemberHelper(
 		if game.Started {
 			replaced := false
 			for memberIdx := range game.Members {
-				oldMember := game.Members[memberIdx]
+				oldMember := &game.Members[memberIdx]
 				if oldMember.Replaceable {
 					oldMember.User = *user
 					oldMember.GameAlias = member.GameAlias
@@ -308,76 +332,6 @@ func createMemberHelper(
 	}
 
 	return game, member, nil
-}
-
-func gameMasterKickMember(w ResponseWriter, r Request) error {
-	ctx := appengine.NewContext(r.Req())
-
-	user, ok := r.Values()["user"].(*auth.User)
-	if !ok {
-		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
-	}
-
-	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
-	if err != nil {
-		return err
-	}
-
-	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
-		game := &Game{}
-		if err := datastore.Get(ctx, gameID, game); err != nil {
-			return err
-		}
-		game.ID = gameID
-
-		if game.GameMasterId != user.Id {
-			return HTTPErr{"unauthorized", http.StatusUnauthorized}
-		}
-
-		var removedMember Member
-		if !game.Started {
-			newMembers := []Member{}
-			for memberIdx := range game.Members {
-				oldMember := game.Members[memberIdx]
-				if oldMember.User.Email == r.Vars()["email"] {
-					removedMember = oldMember
-				} else {
-					newMembers = append(newMembers, oldMember)
-				}
-			}
-			game.Members = newMembers
-		} else if !game.Finished {
-			for memberIdx := range game.Members {
-				oldMember := game.Members[memberIdx]
-				if oldMember.User.Email == r.Vars()["email"] {
-					removedMember = oldMember
-					oldMember.GameAlias = ""
-					oldMember.User = auth.User{
-						Name: "Redacted",
-					}
-					oldMember.Replaceable = true
-				}
-			}
-		} else {
-			return HTTPErr{"game is finished", http.StatusPreconditionFailed}
-		}
-
-		if removedMember.User.Id != "" {
-			if _, err := datastore.Put(ctx, gameID, game); err != nil {
-				return err
-			}
-
-			if err := UpdateUserStatsASAP(ctx, []string{removedMember.User.Id}); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}, &datastore.TransactionOptions{XG: false}); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func gameMasterDeleteInvitation(w ResponseWriter, r Request) (*GameMasterInvitation, error) {
@@ -524,6 +478,7 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 
 	member := &Member{}
 	if err := Copy(member, r, "POST"); err != nil {
+		log.Infof(ctx, "hehu: %v", err)
 		return nil, err
 	}
 

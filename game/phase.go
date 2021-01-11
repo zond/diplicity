@@ -66,7 +66,7 @@ func init() {
 
 	GameMasterEditNewestPhaseDeadlineAtResource = &Resource{
 		Create:     gameMasterEditNewestPhaseDeadlineAt,
-		CreatePath: "/Game/{game_id}/Phase/{phase_ordinal}",
+		CreatePath: "/Game/{game_id}/Phase/{phase_ordinal}/DeadlineAt",
 	}
 }
 
@@ -218,7 +218,7 @@ func ejectProbationaries(ctx context.Context, probationaries []string) error {
 			return err
 		}
 		for _, gameID := range ids {
-			if _, err := deleteMemberHelper(ctx, gameID, probationary, true); err != nil {
+			if _, err := deleteMemberHelper(ctx, gameID, deleteMemberRequest{systemReq: true, toRemoveId: probationary}, true); err != nil {
 				log.Infof(ctx, "Unable to delete %q from game %v: %v; fix 'deleteMemberHelper' or hope datastore gets fixed", probationary, gameID, err)
 				return err
 			}
