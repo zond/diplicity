@@ -972,8 +972,8 @@ func AllocateNations(preferers Preferers, nations godip.Nations) ([]godip.Nation
 }
 
 func (g *Game) ValidNation(nation godip.Nation) bool {
-	for _, nation := range variants.Variants[g.Variant].Nations {
-		if nation == nation {
+	for _, variantNation := range variants.Variants[g.Variant].Nations {
+		if nation == variantNation {
 			return true
 		}
 	}
