@@ -462,7 +462,7 @@ func gameMasterCreateInvitation(w ResponseWriter, r Request) (*GameMasterInvitat
 			return HTTPErr{"game already started", http.StatusPreconditionFailed}
 		}
 
-		if game.IsGameMasterInvited(gmi.Email) {
+		if game.IsInvitedByGameMaster(gmi.Email) {
 			return HTTPErr{"email already invited", http.StatusPreconditionFailed}
 		}
 

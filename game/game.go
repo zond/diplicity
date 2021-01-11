@@ -271,7 +271,7 @@ func (g *Games) RemoveFiltered(userStats *UserStats) [][]string {
 			failedRequirements[i] = append(failedRequirements[i], "MinQuickness")
 			continue
 		}
-		if game.GameMasterEnabled && game.RequireGameMasterInvitation && game.GameMasterId != userStats.User.Id && !game.IsGameMasterInvited(userStats.User.Email) {
+		if game.GameMasterEnabled && game.RequireGameMasterInvitation && game.GameMasterId != userStats.User.Id && !game.IsInvitedByGameMaster(userStats.User.Email) {
 			failedRequirements[i] = append(failedRequirements[i], "InvitationNeeded")
 			continue
 		}
@@ -582,7 +582,7 @@ func (g *Game) Leavable() bool {
 	return !g.Started
 }
 
-func (g *Game) IsGameMasterInvited(email string) bool {
+func (g *Game) IsInvitedByGameMaster(email string) bool {
 	for _, invitation := range g.GameMasterInvitations {
 		if invitation.Email == email {
 			return true
@@ -605,12 +605,12 @@ func (g *Game) Joinable(user *auth.User) bool {
 		return false
 	}
 	if g.Closed || g.NMembers >= len(variants.Variants[g.Variant].Nations) {
-		if g.GameMasterEnabled && g.HasReplaceableMember() && (!g.RequireGameMasterInvitation || g.IsGameMasterInvited(user.Email)) {
+		if g.GameMasterEnabled && g.HasReplaceableMember() && (!g.RequireGameMasterInvitation || g.IsInvitedByGameMaster(user.Email)) {
 			return true
 		}
 		return false
 	} else {
-		if g.GameMasterEnabled && g.RequireGameMasterInvitation && !g.IsGameMasterInvited(user.Email) {
+		if g.GameMasterEnabled && g.RequireGameMasterInvitation && !g.IsInvitedByGameMaster(user.Email) {
 			return false
 		}
 		return false
