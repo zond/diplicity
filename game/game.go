@@ -613,7 +613,7 @@ func (g *Game) Joinable(user *auth.User) bool {
 		if g.GameMasterEnabled && g.RequireGameMasterInvitation && !g.IsInvitedByGameMaster(user.Email) {
 			return false
 		}
-		return false
+		return true
 	}
 }
 
