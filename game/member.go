@@ -14,7 +14,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
 
 	. "github.com/zond/goaeoas"
 )
@@ -478,7 +477,6 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 
 	member := &Member{}
 	if err := Copy(member, r, "POST"); err != nil {
-		log.Infof(ctx, "hehu: %v", err)
 		return nil, err
 	}
 
