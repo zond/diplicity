@@ -1005,6 +1005,7 @@ func (g *Game) AllocateNations(ctx context.Context) error {
 		// If there is a prealloc for this member
 		if prealloc, found := preallocatedEmailsMap[member.User.Email]; found {
 			// Allocate it, and remove the allocated nation
+			log.Infof(ctx, "preallocating %v to %v", prealloc, member.User.Email)
 			member.Nation = prealloc
 			delete(nationsNeedingAllocationMap, prealloc)
 		} else {
@@ -1021,6 +1022,10 @@ func (g *Game) AllocateNations(ctx context.Context) error {
 
 	if len(nationsNeedingAllocation) != len(membersNeedingNations) {
 		return fmt.Errorf("wtf? how did this even happen?")
+	}
+
+	if len(nationsNeedingAllocation) == 0 {
+		return nil
 	}
 
 	if g.NationAllocation == RandomAllocation {

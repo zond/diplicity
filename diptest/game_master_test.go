@@ -8,6 +8,238 @@ import (
 	"github.com/zond/diplicity/game"
 )
 
+func TestGameMasterPreallocationBothPref(t *testing.T) {
+	masterEnv := NewEnv().SetUID(String("fake"))
+	gameDesc := String("test-game")
+
+	masterEnv.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").
+		Body(map[string]interface{}{
+			"Desc":                        gameDesc,
+			"Variant":                     "Cold War",
+			"PhaseLengthMinutes":          time.Duration(60),
+			"GameMasterEnabled":           true,
+			"RequireGameMasterInvitation": true,
+			"SkipMuster":                  true,
+			"Private":                     true,
+			"NationAllocation":            1,
+		}).Success()
+	gameID := masterEnv.GetRoute(game.IndexRoute).Success().
+		Follow("mastered-staging-games", "Links").Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).GetValue("Properties", "ID").(string)
+
+	player1Env := NewEnv().SetUID(String("player1")).SetEmail(String("email1"))
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player1Env.email,
+		"Nation": "blaj",
+	}).Failure()
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player1Env.email,
+		"Nation": "USSR",
+	}).Success()
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email": player1Env.email,
+	}).Failure()
+	player1Env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("join", "Links").Body(map[string]interface{}{
+		"NationPreferences": "NATO,USSR",
+	}).Success()
+
+	player2Env := NewEnv().SetUID(String("player2")).SetEmail(String("email2"))
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player2Env.email,
+		"Nation": "NATO",
+	}).Success()
+	player2Env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("join", "Links").Body(map[string]interface{}{
+		"NationPreferences": "USSR,NATO",
+	}).Success()
+
+	WaitForEmptyQueue("game-asyncStartGame")
+
+	player1Env.GetRoute("ListMyStartedGames").Success().
+		Find("USSR", []string{"Properties"}, []string{"Properties", "Members"}, []string{"Nation"}).
+		Find(player1Env.uid, []string{"User", "Id"})
+	player2Env.GetRoute("ListMyStartedGames").Success().
+		Find("NATO", []string{"Properties"}, []string{"Properties", "Members"}, []string{"Nation"}).
+		Find(player2Env.uid, []string{"User", "Id"})
+}
+
+func TestGameMasterPreallocationOnePref(t *testing.T) {
+	masterEnv := NewEnv().SetUID(String("fake"))
+	gameDesc := String("test-game")
+
+	masterEnv.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").
+		Body(map[string]interface{}{
+			"Desc":                        gameDesc,
+			"Variant":                     "Cold War",
+			"PhaseLengthMinutes":          time.Duration(60),
+			"GameMasterEnabled":           true,
+			"RequireGameMasterInvitation": true,
+			"SkipMuster":                  true,
+			"Private":                     true,
+			"NationAllocation":            1,
+		}).Success()
+	gameID := masterEnv.GetRoute(game.IndexRoute).Success().
+		Follow("mastered-staging-games", "Links").Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).GetValue("Properties", "ID").(string)
+
+	player1Env := NewEnv().SetUID(String("player1")).SetEmail(String("email1"))
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player1Env.email,
+		"Nation": "blaj",
+	}).Failure()
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player1Env.email,
+		"Nation": "USSR",
+	}).Success()
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email": player1Env.email,
+	}).Failure()
+	player1Env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("join", "Links").Body(map[string]interface{}{
+		"NationPreferences": "NATO,USSR",
+	}).Success()
+
+	player2Env := NewEnv().SetUID(String("player2")).SetEmail(String("email2"))
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email": player2Env.email,
+	}).Success()
+	player2Env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("join", "Links").Body(map[string]interface{}{
+		"NationPreferences": "USSR,NATO",
+	}).Success()
+
+	WaitForEmptyQueue("game-asyncStartGame")
+
+	player1Env.GetRoute("ListMyStartedGames").Success().
+		Find("USSR", []string{"Properties"}, []string{"Properties", "Members"}, []string{"Nation"}).
+		Find(player1Env.uid, []string{"User", "Id"})
+	player2Env.GetRoute("ListMyStartedGames").Success().
+		Find("NATO", []string{"Properties"}, []string{"Properties", "Members"}, []string{"Nation"}).
+		Find(player2Env.uid, []string{"User", "Id"})
+}
+
+func TestGameMasterPreallocationOneRandom(t *testing.T) {
+	masterEnv := NewEnv().SetUID(String("fake"))
+	gameDesc := String("test-game")
+
+	masterEnv.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").
+		Body(map[string]interface{}{
+			"Desc":                        gameDesc,
+			"Variant":                     "Cold War",
+			"PhaseLengthMinutes":          time.Duration(60),
+			"GameMasterEnabled":           true,
+			"RequireGameMasterInvitation": true,
+			"SkipMuster":                  true,
+			"Private":                     true,
+		}).Success()
+	gameID := masterEnv.GetRoute(game.IndexRoute).Success().
+		Follow("mastered-staging-games", "Links").Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).GetValue("Properties", "ID").(string)
+
+	player1Env := NewEnv().SetUID(String("player1")).SetEmail(String("email1"))
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player1Env.email,
+		"Nation": "blaj",
+	}).Failure()
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player1Env.email,
+		"Nation": "USSR",
+	}).Success()
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email": player1Env.email,
+	}).Failure()
+	player1Env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("join", "Links").Body(nil).Success()
+
+	player2Env := NewEnv().SetUID(String("player2")).SetEmail(String("email2"))
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email": player2Env.email,
+	}).Success()
+	player2Env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("join", "Links").Body(nil).Success()
+
+	WaitForEmptyQueue("game-asyncStartGame")
+
+	player1Env.GetRoute("ListMyStartedGames").Success().
+		Find("USSR", []string{"Properties"}, []string{"Properties", "Members"}, []string{"Nation"}).
+		Find(player1Env.uid, []string{"User", "Id"})
+	player2Env.GetRoute("ListMyStartedGames").Success().
+		Find("NATO", []string{"Properties"}, []string{"Properties", "Members"}, []string{"Nation"}).
+		Find(player2Env.uid, []string{"User", "Id"})
+}
+
+func TestGameMasterPreallocationBothRandom(t *testing.T) {
+	masterEnv := NewEnv().SetUID(String("fake"))
+	gameDesc := String("test-game")
+
+	masterEnv.GetRoute(game.IndexRoute).Success().
+		Follow("create-game", "Links").
+		Body(map[string]interface{}{
+			"Desc":                        gameDesc,
+			"Variant":                     "Cold War",
+			"PhaseLengthMinutes":          time.Duration(60),
+			"GameMasterEnabled":           true,
+			"RequireGameMasterInvitation": true,
+			"SkipMuster":                  true,
+			"Private":                     true,
+		}).Success()
+	gameID := masterEnv.GetRoute(game.IndexRoute).Success().
+		Follow("mastered-staging-games", "Links").Success().
+		Find(gameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).GetValue("Properties", "ID").(string)
+
+	player1Env := NewEnv().SetUID(String("player1")).SetEmail(String("email1"))
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player1Env.email,
+		"Nation": "blaj",
+	}).Failure()
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player1Env.email,
+		"Nation": "USSR",
+	}).Success()
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email": player1Env.email,
+	}).Failure()
+	player1Env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("join", "Links").Body(nil).Success()
+
+	player2Env := NewEnv().SetUID(String("player2")).SetEmail(String("email2"))
+	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("invite-user", "Links").Body(map[string]interface{}{
+		"Email":  player2Env.email,
+		"Nation": "NATO",
+	}).Success()
+	player2Env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
+		Follow("join", "Links").Body(nil).Success()
+
+	WaitForEmptyQueue("game-asyncStartGame")
+
+	player1Env.GetRoute("ListMyStartedGames").Success().
+		Find("USSR", []string{"Properties"}, []string{"Properties", "Members"}, []string{"Nation"}).
+		Find(player1Env.uid, []string{"User", "Id"})
+	player2Env.GetRoute("ListMyStartedGames").Success().
+		Find("NATO", []string{"Properties"}, []string{"Properties", "Members"}, []string{"Nation"}).
+		Find(player2Env.uid, []string{"User", "Id"})
+}
+
 func TestGameMasterFunctionality(t *testing.T) {
 	masterEnv := NewEnv().SetUID(String("fake"))
 	t.Run("MustBePrivate", func(t *testing.T) {
