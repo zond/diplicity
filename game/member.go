@@ -205,7 +205,7 @@ func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, delReq delet
 			return HTTPErr{"can only remove existing members", http.StatusNotFound}
 		}
 
-		if !delReq.systemReq && (!game.Leavable() || delReq.actorId != delReq.toRemoveId) && game.GameMasterId != delReq.actorId {
+		if !delReq.systemReq && (!game.Leavable() || delReq.actorId != delReq.toRemoveId) && game.GameMaster.Id != delReq.actorId {
 			return HTTPErr{"member not removable, or actor not game master", http.StatusPreconditionFailed}
 		}
 
@@ -355,7 +355,7 @@ func gameMasterDeleteInvitation(w ResponseWriter, r Request) (*GameMasterInvitat
 		}
 		game.ID = gameID
 
-		if game.GameMasterId != user.Id {
+		if game.GameMaster.Id != user.Id {
 			return HTTPErr{"unauthorized", http.StatusUnauthorized}
 		}
 
@@ -407,7 +407,7 @@ func gameMasterCreateInvitation(w ResponseWriter, r Request) (*GameMasterInvitat
 		}
 		game.ID = gameID
 
-		if game.GameMasterId != user.Id {
+		if game.GameMaster.Id != user.Id {
 			return HTTPErr{"unauthorized", http.StatusUnauthorized}
 		}
 

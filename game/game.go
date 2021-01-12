@@ -83,74 +83,74 @@ func init() {
 		Listers: []Lister{
 			{
 				Path:        "/Games/Open",
-				Route:       ListOpenGamesRoute,
-				Handler:     openGamesHandler.handlePublic(true),
+				Route:       openGamesHandler.route,
+				Handler:     openGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/Started",
-				Route:       ListStartedGamesRoute,
-				Handler:     startedGamesHandler.handlePublic(false),
+				Route:       startedGamesHandler.route,
+				Handler:     startedGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/Finished",
-				Route:       ListFinishedGamesRoute,
-				Handler:     finishedGamesHandler.handlePublic(false),
+				Route:       finishedGamesHandler.route,
+				Handler:     finishedGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/Mastered/Staging",
-				Route:       ListMasteredStagingGamesRoute,
-				Handler:     stagingGamesHandler.handlePrivate(true),
+				Route:       masteredStagingGamesHandler.route,
+				Handler:     masteredStagingGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/Mastered/Started",
-				Route:       ListMasteredStartedGamesRoute,
-				Handler:     startedGamesHandler.handlePrivate(true),
+				Route:       masteredStartedGamesHandler.route,
+				Handler:     masteredStartedGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/Mastered/Finished",
-				Route:       ListMasteredFinishedGamesRoute,
-				Handler:     finishedGamesHandler.handlePrivate(true),
+				Route:       masteredFinishedGamesHandler.route,
+				Handler:     masteredFinishedGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Staging",
-				Route:       ListMyStagingGamesRoute,
-				Handler:     stagingGamesHandler.handlePrivate(false),
+				Route:       myStagingGamesHandler.route,
+				Handler:     myStagingGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Started",
-				Route:       ListMyStartedGamesRoute,
-				Handler:     startedGamesHandler.handlePrivate(false),
+				Route:       myStartedGamesHandler.route,
+				Handler:     myStartedGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Finished",
-				Route:       ListMyFinishedGamesRoute,
-				Handler:     finishedGamesHandler.handlePrivate(false),
+				Route:       myFinishedGamesHandler.route,
+				Handler:     myFinishedGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/{user_id}/Staging",
-				Route:       ListOtherStagingGamesRoute,
-				Handler:     stagingGamesHandler.handleOther,
+				Route:       otherMemberStagingGamesHandler.route,
+				Handler:     otherMemberStagingGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/{user_id}/Started",
-				Route:       ListOtherStartedGamesRoute,
-				Handler:     startedGamesHandler.handleOther,
+				Route:       otherMemberStartedGamesHandler.route,
+				Handler:     otherMemberStartedGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/{user_id}/Finished",
-				Route:       ListOtherFinishedGamesRoute,
-				Handler:     finishedGamesHandler.handleOther,
+				Route:       otherMemberFinishedGamesHandler.route,
+				Handler:     otherMemberFinishedGamesHandler.handle,
 				QueryParams: gameListerParams,
 			},
 		},
@@ -273,7 +273,7 @@ func (g *Games) RemoveFiltered(userStats *UserStats) [][]string {
 			failedRequirements[i] = append(failedRequirements[i], "MinQuickness")
 			continue
 		}
-		if game.GameMasterEnabled && game.RequireGameMasterInvitation && game.GameMasterId != userStats.User.Id && !game.IsInvitedByGameMaster(userStats.User.Email) {
+		if game.GameMasterEnabled && game.RequireGameMasterInvitation && game.GameMaster.Id != userStats.User.Id && !game.IsInvitedByGameMaster(userStats.User.Email) {
 			failedRequirements[i] = append(failedRequirements[i], "InvitationNeeded")
 			continue
 		}
@@ -412,7 +412,7 @@ type Game struct {
 	RequireGameMasterInvitation   bool             `methods:"POST,PUT"`
 
 	GameMasterInvitations GameMasterInvitations
-	GameMasterId          string
+	GameMaster            auth.User
 
 	NMembers int
 	Members  Members
@@ -430,6 +430,14 @@ type Game struct {
 	StartedAgo  time.Duration `datastore:"-" ticker:"true"`
 	FinishedAt  time.Time
 	FinishedAgo time.Duration `datastore:"-" ticker:"true"`
+}
+
+func (g *Game) Load(props []datastore.Property) error {
+	err := datastore.LoadStruct(g, props)
+	if _, is := err.(*datastore.ErrFieldMismatch); is {
+		err = nil
+	}
+	return err
 }
 
 func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
@@ -655,7 +663,7 @@ func (g *Game) Item(r Request) *Item {
 				RouteParams: []string{"game_id", g.ID.Encode()},
 			}))
 		}
-		if user.Id == g.GameMasterId {
+		if user.Id == g.GameMaster.Id {
 			gameItem.AddLink(r.NewLink(GameResource.Link("update-game", Update, []string{"id", g.ID.Encode()})))
 			if !g.Started {
 				gameItem.AddLink(r.NewLink(GameResource.Link("delete-game", Delete, []string{"id", g.ID.Encode()})))
@@ -798,7 +806,7 @@ func gameMasterDeleteGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 		game.ID = gameID
 
-		if game.GameMasterId != user.Id {
+		if game.GameMaster.Id != user.Id {
 			return HTTPErr{"unauthorized", http.StatusUnauthorized}
 		}
 
@@ -851,7 +859,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		if !game.Private {
 			return nil, HTTPErr{"only private games can have game master", http.StatusBadRequest}
 		}
-		game.GameMasterId = user.Id
+		game.GameMaster = *user
 	}
 	game.CreatedAt = time.Now()
 
@@ -905,7 +913,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 }
 
 func (g *Game) Redact(viewer *auth.User, r Request) {
-	if viewer.Id == g.GameMasterId {
+	if viewer.Id == g.GameMaster.Id {
 		return
 	}
 	if !g.Finished && ((g.Private && g.Anonymous) || (!g.Private && g.DisablePrivateChat && g.DisableGroupChat && g.DisableConferenceChat)) {
@@ -1261,7 +1269,7 @@ func gameMasterUpdateGame(w ResponseWriter, r Request) (*Game, error) {
 		}
 		game.ID = gameID
 
-		if game.GameMasterId != user.Id {
+		if game.GameMaster.Id != user.Id {
 			return HTTPErr{"unauthorized", http.StatusUnauthorized}
 		}
 

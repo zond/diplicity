@@ -96,34 +96,17 @@ func handleIndex(w ResponseWriter, r Request) error {
 		})).AddLink(r.NewLink(Link{
 			Rel:   "top-quick-players",
 			Route: ListTopQuickPlayersRoute,
-		})).AddLink(r.NewLink(Link{
-			Rel:   "mastered-staging-games",
-			Route: ListMasteredStagingGamesRoute,
-		})).AddLink(r.NewLink(Link{
-			Rel:   "mastered-started-games",
-			Route: ListMasteredStartedGamesRoute,
-		})).AddLink(r.NewLink(Link{
-			Rel:   "mastered-finished-games",
-			Route: ListMasteredFinishedGamesRoute,
-		})).AddLink(r.NewLink(Link{
-			Rel:   "my-staging-games",
-			Route: ListMyStagingGamesRoute,
-		})).AddLink(r.NewLink(Link{
-			Rel:   "my-started-games",
-			Route: ListMyStartedGamesRoute,
-		})).AddLink(r.NewLink(Link{
-			Rel:   "my-finished-games",
-			Route: ListMyFinishedGamesRoute,
-		})).AddLink(r.NewLink(Link{
-			Rel:   "open-games",
-			Route: ListOpenGamesRoute,
-		})).AddLink(r.NewLink(Link{
-			Rel:   "started-games",
-			Route: ListStartedGamesRoute,
-		})).AddLink(r.NewLink(Link{
-			Rel:   "finished-games",
-			Route: ListFinishedGamesRoute,
-		})).AddLink(r.NewLink(Link{
+		}))
+		addGamesHandlerLink(r, index, masteredStagingGamesHandler)
+		addGamesHandlerLink(r, index, masteredStartedGamesHandler)
+		addGamesHandlerLink(r, index, masteredFinishedGamesHandler)
+		addGamesHandlerLink(r, index, myStagingGamesHandler)
+		addGamesHandlerLink(r, index, myStartedGamesHandler)
+		addGamesHandlerLink(r, index, myFinishedGamesHandler)
+		addGamesHandlerLink(r, index, openGamesHandler)
+		addGamesHandlerLink(r, index, startedGamesHandler)
+		addGamesHandlerLink(r, index, finishedGamesHandler)
+		index.AddLink(r.NewLink(Link{
 			Rel:   "flagged-messages",
 			Route: ListFlaggedMessagesRoute,
 		})).AddLink(r.NewLink(Link{

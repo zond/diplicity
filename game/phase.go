@@ -2143,7 +2143,7 @@ func gameMasterEditNewestPhaseDeadlineAt(w ResponseWriter, r Request) (*GameEdit
 		}
 		game.ID = gameID
 
-		if game.GameMasterId != user.Id {
+		if game.GameMaster.Id != user.Id {
 			return HTTPErr{"unauthorized", http.StatusUnauthorized}
 		}
 

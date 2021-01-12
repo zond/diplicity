@@ -186,12 +186,21 @@ func (h *userStatsHandler) handle(w ResponseWriter, r Request) error {
 	return nil
 }
 
+type handlerScope int
+
+const (
+	scopeMember handlerScope = iota
+	scopeOtherIsMember
+	scopePublic
+	scopeGameMaster
+)
+
 type gamesHandler struct {
-	query   *datastore.Query
-	name    string
-	desc    []string
-	route   string
-	private bool
+	query *datastore.Query
+	name  string
+	desc  []string
+	route string
+	scope handlerScope
 }
 
 type gamesReq struct {
@@ -205,6 +214,39 @@ type gamesReq struct {
 	h                 *gamesHandler
 	detailFilters     []func(g *Game) bool
 	viewerStatsFilter bool
+}
+
+/*
+ * handle uses the generating and filtering setup done by the gamesHandler
+ * to generate the next batch (according to cursor and limit)
+ * of games to return.
+ */
+func (req *gamesReq) handle() error {
+	var err error
+	games := make(Games, 0, req.limit)
+	for err == nil && len(games) < req.limit {
+		var nextBatch Games
+		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
+		nextBatch.RemoveCustomFiltered(req.detailFilters)
+		if req.viewerStatsFilter {
+			nextBatch.RemoveFiltered(req.userStats)
+			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
+				return filtErr
+			}
+		}
+		games = append(games, nextBatch...)
+	}
+	if err != nil && err != datastore.Done {
+		return err
+	}
+
+	curs, err := req.cursor(err)
+	if err != nil {
+		return err
+	}
+
+	req.w.SetContent(games.Item(req.r, req.user, curs, req.limit, req.h.name, req.h.desc, req.h.route))
+	return nil
 }
 
 func (r *gamesReq) cursor(err error) (*datastore.Cursor, error) {
@@ -277,23 +319,21 @@ func (req *gamesReq) intervalFilter(ctx context.Context, fieldName, paramName st
 }
 
 /*
- * prepare creates a query and a bunch of filters useful when generating the next
- * batch of games to return.
  * WARNING: If you add filtering here, you should both add it to the gameListerParams in game.go
  *          and add some testing in diptest/game_test.go/TestGameListFilters and /TestIndexCreation.
  */
-func (h *gamesHandler) prepare(w ResponseWriter, r Request, asGameMaster bool, userId *string, viewerStatsFilter bool) (*gamesReq, error) {
+func (h *gamesHandler) handle(w ResponseWriter, r Request) error {
 	req := &gamesReq{
 		ctx:               appengine.NewContext(r.Req()),
 		w:                 w,
 		r:                 r,
 		h:                 h,
-		viewerStatsFilter: viewerStatsFilter,
+		viewerStatsFilter: h.scope == scopePublic,
 	}
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
-		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 	req.user = user
 
@@ -301,7 +341,7 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, asGameMaster bool, u
 	if err := datastore.Get(req.ctx, UserStatsID(req.ctx, user.Id), userStats); err == datastore.ErrNoSuchEntity {
 		userStats.UserId = user.Id
 	} else if err != nil {
-		return nil, err
+		return err
 	}
 	req.userStats = userStats
 
@@ -314,14 +354,17 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, asGameMaster bool, u
 	req.limit = int(limit)
 
 	q := h.query
-	if userId == nil {
+	switch h.scope {
+	case scopeMember:
+		q = q.Filter("Members.User.Id=", user.Id)
+	case scopeOtherIsMember:
+		q = q.Filter("Members.User.Id=", r.Vars()["user_id"])
+	case scopePublic:
 		q = q.Filter("Private=", false)
-	} else {
-		if asGameMaster {
-			q = q.Filter("GameMasterId=", *userId)
-		} else {
-			q = q.Filter("Members.User.Id=", *userId)
-		}
+	case scopeGameMaster:
+		q = q.Filter("GameMaster.Id=", user.Id)
+	default:
+		return HTTPErr{fmt.Sprintf("unrecognized scope %v", h.scope), http.StatusInternalServerError}
 	}
 
 	apiLevel := auth.APILevel(r)
@@ -372,15 +415,15 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, asGameMaster bool, u
 	cursor := uq.Get("cursor")
 	if cursor == "" {
 		req.iter = q.Run(req.ctx)
-		return req, nil
+		return req.handle()
 	}
 
 	decoded, err := datastore.DecodeCursor(cursor)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.iter = q.Start(decoded).Run(req.ctx)
-	return req, nil
+	return req.handle()
 }
 
 func (h *gamesHandler) fetch(iter *datastore.Iterator, max int) (Games, error) {
@@ -400,106 +443,97 @@ func (h *gamesHandler) fetch(iter *datastore.Iterator, max int) (Games, error) {
 	return result, err
 }
 
-/*
- * handle uses the generating and filtering setup in prepare
- * to generate the next batch (according to cursor and limit)
- * of games to return.
- */
-func (req *gamesReq) handle() error {
-	var err error
-	games := make(Games, 0, req.limit)
-	for err == nil && len(games) < req.limit {
-		var nextBatch Games
-		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
-		nextBatch.RemoveCustomFiltered(req.detailFilters)
-		if req.viewerStatsFilter {
-			nextBatch.RemoveFiltered(req.userStats)
-			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
-				return filtErr
-			}
-		}
-		games = append(games, nextBatch...)
-	}
-	if err != nil && err != datastore.Done {
-		return err
-	}
-
-	curs, err := req.cursor(err)
-	if err != nil {
-		return err
-	}
-
-	req.w.SetContent(games.Item(req.r, req.user, curs, req.limit, req.h.name, req.h.desc, req.h.route))
-	return nil
-}
-
-// handlePublic returns a renderer public games, filtering out games the viewer can view if viewerStatsFilter is true.
-func (h *gamesHandler) handlePublic(viewerStatsFilter bool) func(w ResponseWriter, r Request) error {
-	return func(w ResponseWriter, r Request) error {
-		req, err := h.prepare(w, r, false, nil, viewerStatsFilter)
-		if err != nil {
-			return err
-		}
-
-		return req.handle()
-	}
-}
-
-// handleOther renders games belonging to the user_id parameter.
-func (h gamesHandler) handleOther(w ResponseWriter, r Request) error {
-	userId := r.Vars()["user_id"]
-
-	req, err := h.prepare(w, r, false, &userId, false)
-	if err != nil {
-		return err
-	}
-
-	return req.handle()
-}
-
-// handlePrivate renders games belonging to the viewer.
-func (h gamesHandler) handlePrivate(asGameMaster bool) func(w ResponseWriter, r Request) error {
-	return func(w ResponseWriter, r Request) error {
-		user, ok := r.Values()["user"].(*auth.User)
-		if !ok {
-			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
-		}
-
-		req, err := h.prepare(w, r, asGameMaster, &user.Id, false)
-		if err != nil {
-			return err
-		}
-
-		return req.handle()
-	}
+func addGamesHandlerLink(r Request, item *Item, handler *gamesHandler) *Item {
+	return item.AddLink(r.NewLink(Link{
+		Rel:   handler.name,
+		Route: handler.route,
+	}))
 }
 
 var (
-	finishedGamesHandler = gamesHandler{
+	finishedGamesHandler = &gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
 		name:  "finished-games",
-		desc:  []string{"Finished games", "Finished games, sorted with newest first."},
+		desc:  []string{"Finished games", "Public finished games, sorted with newest first."},
 		route: ListFinishedGamesRoute,
+		scope: scopePublic,
 	}
-	startedGamesHandler = gamesHandler{
+	startedGamesHandler = &gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
 		name:  "started-games",
-		desc:  []string{"Started games", "Started games, sorted with oldest first."},
+		desc:  []string{"Started games", "Public started games, sorted with oldest first."},
 		route: ListStartedGamesRoute,
+		scope: scopePublic,
 	}
-	// The reason we have both openGamesHandler and stagingGamesHandler is because in theory we could have
-	// started games in openGamesHandler - if we had a replacement mechanism.
-	openGamesHandler = gamesHandler{
+	openGamesHandler = &gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("StartETA"),
 		name:  "open-games",
-		desc:  []string{"Open games", "Open games, sorted with those expected to start soonest first."},
+		desc:  []string{"Open games", "Public open games, sorted with those expected to start soonest first."},
 		route: ListOpenGamesRoute,
+		scope: scopePublic,
 	}
-	stagingGamesHandler = gamesHandler{
+	myFinishedGamesHandler = &gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
+		name:  "my-finished-games",
+		desc:  []string{"My finished games", "Finished games you are a member of, sorted with newest first."},
+		route: ListMyFinishedGamesRoute,
+		scope: scopeMember,
+	}
+	myStartedGamesHandler = &gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
+		name:  "my-started-games",
+		desc:  []string{"My started games", "Started games you are a member of, sorted with oldest first."},
+		route: ListMyStartedGamesRoute,
+		scope: scopeMember,
+	}
+	myStagingGamesHandler = &gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
-		name:  "staging-games",
-		desc:  []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
+		name:  "my-staging-games",
+		desc:  []string{"My staging games", "Unstarted games you are a member of, sorted with fullest and oldest first."},
 		route: ListMyStagingGamesRoute,
+		scope: scopeMember,
+	}
+	masteredStagingGamesHandler = &gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
+		name:  "mastered-staging-games",
+		desc:  []string{"Mastered staging games", "Unstarted games you are game master of, sorted with fullest and oldest first."},
+		route: ListMasteredStagingGamesRoute,
+		scope: scopeGameMaster,
+	}
+	masteredFinishedGamesHandler = &gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
+		name:  "mastered-finished-games",
+		desc:  []string{"Mastered finished games", "Finished games you are game master of, sorted with newest first."},
+		route: ListMasteredFinishedGamesRoute,
+		scope: scopeGameMaster,
+	}
+	masteredStartedGamesHandler = &gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
+		name:  "mastered-started-games",
+		desc:  []string{"Mastered started games", "Started games you are game master of, sorted with oldest first."},
+		route: ListMasteredStartedGamesRoute,
+		scope: scopeGameMaster,
+	}
+	otherMemberStagingGamesHandler = &gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
+		name:  "other-member-staging-games",
+		desc:  []string{"Other member staging games", "Unstarted games someone else is a member of, sorted with fullest and oldest first."},
+		route: ListOtherStagingGamesRoute,
+		scope: scopeOtherIsMember,
+	}
+	otherMemberFinishedGamesHandler = &gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
+		name:  "other-member-finished-games",
+		desc:  []string{"Other member finished games", "Finished games someone else is a member of, sorted with newest first."},
+		route: ListOtherFinishedGamesRoute,
+		scope: scopeOtherIsMember,
+	}
+	otherMemberStartedGamesHandler = &gamesHandler{
+		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
+		name:  "other-member-started-games",
+		desc:  []string{"Other member started games", "Started games someone else is a member of, sorted with oldest first."},
+		route: ListOtherStartedGamesRoute,
+		scope: scopeOtherIsMember,
 	}
 	topRatedPlayersHandler = userStatsHandler{
 		query: datastore.NewQuery(userStatsKind).Order("-TrueSkill.Rating"),

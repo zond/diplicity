@@ -272,7 +272,7 @@ func TestGameMasterFunctionality(t *testing.T) {
 
 		masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 			AssertEq(true, "Properties", "GameMasterEnabled").
-			AssertEq(masterEnv.uid, "Properties", "GameMasterId").
+			AssertEq(masterEnv.uid, "Properties", "GameMaster", "Id").
 			AssertRel("update-game", "Links").
 			AssertRel("delete-game", "Links").
 			AssertRel("invite-user", "Links")
