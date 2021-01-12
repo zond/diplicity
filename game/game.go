@@ -744,7 +744,7 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 		Filter("Finished=", false).
 		Filter("Private=", false).
 		Filter("NoMerge=", false).
-		Filter("GameMasterId=", "").
+		Filter("GameMaster.Id=", "").
 		Filter("Variant=", game.Variant).
 		Filter("PhaseLengthMinutes=", game.PhaseLengthMinutes).
 		Filter("MaxHated=", game.MaxHated).
