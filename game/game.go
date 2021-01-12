@@ -77,7 +77,9 @@ func init() {
 	}
 	GameResource = &Resource{
 		Load:   loadGame,
+		Delete: gameMasterDeleteGame,
 		Create: createGame,
+		Update: gameMasterUpdateGame,
 		Listers: []Lister{
 			{
 				Path:        "/Games/Open",
@@ -98,21 +100,39 @@ func init() {
 				QueryParams: gameListerParams,
 			},
 			{
+				Path:        "/Games/Mastered/Staging",
+				Route:       ListMasteredStagingGamesRoute,
+				Handler:     stagingGamesHandler.handlePrivate(true),
+				QueryParams: gameListerParams,
+			},
+			{
+				Path:        "/Games/Mastered/Started",
+				Route:       ListMasteredStartedGamesRoute,
+				Handler:     startedGamesHandler.handlePrivate(true),
+				QueryParams: gameListerParams,
+			},
+			{
+				Path:        "/Games/Mastered/Finished",
+				Route:       ListMasteredFinishedGamesRoute,
+				Handler:     finishedGamesHandler.handlePrivate(true),
+				QueryParams: gameListerParams,
+			},
+			{
 				Path:        "/Games/My/Staging",
 				Route:       ListMyStagingGamesRoute,
-				Handler:     stagingGamesHandler.handlePrivate,
+				Handler:     stagingGamesHandler.handlePrivate(false),
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Started",
 				Route:       ListMyStartedGamesRoute,
-				Handler:     startedGamesHandler.handlePrivate,
+				Handler:     startedGamesHandler.handlePrivate(false),
 				QueryParams: gameListerParams,
 			},
 			{
 				Path:        "/Games/My/Finished",
 				Route:       ListMyFinishedGamesRoute,
-				Handler:     finishedGamesHandler.handlePrivate,
+				Handler:     finishedGamesHandler.handlePrivate(false),
 				QueryParams: gameListerParams,
 			},
 			{
@@ -253,6 +273,10 @@ func (g *Games) RemoveFiltered(userStats *UserStats) [][]string {
 			failedRequirements[i] = append(failedRequirements[i], "MinQuickness")
 			continue
 		}
+		if game.GameMasterEnabled && game.RequireGameMasterInvitation && game.GameMasterId != userStats.User.Id && !game.IsInvitedByGameMaster(userStats.User.Email) {
+			failedRequirements[i] = append(failedRequirements[i], "InvitationNeeded")
+			continue
+		}
 		newGames = append(newGames, game)
 	}
 	*g = newGames
@@ -274,6 +298,10 @@ func (g *Games) RemoveBanned(ctx context.Context, uid string) ([][]Ban, error) {
 			banIDs = append(banIDs, banID)
 		}
 	}
+	if len(banIDs) == 0 {
+		return [][]Ban{[]Ban{}}, nil
+	}
+
 	bans := make([]Ban, len(banIDs))
 	err := datastore.GetMulti(ctx, banIDs, bans)
 
@@ -362,8 +390,8 @@ type Game struct {
 
 	Desc                          string           `methods:"POST" datastore:",noindex"`
 	Variant                       string           `methods:"POST"`
-	PhaseLengthMinutes            time.Duration    `methods:"POST"`
-	NonMovementPhaseLengthMinutes time.Duration    `methods:"POST"`
+	PhaseLengthMinutes            time.Duration    `methods:"POST,PUT"`
+	NonMovementPhaseLengthMinutes time.Duration    `methods:"POST,PUT"`
 	MaxHated                      float64          `methods:"POST"`
 	MaxHater                      float64          `methods:"POST"`
 	MinRating                     float64          `methods:"POST"`
@@ -372,14 +400,19 @@ type Game struct {
 	MinQuickness                  float64          `methods:"POST"`
 	Private                       bool             `methods:"POST"`
 	NoMerge                       bool             `methods:"POST"`
-	DisableConferenceChat         bool             `methods:"POST"`
-	DisableGroupChat              bool             `methods:"POST"`
-	DisablePrivateChat            bool             `methods:"POST"`
+	DisableConferenceChat         bool             `methods:"POST,PUT"`
+	DisableGroupChat              bool             `methods:"POST,PUT"`
+	DisablePrivateChat            bool             `methods:"POST,PUT"`
 	NationAllocation              AllocationMethod `methods:"POST"`
 	Anonymous                     bool             `methods:"POST"`
-	LastYear                      int              `methods:"POST"`
-	SkipMuster                    bool             `methods:"POST"`
-	ChatLanguageISO639_1          string           `methods:"POST"`
+	LastYear                      int              `methods:"POST,PUT"`
+	SkipMuster                    bool             `methods:"POST,PUT"`
+	ChatLanguageISO639_1          string           `methods:"POST,PUT"`
+	GameMasterEnabled             bool             `methods:"POST"`
+	RequireGameMasterInvitation   bool             `methods:"POST,PUT"`
+
+	GameMasterInvitations GameMasterInvitations
+	GameMasterId          string
 
 	NMembers int
 	Members  Members
@@ -455,6 +488,9 @@ func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
 		return false
 	}
 	if g.Anonymous != o.Anonymous {
+		return false
+	}
+	if g.GameMasterEnabled || o.GameMasterEnabled {
 		return false
 	}
 	if g.NMembers+o.NMembers > len(variants.Variants[g.Variant].Nations) {
@@ -548,8 +584,39 @@ func (g *Game) Leavable() bool {
 	return !g.Started
 }
 
-func (g *Game) Joinable() bool {
-	return !g.Closed && g.NMembers < len(variants.Variants[g.Variant].Nations) && len(g.ActiveBans) == 0 && len(g.FailedRequirements) == 0
+func (g *Game) IsInvitedByGameMaster(email string) bool {
+	for _, invitation := range g.GameMasterInvitations {
+		if invitation.Email == email {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *Game) HasReplaceableMember() bool {
+	for _, member := range g.Members {
+		if member.Replaceable {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *Game) Joinable(user *auth.User) bool {
+	if len(g.ActiveBans) > 0 || len(g.FailedRequirements) > 0 {
+		return false
+	}
+	if g.Closed || g.NMembers >= len(variants.Variants[g.Variant].Nations) {
+		if g.GameMasterEnabled && g.HasReplaceableMember() && (!g.RequireGameMasterInvitation || g.IsInvitedByGameMaster(user.Email)) {
+			return true
+		}
+		return false
+	} else {
+		if g.GameMasterEnabled && g.RequireGameMasterInvitation && !g.IsInvitedByGameMaster(user.Email) {
+			return false
+		}
+		return true
+	}
 }
 
 func (g *Game) Item(r Request) *Item {
@@ -562,7 +629,7 @@ func (g *Game) Item(r Request) *Item {
 			}
 			gameItem.AddLink(r.NewLink(MemberResource.Link("update-membership", Update, []string{"game_id", g.ID.Encode(), "user_id", user.Id})))
 		} else {
-			if g.Joinable() {
+			if g.Joinable(user) {
 				gameItem.AddLink(r.NewLink(MemberResource.Link("join", Create, []string{"game_id", g.ID.Encode()})))
 			}
 		}
@@ -587,6 +654,52 @@ func (g *Game) Item(r Request) *Item {
 				Route:       ListGameStatesRoute,
 				RouteParams: []string{"game_id", g.ID.Encode()},
 			}))
+		}
+		if user.Id == g.GameMasterId {
+			gameItem.AddLink(r.NewLink(GameResource.Link("update-game", Update, []string{"id", g.ID.Encode()})))
+			if !g.Started {
+				gameItem.AddLink(r.NewLink(GameResource.Link("delete-game", Delete, []string{"id", g.ID.Encode()})))
+			}
+			gameItem.AddLink(r.NewLink(GameMasterInvitationResource.Link(
+				"invite-user",
+				Create,
+				[]string{
+					"game_id", g.ID.Encode(),
+				},
+			)))
+			if len(g.NewestPhaseMeta) == 1 && !g.NewestPhaseMeta[0].Resolved {
+				gameItem.AddLink(r.NewLink(GameMasterEditNewestPhaseDeadlineAtResource.Link(
+					"edit-newest-phase-deadline-at",
+					Create,
+					[]string{
+						"game_id",
+						g.ID.Encode(),
+						"phase_ordinal",
+						fmt.Sprint(g.NewestPhaseMeta[0].PhaseOrdinal),
+					},
+				)))
+			}
+			uniqueInvitationEmail := map[string]bool{}
+			for _, invitation := range g.GameMasterInvitations {
+				uniqueInvitationEmail[invitation.Email] = true
+			}
+			for email := range uniqueInvitationEmail {
+				gameItem.AddLink(r.NewLink(GameMasterInvitationResource.Link(
+					"uninvite-"+email,
+					Delete,
+					[]string{
+						"game_id", g.ID.Encode(),
+						"email", email,
+					},
+				)))
+			}
+			uniqueMemberIds := map[string]bool{}
+			for _, member := range g.Members {
+				uniqueMemberIds[member.User.Id] = true
+			}
+			for id := range uniqueMemberIds {
+				gameItem.AddLink(MemberResource.Link("kick-"+id, Delete, []string{"game_id", g.ID.Encode(), "user_id", id}))
+			}
 		}
 	}
 	return gameItem
@@ -623,6 +736,7 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 		Filter("Finished=", false).
 		Filter("Private=", false).
 		Filter("NoMerge=", false).
+		Filter("GameMasterId=", "").
 		Filter("Variant=", game.Variant).
 		Filter("PhaseLengthMinutes=", game.PhaseLengthMinutes).
 		Filter("MaxHated=", game.MaxHated).
@@ -663,6 +777,51 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 	return nil, nil
 }
 
+func gameMasterDeleteGame(w ResponseWriter, r Request) (*Game, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["id"])
+	if err != nil {
+		return nil, err
+	}
+
+	game := &Game{}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game = &Game{}
+		if err := datastore.Get(ctx, gameID, game); err != nil {
+			return HTTPErr{"non existing game", http.StatusPreconditionFailed}
+		}
+		game.ID = gameID
+
+		if game.GameMasterId != user.Id {
+			return HTTPErr{"unauthorized", http.StatusUnauthorized}
+		}
+
+		if game.Started {
+			return HTTPErr{"game has already started", http.StatusPreconditionFailed}
+		}
+
+		userIDs := []string{}
+		for _, member := range game.Members {
+			userIDs = append(userIDs, member.User.Id)
+		}
+		if err := UpdateUserStatsASAP(ctx, userIDs); err != nil {
+			return err
+		}
+
+		return datastore.Delete(ctx, gameID)
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		return nil, err
+	}
+
+	return game, nil
+}
+
 func createGame(w ResponseWriter, r Request) (*Game, error) {
 	ctx := appengine.NewContext(r.Req())
 
@@ -688,6 +847,12 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	if game.PhaseLengthMinutes > MAX_PHASE_DEADLINE {
 		return nil, HTTPErr{"no games with more than 30 day deadlines allowed", http.StatusBadRequest}
 	}
+	if game.GameMasterEnabled {
+		if !game.Private {
+			return nil, HTTPErr{"only private games can have game master", http.StatusBadRequest}
+		}
+		game.GameMasterId = user.Id
+	}
 	game.CreatedAt = time.Now()
 
 	if !game.NoMerge && !game.Private {
@@ -705,6 +870,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		userStats := &UserStats{}
 		if err := datastore.Get(ctx, UserStatsID(ctx, user.Id), userStats); err == datastore.ErrNoSuchEntity {
 			userStats.UserId = user.Id
+			userStats.User = *user
 		} else if err != nil {
 			return err
 		}
@@ -715,18 +881,20 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		if err := game.Save(ctx); err != nil {
 			return err
 		}
-		game.Members = []Member{
-			{
-				User:              *user,
-				GameAlias:         game.FirstMember.GameAlias,
-				NationPreferences: game.FirstMember.NationPreferences,
-				NewestPhaseState: PhaseState{
-					GameID: game.ID,
+		if !game.GameMasterEnabled {
+			game.Members = []Member{
+				{
+					User:              *user,
+					GameAlias:         game.FirstMember.GameAlias,
+					NationPreferences: game.FirstMember.NationPreferences,
+					NewestPhaseState: PhaseState{
+						GameID: game.ID,
+					},
 				},
-			},
-		}
-		if err := UpdateUserStatsASAP(ctx, []string{user.Id}); err != nil {
-			return err
+			}
+			if err := UpdateUserStatsASAP(ctx, []string{user.Id}); err != nil {
+				return err
+			}
 		}
 		return game.Save(ctx)
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
@@ -737,6 +905,9 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 }
 
 func (g *Game) Redact(viewer *auth.User, r Request) {
+	if viewer.Id == g.GameMasterId {
+		return
+	}
 	if !g.Finished && ((g.Private && g.Anonymous) || (!g.Private && g.DisablePrivateChat && g.DisableGroupChat && g.DisableConferenceChat)) {
 		for index := range g.Members {
 			if g.Members[index].User.Id == viewer.Id {
@@ -800,19 +971,78 @@ func AllocateNations(preferers Preferers, nations godip.Nations) ([]godip.Nation
 	return result, nil
 }
 
-func (g *Game) AllocateNations() error {
+func (g *Game) ValidNation(nation godip.Nation) bool {
+	for _, variantNation := range variants.Variants[g.Variant].Nations {
+		if nation == variantNation {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *Game) AllocateNations(ctx context.Context) error {
 	variant := variants.Variants[g.Variant]
+
+	// All nations we need to allocate
+	nationsNeedingAllocationMap := map[godip.Nation]bool{}
+	for _, nation := range variant.Nations {
+		nationsNeedingAllocationMap[nation] = true
+	}
+
+	// Check all invitations for preallocations
+	preallocatedEmailsMap := map[string]godip.Nation{}
+	for _, invitation := range g.GameMasterInvitations {
+		if invitation.Nation != "" && g.ValidNation(invitation.Nation) {
+			preallocatedEmailsMap[invitation.Email] = invitation.Nation
+		}
+	}
+
+	membersNeedingNations := []*Member{}
+
+	// For each member
+	for memberIdx := range g.Members {
+		member := &g.Members[memberIdx]
+		// If there is a prealloc for this member
+		if prealloc, found := preallocatedEmailsMap[member.User.Email]; found {
+			// Allocate it, and remove the allocated nation
+			log.Infof(ctx, "preallocating %v to %v", prealloc, member.User.Email)
+			member.Nation = prealloc
+			delete(nationsNeedingAllocationMap, prealloc)
+		} else {
+			// Store this member as needing a nation
+			membersNeedingNations = append(membersNeedingNations, member)
+		}
+	}
+
+	// Collect the nations needing allocation in a new slice
+	nationsNeedingAllocation := []godip.Nation{}
+	for nation := range nationsNeedingAllocationMap {
+		nationsNeedingAllocation = append(nationsNeedingAllocation, nation)
+	}
+
+	if len(nationsNeedingAllocation) != len(membersNeedingNations) {
+		return fmt.Errorf("wtf? how did this even happen?")
+	}
+
+	if len(nationsNeedingAllocation) == 0 {
+		return nil
+	}
+
 	if g.NationAllocation == RandomAllocation {
-		for memberIndex, nationIndex := range rand.Perm(len(variant.Nations)) {
-			g.Members[memberIndex].Nation = variant.Nations[nationIndex]
+		for memberIndex, nationIndex := range rand.Perm(len(nationsNeedingAllocation)) {
+			membersNeedingNations[memberIndex].Nation = nationsNeedingAllocation[nationIndex]
 		}
 	} else if g.NationAllocation == PreferenceAllocation {
-		alloc, err := AllocateNations(g.Members, variant.Nations)
-		if err != nil {
-			return fmt.Errorf("AllocateNations(%+v, %+v): %v", g.Members, variant.Nations, err)
+		members := Members{}
+		for memberIdx := range membersNeedingNations {
+			members = append(members, *membersNeedingNations[memberIdx])
 		}
-		for memberIdx := range g.Members {
-			g.Members[memberIdx].Nation = alloc[memberIdx]
+		alloc, err := AllocateNations(members, nationsNeedingAllocation)
+		if err != nil {
+			return fmt.Errorf("AllocateNations(%+v, %+v): %v", members, nationsNeedingAllocation, err)
+		}
+		for memberIdx := range membersNeedingNations {
+			membersNeedingNations[memberIdx].Nation = alloc[memberIdx]
 		}
 	} else {
 		return fmt.Errorf("unknown allocation method %v, pick %v or %v", g.NationAllocation, RandomAllocation, PreferenceAllocation)
@@ -846,7 +1076,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 		g.Started = true
 		g.StartedAt = time.Now()
 		g.Closed = true
-		if err := g.AllocateNations(); err != nil {
+		if err := g.AllocateNations(ctx); err != nil {
 			log.Errorf(ctx, "g.AllocateNations(): %v; fix it?", err)
 			return err
 		}
@@ -1010,6 +1240,47 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 	return nil
 }
 
+func gameMasterUpdateGame(w ResponseWriter, r Request) (*Game, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
+	}
+
+	gameID, err := datastore.DecodeKey(r.Vars()["id"])
+	if err != nil {
+		return nil, err
+	}
+
+	game := &Game{}
+	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		game = &Game{}
+		if err := datastore.Get(ctx, gameID, game); err != nil {
+			return err
+		}
+		game.ID = gameID
+
+		if game.GameMasterId != user.Id {
+			return HTTPErr{"unauthorized", http.StatusUnauthorized}
+		}
+
+		if err := Copy(game, r, "PUT"); err != nil {
+			return err
+		}
+
+		if _, err := datastore.Put(ctx, gameID, game); err != nil {
+			return err
+		}
+
+		return nil
+	}, &datastore.TransactionOptions{XG: false}); err != nil {
+		return nil, err
+	}
+
+	return game, nil
+}
+
 func loadGame(w ResponseWriter, r Request) (*Game, error) {
 	ctx := appengine.NewContext(r.Req())
 
@@ -1032,6 +1303,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 		if merr, ok := err.(appengine.MultiError); ok {
 			if merr[0] == nil && merr[1] == datastore.ErrNoSuchEntity {
 				userStats.UserId = user.Id
+				userStats.User = *user
 				err = nil
 			} else {
 				return nil, err

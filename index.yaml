@@ -31,6 +31,11 @@ indexes:
 
     - kind: Game
       properties:
+          - name: GameMasterId
+          - name: StartETA
+
+    - kind: Game
+      properties:
           - name: Started
           - name: StartETA
 
@@ -81,6 +86,12 @@ indexes:
 
     - kind: Game
       properties:
+          - name: GameMasterId
+          - name: FinishedAt
+            direction: desc
+
+    - kind: Game
+      properties:
           - name: Started
           - name: FinishedAt
             direction: desc
@@ -137,6 +148,12 @@ indexes:
       properties:
           - name: Members.User.Id
           - name: FinishedAt
+            direction: desc
+
+    - kind: Game
+      properties:
+          - name: GameMasterId
+          - name: StartedAt
             direction: desc
 
     - kind: Game

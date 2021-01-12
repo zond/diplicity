@@ -68,6 +68,9 @@ const (
 	ListOpenGamesRoute                  = "ListOpenGames"
 	ListStartedGamesRoute               = "ListStartedGames"
 	ListFinishedGamesRoute              = "ListFinishedGames"
+	ListMasteredStagingGamesRoute       = "ListMasteredStagingGames"
+	ListMasteredStartedGamesRoute       = "ListMasteredStartedGames"
+	ListMasteredFinishedGamesRoute      = "ListMasteredFinishedGames"
 	ListMyStagingGamesRoute             = "ListMyStagingGames"
 	ListMyStartedGamesRoute             = "ListMyStartedGames"
 	ListMyFinishedGamesRoute            = "ListMyFinishedGames"
@@ -279,7 +282,7 @@ func (req *gamesReq) intervalFilter(ctx context.Context, fieldName, paramName st
  * WARNING: If you add filtering here, you should both add it to the gameListerParams in game.go
  *          and add some testing in diptest/game_test.go/TestGameListFilters and /TestIndexCreation.
  */
-func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, viewerStatsFilter bool) (*gamesReq, error) {
+func (h *gamesHandler) prepare(w ResponseWriter, r Request, asGameMaster bool, userId *string, viewerStatsFilter bool) (*gamesReq, error) {
 	req := &gamesReq{
 		ctx:               appengine.NewContext(r.Req()),
 		w:                 w,
@@ -314,7 +317,11 @@ func (h *gamesHandler) prepare(w ResponseWriter, r Request, userId *string, view
 	if userId == nil {
 		q = q.Filter("Private=", false)
 	} else {
-		q = q.Filter("Members.User.Id=", *userId)
+		if asGameMaster {
+			q = q.Filter("GameMasterId=", *userId)
+		} else {
+			q = q.Filter("Members.User.Id=", *userId)
+		}
 	}
 
 	apiLevel := auth.APILevel(r)
@@ -429,7 +436,7 @@ func (req *gamesReq) handle() error {
 // handlePublic returns a renderer public games, filtering out games the viewer can view if viewerStatsFilter is true.
 func (h *gamesHandler) handlePublic(viewerStatsFilter bool) func(w ResponseWriter, r Request) error {
 	return func(w ResponseWriter, r Request) error {
-		req, err := h.prepare(w, r, nil, viewerStatsFilter)
+		req, err := h.prepare(w, r, false, nil, viewerStatsFilter)
 		if err != nil {
 			return err
 		}
@@ -442,7 +449,7 @@ func (h *gamesHandler) handlePublic(viewerStatsFilter bool) func(w ResponseWrite
 func (h gamesHandler) handleOther(w ResponseWriter, r Request) error {
 	userId := r.Vars()["user_id"]
 
-	req, err := h.prepare(w, r, &userId, false)
+	req, err := h.prepare(w, r, false, &userId, false)
 	if err != nil {
 		return err
 	}
@@ -451,18 +458,20 @@ func (h gamesHandler) handleOther(w ResponseWriter, r Request) error {
 }
 
 // handlePrivate renders games belonging to the viewer.
-func (h gamesHandler) handlePrivate(w ResponseWriter, r Request) error {
-	user, ok := r.Values()["user"].(*auth.User)
-	if !ok {
-		return HTTPErr{"unauthenticated", http.StatusUnauthorized}
-	}
+func (h gamesHandler) handlePrivate(asGameMaster bool) func(w ResponseWriter, r Request) error {
+	return func(w ResponseWriter, r Request) error {
+		user, ok := r.Values()["user"].(*auth.User)
+		if !ok {
+			return HTTPErr{"unauthenticated", http.StatusUnauthorized}
+		}
 
-	req, err := h.prepare(w, r, &user.Id, false)
-	if err != nil {
-		return err
-	}
+		req, err := h.prepare(w, r, asGameMaster, &user.Id, false)
+		if err != nil {
+			return err
+		}
 
-	return req.handle()
+		return req.handle()
+	}
 }
 
 var (
@@ -488,7 +497,7 @@ var (
 	}
 	stagingGamesHandler = gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
-		name:  "my-staging-games",
+		name:  "staging-games",
 		desc:  []string{"My staging games", "Unstarted games I'm a member of, sorted with fullest and oldest first."},
 		route: ListMyStagingGamesRoute,
 	}
@@ -1830,8 +1839,8 @@ func handleReapInactiveWaitingPlayers(w ResponseWriter, r Request) error {
 func ejectMember(ctx context.Context, gameID *datastore.Key, userId string) error {
 	log.Infof(ctx, "ejectMember(..., %v, %v)", gameID, userId)
 
-	if _, err := deleteMemberHelper(ctx, gameID, userId, true); err != nil {
-		log.Errorf(ctx, "deleteMemberHelper(..., %v, %v, true): %v; hope datastore gets fixed", gameID, userId, err)
+	if _, err := deleteMemberHelper(ctx, gameID, deleteMemberRequest{systemReq: true, toRemoveId: userId}, true); err != nil {
+		log.Errorf(ctx, "deleteMemberHelper(..., %v, %v, %v, true): %v; hope datastore gets fixed", gameID, userId, userId, err)
 		return err
 	}
 
@@ -1889,6 +1898,8 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/Users/Ratings/Histogram", []string{"GET"}, GetUserRatingHistogramRoute, getUserRatingHistogram)
 	HandleResource(r, GameResource)
 	HandleResource(r, AllocationResource)
+	HandleResource(r, GameMasterInvitationResource)
+	HandleResource(r, GameMasterEditNewestPhaseDeadlineAtResource)
 	HandleResource(r, MemberResource)
 	HandleResource(r, PhaseResource)
 	HandleResource(r, OrderResource)
