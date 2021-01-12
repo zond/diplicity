@@ -191,7 +191,8 @@ type handlerScope int
 const (
 	scopeMember handlerScope = iota
 	scopeOtherIsMember
-	scopePublic
+	scopePublicOpen
+	scopePublicClosed
 	scopeGameMaster
 )
 
@@ -328,7 +329,7 @@ func (h *gamesHandler) handle(w ResponseWriter, r Request) error {
 		w:                 w,
 		r:                 r,
 		h:                 h,
-		viewerStatsFilter: h.scope == scopePublic,
+		viewerStatsFilter: h.scope == scopePublicOpen,
 	}
 
 	user, ok := r.Values()["user"].(*auth.User)
@@ -359,7 +360,9 @@ func (h *gamesHandler) handle(w ResponseWriter, r Request) error {
 		q = q.Filter("Members.User.Id=", user.Id)
 	case scopeOtherIsMember:
 		q = q.Filter("Members.User.Id=", r.Vars()["user_id"])
-	case scopePublic:
+	case scopePublicClosed:
+		fallthrough
+	case scopePublicOpen:
 		q = q.Filter("Private=", false)
 	case scopeGameMaster:
 		q = q.Filter("GameMaster.Id=", user.Id)
@@ -456,21 +459,21 @@ var (
 		name:  "finished-games",
 		desc:  []string{"Finished games", "Public finished games, sorted with newest first."},
 		route: ListFinishedGamesRoute,
-		scope: scopePublic,
+		scope: scopePublicClosed,
 	}
 	startedGamesHandler = &gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
 		name:  "started-games",
 		desc:  []string{"Started games", "Public started games, sorted with oldest first."},
 		route: ListStartedGamesRoute,
-		scope: scopePublic,
+		scope: scopePublicClosed,
 	}
 	openGamesHandler = &gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("StartETA"),
 		name:  "open-games",
 		desc:  []string{"Open games", "Public open games, sorted with those expected to start soonest first."},
 		route: ListOpenGamesRoute,
-		scope: scopePublic,
+		scope: scopePublicOpen,
 	}
 	myFinishedGamesHandler = &gamesHandler{
 		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
