@@ -749,6 +749,7 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 
 		if queryToken {
 			r.DecorateLinks(func(l *Link, u *url.URL) error {
+				log.Infof(ctx, "going to decorate %+v, %+v with %q", l, u, token)
 				if l.Rel != "logout" {
 					q := u.Query()
 					q.Set("token", token)
