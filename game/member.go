@@ -173,7 +173,7 @@ func updateMember(w ResponseWriter, r Request) (*Member, error) {
 		if !updated {
 			return fmt.Errorf("Sanity check failed, didn't succeed in finding the right member to update? game: %v, member: %v", spew.Sdump(game), spew.Sdump(member))
 		}
-		return game.Save(ctx)
+		return game.DBSave(ctx)
 	}, &datastore.TransactionOptions{XG: false}); err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func deleteMemberHelper(ctx context.Context, gameID *datastore.Key, delReq delet
 			return datastore.Delete(ctx, gameID)
 		}
 
-		if err := game.Save(ctx); err != nil {
+		if err := game.DBSave(ctx); err != nil {
 			return err
 		}
 
@@ -318,7 +318,7 @@ func createMemberHelper(
 
 		}
 
-		if err := game.Save(ctx); err != nil {
+		if err := game.DBSave(ctx); err != nil {
 			return err
 		}
 

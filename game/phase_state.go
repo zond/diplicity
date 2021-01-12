@@ -185,7 +185,7 @@ func updatePhaseState(w ResponseWriter, r Request) (*PhaseState, error) {
 		if err := phaseState.Save(ctx); err != nil {
 			return err
 		}
-		if err := game.Save(ctx); err != nil {
+		if err := game.DBSave(ctx); err != nil {
 			return err
 		}
 

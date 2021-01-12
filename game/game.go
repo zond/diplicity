@@ -716,7 +716,7 @@ func (g *Game) Item(r Request) *Item {
 	return gameItem
 }
 
-func (g *Game) Save(ctx context.Context) error {
+func (g *Game) DBSave(ctx context.Context) error {
 	g.NMembers = len(g.Members)
 	if g.Started {
 		g.StartETA = g.StartedAt
@@ -889,7 +889,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 		if failedRequirements := filtered.RemoveFiltered(userStats); len(failedRequirements[0]) > 0 {
 			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), http.StatusPreconditionFailed}
 		}
-		if err := game.Save(ctx); err != nil {
+		if err := game.DBSave(ctx); err != nil {
 			return err
 		}
 		if !game.GameMasterEnabled {
@@ -907,7 +907,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 				return err
 			}
 		}
-		return game.Save(ctx)
+		return game.DBSave(ctx)
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}

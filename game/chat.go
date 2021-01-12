@@ -421,7 +421,7 @@ func sendMsgNotificationsToUsers(ctx context.Context, host string, gameID *datas
 				total += channel.NMessagesSince.NMessages
 			}
 			member.UnreadMessages = total
-			if err := game.Save(ctx); err != nil {
+			if err := game.DBSave(ctx); err != nil {
 				log.Errorf(ctx, "Unable to save %v after updating unread messages for %v: %v; hope datastore gets fixed", gameID, member.Nation, err)
 				return err
 			}
@@ -1052,7 +1052,7 @@ func listMessages(w ResponseWriter, r Request) error {
 			}
 
 			member.UnreadMessages = unread
-			if err := game.Save(ctx); err != nil {
+			if err := game.DBSave(ctx); err != nil {
 				return err
 			}
 

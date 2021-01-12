@@ -858,7 +858,7 @@ func (p *PhaseResolver) Act() error {
 				return err
 			}
 			// Save the game with the new state of being staging, and no longer closed.
-			if err := p.Game.Save(p.Context); err != nil {
+			if err := p.Game.DBSave(p.Context); err != nil {
 				log.Errorf(p.Context, "Unable to save game %v: %v; hope datastore will get fixed", PP(p.Game), err)
 				return err
 			}
@@ -1343,7 +1343,7 @@ func (p *PhaseResolver) Act() error {
 		}
 	}
 
-	if err := p.Game.Save(p.Context); err != nil {
+	if err := p.Game.DBSave(p.Context); err != nil {
 		log.Errorf(p.Context, "Unable to save game %v: %v; hope datastore will get fixed", PP(p.Game), err)
 		return err
 	}
