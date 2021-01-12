@@ -737,8 +737,12 @@ func (p *PhaseResolver) Act() error {
 
 		// Find all userIds.
 		allUserIds := []string{}
+		readyUserIds := []string{}
 		for _, member := range p.Game.Members {
 			allUserIds = append(allUserIds, member.User.Id)
+			if readyNationMap[member.Nation] {
+				readyUserIds = append(readyUserIds, member.User.Id)
+			}
 		}
 
 		// Depending on whether everyone is ready...
@@ -892,7 +896,7 @@ func (p *PhaseResolver) Act() error {
 			p.Phase.Host,
 			p.Game.ID,
 			p.Phase.PhaseOrdinal,
-			allUserIds,
+			readyUserIds,
 		); err != nil {
 			log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
 			return err
