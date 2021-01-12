@@ -432,6 +432,9 @@ type Game struct {
 	FinishedAgo time.Duration `datastore:"-" ticker:"true"`
 }
 
+func (g *Game) Save() ([]datastore.Property, error) {
+	return datastore.SaveStruct(g)
+}
 func (g *Game) Load(props []datastore.Property) error {
 	err := datastore.LoadStruct(g, props)
 	if _, is := err.(*datastore.ErrFieldMismatch); is {
