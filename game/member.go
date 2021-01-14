@@ -400,6 +400,10 @@ func gameMasterCreateInvitation(w ResponseWriter, r Request) (*GameMasterInvitat
 		return nil, err
 	}
 
+	if gmi.Email == "" {
+		return nil, HTTPErr{"email empty", http.StatusBadRequest}
+	}
+
 	if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
 		game := &Game{}
 		if err := datastore.Get(ctx, gameID, game); err != nil {
