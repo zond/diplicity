@@ -230,7 +230,7 @@ func (req *gamesReq) handle() error {
 		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
 		nextBatch.RemoveCustomFiltered(req.detailFilters)
 		if req.viewerStatsFilter {
-			nextBatch.RemoveFiltered(req.userStats)
+			nextBatch.RemoveFiltered(toJoin, req.userStats)
 			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
 				return filtErr
 			}

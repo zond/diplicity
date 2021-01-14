@@ -245,7 +245,14 @@ func (g *Games) RemoveCustomFiltered(filters []func(g *Game) bool) {
 	*g = newGames
 }
 
-func (g *Games) RemoveFiltered(userStats *UserStats) [][]string {
+type filterReason int
+
+const (
+	toCreate filterReason = iota
+	toJoin
+)
+
+func (g *Games) RemoveFiltered(reason filterReason, userStats *UserStats) [][]string {
 	failedRequirements := make([][]string, len(*g))
 	newGames := make(Games, 0, len(*g))
 	for i, game := range *g {
@@ -273,7 +280,7 @@ func (g *Games) RemoveFiltered(userStats *UserStats) [][]string {
 			failedRequirements[i] = append(failedRequirements[i], "MinQuickness")
 			continue
 		}
-		if game.GameMasterEnabled && game.RequireGameMasterInvitation && game.GameMaster.Id != userStats.User.Id && !game.IsInvitedByGameMaster(userStats.User.Email) {
+		if game.GameMasterEnabled && game.RequireGameMasterInvitation && reason == toJoin && !game.IsInvitedByGameMaster(userStats.User.Email) {
 			failedRequirements[i] = append(failedRequirements[i], "InvitationNeeded")
 			continue
 		}
@@ -886,7 +893,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 			return err
 		}
 		filtered := Games{*game}
-		if failedRequirements := filtered.RemoveFiltered(userStats); len(failedRequirements[0]) > 0 {
+		if failedRequirements := filtered.RemoveFiltered(toCreate, userStats); len(failedRequirements[0]) > 0 {
 			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), http.StatusPreconditionFailed}
 		}
 		if err := game.DBSave(ctx); err != nil {
@@ -1340,7 +1347,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 	game.ActiveBans = activeBans[0]
 
 	filtered = Games{*game}
-	game.FailedRequirements = filtered.RemoveFiltered(userStats)[0]
+	game.FailedRequirements = filtered.RemoveFiltered(toJoin, userStats)[0]
 
 	return game, nil
 }
