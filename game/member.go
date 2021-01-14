@@ -454,11 +454,11 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		return nil, err
 	}
 	filterList := Games{*game}
-	if _, err := filterList.RemoveBanned(ctx, user.Id); err != nil {
+	if _, err := filterList.RemoveBanned(ctx, user.Id, true); err != nil {
 		return nil, err
 	}
 	if len(filterList) == 0 {
-		return nil, HTTPErr{"banned from this game", http.StatusForbidden}
+		return nil, HTTPErr{"banned from this game", http.StatusPreconditionFailed}
 	}
 
 	userStats := &UserStats{}
@@ -468,11 +468,9 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 	} else if err != nil {
 		return nil, err
 	}
-	if failedRequirements := filterList.RemoveFiltered(toJoin, userStats); len(failedRequirements[0]) > 0 {
-		return nil, HTTPErr{fmt.Sprintf("Can't join game, failed requirements: %+v", failedRequirements[0]), http.StatusPreconditionFailed}
-	}
+	filterList.RemoveFiltered(toJoin, userStats, true)
 	if len(filterList) == 0 {
-		return nil, HTTPErr{"filtered from this game", http.StatusForbidden}
+		return nil, HTTPErr{"filtered from this game", http.StatusPreconditionFailed}
 	}
 
 	member := &Member{}

@@ -252,95 +252,125 @@ const (
 	toJoin
 )
 
-func (g *Games) RemoveFiltered(reason filterReason, userStats *UserStats) [][]string {
+func (g *Games) RemoveFiltered(reason filterReason, userStats *UserStats, actuallyRemove bool) [][]string {
 	failedRequirements := make([][]string, len(*g))
 	newGames := make(Games, 0, len(*g))
-	for i, game := range *g {
+	for i := range *g {
+		game := &(*g)[i]
+		game.FailedRequirements = nil
+		addFailure := func(failure string) {
+			failedRequirements[i] = append(failedRequirements[i], failure)
+			game.FailedRequirements = append(game.FailedRequirements, failure)
+		}
 		if game.MaxHated != 0 && userStats.Hated > game.MaxHated {
-			failedRequirements[i] = append(failedRequirements[i], "Hated")
-			continue
+			addFailure("Hated")
 		}
 		if game.MaxHater != 0 && userStats.Hater > game.MaxHater {
-			failedRequirements[i] = append(failedRequirements[i], "Hater")
-			continue
+			addFailure("Hater")
 		}
 		if game.MaxRating != 0 && userStats.TrueSkill.Rating > game.MaxRating {
-			failedRequirements[i] = append(failedRequirements[i], "MaxRating")
-			continue
+			addFailure("MaxRating")
 		}
 		if game.MinRating != 0 && userStats.TrueSkill.Rating < game.MinRating {
-			failedRequirements[i] = append(failedRequirements[i], "MinRating")
-			continue
+			addFailure("MinRating")
 		}
 		if game.MinReliability != 0 && userStats.Reliability < game.MinReliability {
-			failedRequirements[i] = append(failedRequirements[i], "MinReliability")
-			continue
+			addFailure("MinReliability")
 		}
 		if game.MinQuickness != 0 && userStats.Quickness < game.MinQuickness {
-			failedRequirements[i] = append(failedRequirements[i], "MinQuickness")
-			continue
+			addFailure("MinQuickness")
 		}
 		if game.GameMasterEnabled && game.RequireGameMasterInvitation && reason == toJoin && !game.IsInvitedByGameMaster(userStats.User.Email) {
-			failedRequirements[i] = append(failedRequirements[i], "InvitationNeeded")
-			continue
+			addFailure("InvitationNeeded")
 		}
-		newGames = append(newGames, game)
+		if len(game.FailedRequirements) == 0 && actuallyRemove {
+			newGames = append(newGames, *game)
+		}
 	}
-	*g = newGames
+	if actuallyRemove {
+		*g = newGames
+	}
 	return failedRequirements
 }
 
-func (g *Games) RemoveBanned(ctx context.Context, uid string) ([][]Ban, error) {
+func (g *Games) RemoveBanned(ctx context.Context, uid string, actuallyRemove bool) ([][]Ban, error) {
+	// Empty slice of bans per game.
 	gameBans := make([][]Ban, len(*g))
 
+	// Create a slice of ban IDs, and for each ban ID add the index into *g for the game the ban came from.
 	banIDs := []*datastore.Key{}
 	gameIndices := []int{}
-	for gameIndex, game := range *g {
-		for _, member := range game.Members {
-			banID, err := BanID(ctx, []string{uid, member.User.Id})
-			if err != nil {
-				return nil, err
+	for gameIndex := range *g {
+		game := &(*g)[gameIndex]
+		game.ActiveBans = nil
+		// You can't be banned from your own game mastered game.
+		if game.GameMaster.Id != uid {
+			for _, member := range game.Members {
+				banID, err := BanID(ctx, []string{uid, member.User.Id})
+				if err != nil {
+					return nil, err
+				}
+				gameIndices = append(gameIndices, gameIndex)
+				banIDs = append(banIDs, banID)
 			}
-			gameIndices = append(gameIndices, gameIndex)
-			banIDs = append(banIDs, banID)
+			if game.GameMaster.Id != "" {
+				banID, err := BanID(ctx, []string{uid, game.GameMaster.Id})
+				if err != nil {
+					return nil, err
+				}
+				gameIndices = append(gameIndices, gameIndex)
+				banIDs = append(banIDs, banID)
+			}
 		}
 	}
+	// If we found no possible bans, just return the empty slice of bans.
 	if len(banIDs) == 0 {
-		return [][]Ban{[]Ban{}}, nil
+		return gameBans, nil
 	}
 
 	bans := make([]Ban, len(banIDs))
 	err := datastore.GetMulti(ctx, banIDs, bans)
 
 	if err == nil {
-		*g = Games{}
-		return [][]Ban{bans}, nil
-	}
-
-	if err == datastore.ErrNoSuchEntity {
-		return gameBans, nil
-	}
-
-	merr, ok := err.(appengine.MultiError)
-	if !ok {
-		return nil, err
-	}
-
-	for banIndex, serr := range merr {
-		if serr == nil {
+		// If we succeeded with all loads (all bans existed, unlikely), then add each ban we found to the correct position in gameBans.
+		for banIndex := range bans {
 			gameBans[gameIndices[banIndex]] = append(gameBans[gameIndices[banIndex]], bans[banIndex])
-		} else if serr != datastore.ErrNoSuchEntity {
+			(*g)[gameIndices[banIndex]].ActiveBans = append((*g)[gameIndices[banIndex]].ActiveBans, bans[banIndex])
+		}
+	} else {
+		// If we didn't find ANYTHING, just return the empty slice of bans.
+		if err == datastore.ErrNoSuchEntity {
+			return gameBans, nil
+		}
+
+		// If the error isn't a multi error, then eject.
+		merr, ok := err.(appengine.MultiError)
+		if !ok {
 			return nil, err
 		}
-	}
 
-	newGames := Games{}
-	for gameIndex, game := range *g {
-		if len(gameBans[gameIndex]) == 0 {
-			newGames = append(newGames, game)
+		for banIndex, serr := range merr {
+			// Go through the errors, and add each ban that was loaded successfully to the correct position in gameBans.
+			if serr == nil {
+				gameBans[gameIndices[banIndex]] = append(gameBans[gameIndices[banIndex]], bans[banIndex])
+				(*g)[gameIndices[banIndex]].ActiveBans = append((*g)[gameIndices[banIndex]].ActiveBans, bans[banIndex])
+			} else if serr != datastore.ErrNoSuchEntity {
+				// If the error wasn't a 'not found', eject.
+				return nil, err
+			}
 		}
 	}
-	*g = newGames
+
+	// Build a new slice of games, if we want to remove.
+	if actuallyRemove {
+		newGames := Games{}
+		for gameIndex, game := range *g {
+			if len(gameBans[gameIndex]) == 0 {
+				newGames = append(newGames, game)
+			}
+		}
+		*g = newGames
+	}
 	return gameBans, nil
 }
 
@@ -777,7 +807,7 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 	}
 	sort.Sort(games)
 
-	games.RemoveBanned(ctx, user.Id)
+	games.RemoveBanned(ctx, user.Id, true)
 
 	for _, otherGame := range games {
 		if game.canMergeInto(&otherGame, user) {
@@ -893,7 +923,7 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 			return err
 		}
 		filtered := Games{*game}
-		if failedRequirements := filtered.RemoveFiltered(toCreate, userStats); len(failedRequirements[0]) > 0 {
+		if failedRequirements := filtered.RemoveFiltered(toCreate, userStats, false); len(failedRequirements[0]) > 0 {
 			return HTTPErr{fmt.Sprintf("Can't create game, failed own requirements: %+v", failedRequirements[0]), http.StatusPreconditionFailed}
 		}
 		if err := game.DBSave(ctx); err != nil {
@@ -1340,14 +1370,10 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 	game.Refresh()
 
 	filtered := Games{*game}
-	activeBans, err := filtered.RemoveBanned(ctx, user.Id)
-	if err != nil {
+	if _, err = filtered.RemoveBanned(ctx, user.Id, false); err != nil {
 		return nil, err
 	}
-	game.ActiveBans = activeBans[0]
+	filtered.RemoveFiltered(toJoin, userStats, false)
 
-	filtered = Games{*game}
-	game.FailedRequirements = filtered.RemoveFiltered(toJoin, userStats)[0]
-
-	return game, nil
+	return &filtered[0], nil
 }

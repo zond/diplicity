@@ -191,30 +191,39 @@ type handlerScope int
 const (
 	scopeMember handlerScope = iota
 	scopeOtherIsMember
-	scopePublicOpen
-	scopePublicClosed
+	scopePublic
 	scopeGameMaster
 )
 
+type handlerJoinability int
+
+const (
+	joinabilityOpen handlerJoinability = iota
+	joinabilityClosed
+)
+
 type gamesHandler struct {
-	query *datastore.Query
-	name  string
-	desc  []string
-	route string
-	scope handlerScope
+	query       *datastore.Query
+	name        string
+	desc        []string
+	route       string
+	scope       handlerScope
+	joinability handlerJoinability
 }
 
 type gamesReq struct {
-	ctx               context.Context
-	w                 ResponseWriter
-	r                 Request
-	user              *auth.User
-	userStats         *UserStats
-	iter              *datastore.Iterator
-	limit             int
-	h                 *gamesHandler
-	detailFilters     []func(g *Game) bool
-	viewerStatsFilter bool
+	ctx                context.Context
+	w                  ResponseWriter
+	r                  Request
+	user               *auth.User
+	userStats          *UserStats
+	iter               *datastore.Iterator
+	limit              int
+	h                  *gamesHandler
+	detailFilters      []func(g *Game) bool
+	viewerStatsFilter  bool
+	viewerBanFilter    bool
+	viewerFilterRemove bool
 }
 
 /*
@@ -228,12 +237,21 @@ func (req *gamesReq) handle() error {
 	for err == nil && len(games) < req.limit {
 		var nextBatch Games
 		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
+		log.Infof(req.ctx, "next batch %+v", nextBatch)
+		// Remove those not matching programmatic filters.
 		nextBatch.RemoveCustomFiltered(req.detailFilters)
+		log.Infof(req.ctx, "post custom filter: %+v", nextBatch)
+		// Mark failed requirements for games if required.
 		if req.viewerStatsFilter {
-			nextBatch.RemoveFiltered(toJoin, req.userStats)
-			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id); filtErr != nil {
+			nextBatch.RemoveFiltered(toJoin, req.userStats, req.viewerFilterRemove)
+			log.Infof(req.ctx, "post stats filter: %+v", nextBatch)
+		}
+		// Mark bans for games if required, and remove them if required.
+		if req.viewerBanFilter {
+			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id, req.viewerFilterRemove); filtErr != nil {
 				return filtErr
 			}
+			log.Infof(req.ctx, "post ban filter: %+v", nextBatch)
 		}
 		games = append(games, nextBatch...)
 	}
@@ -325,11 +343,13 @@ func (req *gamesReq) intervalFilter(ctx context.Context, fieldName, paramName st
  */
 func (h *gamesHandler) handle(w ResponseWriter, r Request) error {
 	req := &gamesReq{
-		ctx:               appengine.NewContext(r.Req()),
-		w:                 w,
-		r:                 r,
-		h:                 h,
-		viewerStatsFilter: h.scope == scopePublicOpen,
+		ctx:                appengine.NewContext(r.Req()),
+		w:                  w,
+		r:                  r,
+		h:                  h,
+		viewerStatsFilter:  h.joinability == joinabilityOpen,
+		viewerBanFilter:    h.joinability == joinabilityOpen,
+		viewerFilterRemove: h.joinability == joinabilityOpen && h.scope == scopePublic,
 	}
 
 	user, ok := r.Values()["user"].(*auth.User)
@@ -360,9 +380,7 @@ func (h *gamesHandler) handle(w ResponseWriter, r Request) error {
 		q = q.Filter("Members.User.Id=", user.Id)
 	case scopeOtherIsMember:
 		q = q.Filter("Members.User.Id=", r.Vars()["user_id"])
-	case scopePublicClosed:
-		fallthrough
-	case scopePublicOpen:
+	case scopePublic:
 		q = q.Filter("Private=", false)
 	case scopeGameMaster:
 		q = q.Filter("GameMaster.Id=", user.Id)
@@ -455,88 +473,100 @@ func addGamesHandlerLink(r Request, item *Item, handler *gamesHandler) *Item {
 
 var (
 	finishedGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
-		name:  "finished-games",
-		desc:  []string{"Finished games", "Public finished games, sorted with newest first."},
-		route: ListFinishedGamesRoute,
-		scope: scopePublicClosed,
+		query:       datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
+		name:        "finished-games",
+		desc:        []string{"Finished games", "Public finished games, sorted with newest first."},
+		route:       ListFinishedGamesRoute,
+		scope:       scopePublic,
+		joinability: joinabilityClosed,
 	}
 	startedGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
-		name:  "started-games",
-		desc:  []string{"Started games", "Public started games, sorted with oldest first."},
-		route: ListStartedGamesRoute,
-		scope: scopePublicClosed,
+		query:       datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
+		name:        "started-games",
+		desc:        []string{"Started games", "Public started games, sorted with oldest first."},
+		route:       ListStartedGamesRoute,
+		scope:       scopePublic,
+		joinability: joinabilityClosed,
 	}
 	openGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Closed=", false).Order("StartETA"),
-		name:  "open-games",
-		desc:  []string{"Open games", "Public open games, sorted with those expected to start soonest first."},
-		route: ListOpenGamesRoute,
-		scope: scopePublicOpen,
+		query:       datastore.NewQuery(gameKind).Filter("Closed=", false).Order("StartETA"),
+		name:        "open-games",
+		desc:        []string{"Open games", "Public open games, sorted with those expected to start soonest first."},
+		route:       ListOpenGamesRoute,
+		scope:       scopePublic,
+		joinability: joinabilityOpen,
 	}
 	myFinishedGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
-		name:  "my-finished-games",
-		desc:  []string{"My finished games", "Finished games you are a member of, sorted with newest first."},
-		route: ListMyFinishedGamesRoute,
-		scope: scopeMember,
+		query:       datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
+		name:        "my-finished-games",
+		desc:        []string{"My finished games", "Finished games you are a member of, sorted with newest first."},
+		route:       ListMyFinishedGamesRoute,
+		scope:       scopeMember,
+		joinability: joinabilityClosed,
 	}
 	myStartedGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
-		name:  "my-started-games",
-		desc:  []string{"My started games", "Started games you are a member of, sorted with oldest first."},
-		route: ListMyStartedGamesRoute,
-		scope: scopeMember,
+		query:       datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
+		name:        "my-started-games",
+		desc:        []string{"My started games", "Started games you are a member of, sorted with oldest first."},
+		route:       ListMyStartedGamesRoute,
+		scope:       scopeMember,
+		joinability: joinabilityClosed,
 	}
 	myStagingGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
-		name:  "my-staging-games",
-		desc:  []string{"My staging games", "Unstarted games you are a member of, sorted with fullest and oldest first."},
-		route: ListMyStagingGamesRoute,
-		scope: scopeMember,
+		query:       datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
+		name:        "my-staging-games",
+		desc:        []string{"My staging games", "Unstarted games you are a member of, sorted with those expected to start soonest first."},
+		route:       ListMyStagingGamesRoute,
+		scope:       scopeMember,
+		joinability: joinabilityClosed,
 	}
 	masteredStagingGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
-		name:  "mastered-staging-games",
-		desc:  []string{"Mastered staging games", "Unstarted games you are game master of, sorted with fullest and oldest first."},
-		route: ListMasteredStagingGamesRoute,
-		scope: scopeGameMaster,
+		query:       datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
+		name:        "mastered-staging-games",
+		desc:        []string{"Mastered staging games", "Unstarted games you are game master of, sorted with those expected to start soonest first."},
+		route:       ListMasteredStagingGamesRoute,
+		scope:       scopeGameMaster,
+		joinability: joinabilityOpen,
 	}
 	masteredFinishedGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
-		name:  "mastered-finished-games",
-		desc:  []string{"Mastered finished games", "Finished games you are game master of, sorted with newest first."},
-		route: ListMasteredFinishedGamesRoute,
-		scope: scopeGameMaster,
+		query:       datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
+		name:        "mastered-finished-games",
+		desc:        []string{"Mastered finished games", "Finished games you are game master of, sorted with newest first."},
+		route:       ListMasteredFinishedGamesRoute,
+		scope:       scopeGameMaster,
+		joinability: joinabilityClosed,
 	}
 	masteredStartedGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
-		name:  "mastered-started-games",
-		desc:  []string{"Mastered started games", "Started games you are game master of, sorted with oldest first."},
-		route: ListMasteredStartedGamesRoute,
-		scope: scopeGameMaster,
+		query:       datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
+		name:        "mastered-started-games",
+		desc:        []string{"Mastered started games", "Started games you are game master of, sorted with oldest first."},
+		route:       ListMasteredStartedGamesRoute,
+		scope:       scopeGameMaster,
+		joinability: joinabilityOpen,
 	}
 	otherMemberStagingGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
-		name:  "other-member-staging-games",
-		desc:  []string{"Other member staging games", "Unstarted games someone else is a member of, sorted with fullest and oldest first."},
-		route: ListOtherStagingGamesRoute,
-		scope: scopeOtherIsMember,
+		query:       datastore.NewQuery(gameKind).Filter("Started=", false).Order("StartETA"),
+		name:        "other-member-staging-games",
+		desc:        []string{"Other member staging games", "Unstarted games someone else is a member of, sorted with those expected to start soonest first."},
+		route:       ListOtherStagingGamesRoute,
+		scope:       scopeOtherIsMember,
+		joinability: joinabilityOpen,
 	}
 	otherMemberFinishedGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
-		name:  "other-member-finished-games",
-		desc:  []string{"Other member finished games", "Finished games someone else is a member of, sorted with newest first."},
-		route: ListOtherFinishedGamesRoute,
-		scope: scopeOtherIsMember,
+		query:       datastore.NewQuery(gameKind).Filter("Finished=", true).Order("-FinishedAt"),
+		name:        "other-member-finished-games",
+		desc:        []string{"Other member finished games", "Finished games someone else is a member of, sorted with newest first."},
+		route:       ListOtherFinishedGamesRoute,
+		scope:       scopeOtherIsMember,
+		joinability: joinabilityClosed,
 	}
 	otherMemberStartedGamesHandler = &gamesHandler{
-		query: datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
-		name:  "other-member-started-games",
-		desc:  []string{"Other member started games", "Started games someone else is a member of, sorted with oldest first."},
-		route: ListOtherStartedGamesRoute,
-		scope: scopeOtherIsMember,
+		query:       datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).Order("-StartedAt"),
+		name:        "other-member-started-games",
+		desc:        []string{"Other member started games", "Started games someone else is a member of, sorted with oldest first."},
+		route:       ListOtherStartedGamesRoute,
+		scope:       scopeOtherIsMember,
+		joinability: joinabilityOpen,
 	}
 	topRatedPlayersHandler = userStatsHandler{
 		query: datastore.NewQuery(userStatsKind).Order("-TrueSkill.Rating"),

@@ -645,8 +645,10 @@ func testGameListFilters(t *testing.T, private bool) {
 
 	gameResp := env2.GetURL(gameURL.String()).Success()
 	gameResp.
-		AssertLen(1, "Properties", "FailedRequirements")
+		AssertLen(3, "Properties", "FailedRequirements")
 	gameResp.Find("MinRating", []string{"Properties", "FailedRequirements"}, nil)
+	gameResp.Find("MinQuickness", []string{"Properties", "FailedRequirements"}, nil)
+	gameResp.Find("MinReliability", []string{"Properties", "FailedRequirements"}, nil)
 	gameResp.AssertNotFind("join", []string{"Links"}, []string{"Rel"})
 
 	env2.PostRoute("Member.Create").RouteParams("game_id", gameID).Body(map[string]string{}).Failure()
