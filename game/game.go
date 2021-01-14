@@ -425,7 +425,7 @@ type Game struct {
 	Closed   bool // Game is no longer joinable.
 	Finished bool // Game has reached its end.
 
-	Desc                          string           `methods:"POST" datastore:",noindex"`
+	Desc                          string           `methods:"POST,PUT" datastore:",noindex"`
 	Variant                       string           `methods:"POST"`
 	PhaseLengthMinutes            time.Duration    `methods:"POST,PUT"`
 	NonMovementPhaseLengthMinutes time.Duration    `methods:"POST,PUT"`
