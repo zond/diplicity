@@ -828,7 +828,7 @@ func (p *PhaseResolver) Act() error {
 				return err
 			}
 			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY PROMOTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
-		} else if len(readyNationMap) == 0 {
+		} else if !p.Game.GameMasterEnabled && len(readyNationMap) == 0 {
 			allKeys = append(allKeys, p.Game.ID)
 			// Delete the game, the phase, and all it's phase states.
 			if err := datastore.DeleteMulti(p.Context, allKeys); err != nil {
