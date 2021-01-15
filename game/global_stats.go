@@ -96,6 +96,8 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 			"GroupChat":                     newHist("Distribution of games with vs without group chat"),
 			"PrivateChat":                   newHist("Distribution of games with vs without private chat"),
 			"NationAllocation":              newHist("Distribution of games with different methods of nation allocation"),
+			"GameMasterEnabled":             newHist("Active games with game master enabled"),
+			"RequireGameMasterInvitation":   newHist("Active games that require a game master invitation to join"),
 		},
 		ActiveGameMemberUserStatsHistograms: newUserStatsHistograms("members of active games"),
 		ActiveMemberUserStatsHistograms:     newUserStatsHistograms("active members of active games"),
@@ -128,6 +130,8 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 		bumpNamedHistogram("ConferenceChat", fmt.Sprint(!game.DisableConferenceChat), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("GroupChat", fmt.Sprint(!game.DisableGroupChat), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("PrivateChat", fmt.Sprint(!game.DisablePrivateChat), globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("GameMasterEnabled", fmt.Sprint(game.GameMasterEnabled), globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("RequireGameMasterInvitation", fmt.Sprint(game.RequireGameMasterInvitation), globalStats.ActiveGameHistograms)
 		if len(game.NewestPhaseMeta) > 0 {
 			bumpNamedHistogram("NewestPhaseOrdinal", game.NewestPhaseMeta[0].PhaseOrdinal, globalStats.ActiveGameHistograms)
 		}

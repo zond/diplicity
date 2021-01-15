@@ -16,7 +16,9 @@
 				"ActiveGameHistograms-ConferenceChat": true,
 				"ActiveGameHistograms-GroupChat": true,
 				"ActiveGameHistograms-PrivateChat": true,
-				"ActiveGameHistograms-NationAllocation": true
+				"ActiveGameHistograms-NationAllocation": true,
+				"ActiveGameHistograms-GameMasterEnabled": true,
+				"ActiveGameHistograms-RequireGameMasterInvitation": true,
 			};
 			function drawPie(histType, histName, data) {
 				var id = histType + "-" + histName;
@@ -34,8 +36,8 @@
 					{
 						values: values,
 						labels: labels,
-						type: "pie"
-					}
+						type: "pie",
+					},
 				]);
 			}
 			function drawHist(histType, histName, data, bins) {
@@ -63,7 +65,7 @@
 				}
 				var opts = {
 					x: x,
-					type: "histogram"
+					type: "histogram",
 				};
 				if (bins != null) {
 					opts.nbinsx = bins;
@@ -105,7 +107,7 @@
 							minAndMax[1] +
 							'" style="width: 100%" />'
 					);
-					$("#hist-" + id + "-bin-slider").change(function(ev) {
+					$("#hist-" + id + "-bin-slider").change(function (ev) {
 						drawHist(
 							histType,
 							histName,
@@ -118,12 +120,12 @@
 					});
 				}
 			}
-			$.ajax("https://diplicity-engine.appspot.com/GlobalStats", {
+			$.ajax("../GlobalStats", {
 				method: "GET",
 				headers: {
-					Accept: "application/json"
+					Accept: "application/json",
 				},
-				success: function(data) {
+				success: function (data) {
 					for (var histType in data.Properties) {
 						for (var histName in data.Properties[histType]) {
 							addHistogram(
@@ -133,7 +135,7 @@
 							);
 						}
 					}
-				}
+				},
 			});
 		</script>
 	</head>
