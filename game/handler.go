@@ -1963,6 +1963,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(r, "/GlobalStats", []string{"GET"}, GlobalStatsRoute, handleGlobalStats)
 	Handle(r, "/Rss", []string{"GET"}, RssRoute, handleRss)
 	Handle(r, "/Users/Ratings/Histogram", []string{"GET"}, GetUserRatingHistogramRoute, getUserRatingHistogram)
+	HandleResource(r, ForumMailResource)
 	HandleResource(r, GameResource)
 	HandleResource(r, AllocationResource)
 	HandleResource(r, GameMasterInvitationResource)

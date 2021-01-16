@@ -5,14 +5,32 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/memcache"
+
+	. "github.com/zond/goaeoas"
 )
 
 const (
 	forumMailKind       = "ForumMail"
 	forumAddressPattern = "forum-mail-%s@diplicity-engine.appspotmail.com"
 )
+
+var (
+	ForumMailResource *Resource
+)
+
+func init() {
+	ForumMailResource = &Resource{
+		FullPath: "/ForumMail",
+		Load:     loadForumMail,
+	}
+}
+
+func loadForumMail(w ResponseWriter, r Request) (*ForumMail, error) {
+	return GetForumMail(appengine.NewContext(r.Req()))
+}
 
 func getForumMailKey(ctx context.Context) *datastore.Key {
 	return datastore.NewKey(ctx, forumMailKind, prodKey, 0, nil)
@@ -22,6 +40,10 @@ type ForumMail struct {
 	Secret  string
 	Subject string
 	Body    string
+}
+
+func (f *ForumMail) Item(r Request) *Item {
+	return NewItem(f).SetName("ForumMail")
 }
 
 func (f *ForumMail) Address() string {
