@@ -61,7 +61,8 @@ func handleIndex(w ResponseWriter, r Request) error {
 	})).AddLink(r.NewLink(Link{
 		Rel:   "rss",
 		Route: RssRoute,
-	})).AddLink(r.NewLink(AllocationResource.Link("test-allocation", Create, nil)))
+	})).AddLink(r.NewLink(AllocationResource.Link("test-allocation", Create, nil))).
+		AddLink(r.NewLink(ForumMailResource.Link("latest-forum-mail", Load, nil)))
 
 	if user == nil {
 		redirectURL := r.Req().URL
