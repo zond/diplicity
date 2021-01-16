@@ -1241,7 +1241,16 @@ func receiveMail(w ResponseWriter, r Request) error {
 
 	toAddress, err := mail.ParseAddress(toAddressString)
 	if err != nil {
-		e := fmt.Sprintf("Unable to parse recipient address %q: %v", toAddressString, err)
+		e := fmt.Sprintf("Unable to parse To address %q: %v", toAddressString, err)
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
+	}
+
+	deliveredToAddressString := enmsg.GetHeader("Delivered-To")
+
+	deliveredToAddress, err := mail.ParseAddress(deliveredToAddressString)
+	if err != nil {
+		e := fmt.Sprintf("Unable to parse Delivered-To address %q: %v", deliveredToAddress, err)
 		log.Errorf(ctx, e)
 		return sendEmailError(ctx, from, e)
 	}
@@ -1252,7 +1261,7 @@ func receiveMail(w ResponseWriter, r Request) error {
 		log.Errorf(ctx, e)
 		return sendEmailError(ctx, from, e)
 	}
-	if forumMail != nil && toAddress.Address == forumMail.Address() {
+	if forumMail != nil && deliveredToAddress.Address == forumMail.Address() {
 		forumMail.Subject = enmsg.GetHeader("Subject")
 		forumMail.Body = mailstrip.Parse(enmsg.Text).String()
 		if err := forumMail.Save(ctx); err != nil {
