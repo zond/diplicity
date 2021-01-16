@@ -1246,30 +1246,31 @@ func receiveMail(w ResponseWriter, r Request) error {
 		return sendEmailError(ctx, from, e)
 	}
 
-	deliveredToAddressString := enmsg.GetHeader("Delivered-To")
+	if deliveredToAddressString := enmsg.GetHeader("Delivered-To"); deliveredToAddressString != "" {
 
-	deliveredToAddress, err := mail.ParseAddress(deliveredToAddressString)
-	if err != nil {
-		e := fmt.Sprintf("Unable to parse Delivered-To address %q: %v", deliveredToAddress, err)
-		log.Errorf(ctx, e)
-		return sendEmailError(ctx, from, e)
-	}
-
-	forumMail, err := GetForumMail(ctx)
-	if err != nil {
-		e := fmt.Sprintf("Unable to load root forum email: %v", err)
-		log.Errorf(ctx, e)
-		return sendEmailError(ctx, from, e)
-	}
-	if forumMail != nil && deliveredToAddress.Address == forumMail.Address() {
-		forumMail.Subject = enmsg.GetHeader("Subject")
-		forumMail.Body = mailstrip.Parse(enmsg.Text).String()
-		if err := forumMail.Save(ctx); err != nil {
-			e := fmt.Sprintf("Unable to save root forum email %+v: %v", forumMail, err)
+		deliveredToAddress, err := mail.ParseAddress(deliveredToAddressString)
+		if err != nil {
+			e := fmt.Sprintf("Unable to parse Delivered-To address %q: %v", deliveredToAddress, err)
 			log.Errorf(ctx, e)
-			return sendEmailError(ctx, from, e)
+		} else {
+			forumMail, err := GetForumMail(ctx)
+			if err != nil {
+				e := fmt.Sprintf("Unable to load root forum email: %v", err)
+				log.Errorf(ctx, e)
+
+			} else {
+				if forumMail != nil && deliveredToAddress.Address == forumMail.Address() {
+					forumMail.Subject = enmsg.GetHeader("Subject")
+					forumMail.Body = mailstrip.Parse(enmsg.Text).String()
+					if err := forumMail.Save(ctx); err != nil {
+						e := fmt.Sprintf("Unable to save root forum email %+v: %v", forumMail, err)
+						log.Errorf(ctx, e)
+						return sendEmailError(ctx, from, e)
+					}
+					return nil
+				}
+			}
 		}
-		return nil
 	}
 
 	match := fromAddressReg.FindStringSubmatch(toAddress.Address)
