@@ -314,6 +314,7 @@ func getNaCl(ctx context.Context) (*naCl, error) {
 	defer prodNaClLock.Unlock()
 	foundNaCl := &naCl{}
 	if err := datastore.Get(ctx, getNaClKey(ctx), foundNaCl); err == nil {
+		prodNaCl = foundNaCl
 		return foundNaCl, nil
 	} else if err != datastore.ErrNoSuchEntity {
 		return nil, err

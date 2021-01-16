@@ -1246,6 +1246,23 @@ func receiveMail(w ResponseWriter, r Request) error {
 		return sendEmailError(ctx, from, e)
 	}
 
+	forumMail, err := GetForumMail(ctx)
+	if err != nil {
+		e := fmt.Sprintf("Unable to load root forum email: %v", err)
+		log.Errorf(ctx, e)
+		return sendEmailError(ctx, from, e)
+	}
+	if forumMail != nil && toAddress.Address == forumMail.Address() {
+		forumMail.Subject = enmsg.GetHeader("Subject")
+		forumMail.Body = mailstrip.Parse(enmsg.Text).String()
+		if err := forumMail.Save(ctx); err != nil {
+			e := fmt.Sprintf("Unable to save root forum email %+v: %v", forumMail, err)
+			log.Errorf(ctx, e)
+			return sendEmailError(ctx, from, e)
+		}
+		return nil
+	}
+
 	match := fromAddressReg.FindStringSubmatch(toAddress.Address)
 	if len(match) == 0 {
 		e := fmt.Sprintf("Recipient address of %v doesn't match %v.", toAddress, fromAddressReg)
