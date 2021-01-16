@@ -1235,10 +1235,14 @@ func receiveMail(w ResponseWriter, r Request) error {
 		return fmt.Errorf(e)
 	}
 
+	log.Infof(ctx, "Headers:")
+	for _, hk := range enmsg.GetHeaderKeys() {
+		log.Infof(ctx, "%v: %v", hk, enmsg.GetHeader(hk))
+	}
+
 	from := enmsg.GetHeader("From")
 
 	toAddressString := enmsg.GetHeader("To")
-	log.Infof(ctx, "Got email for %q", toAddressString)
 
 	toAddress, err := mail.ParseAddress(toAddressString)
 	if err != nil {
@@ -1248,7 +1252,6 @@ func receiveMail(w ResponseWriter, r Request) error {
 	}
 
 	if deliveredToAddressString := enmsg.GetHeader("Delivered-To"); deliveredToAddressString != "" {
-		log.Infof(ctx, "Delivered-To %q", deliveredToAddressString)
 
 		deliveredToAddress, err := mail.ParseAddress(deliveredToAddressString)
 		if err != nil {
