@@ -1235,6 +1235,7 @@ func receiveMail(w ResponseWriter, r Request) error {
 		return fmt.Errorf(e)
 	}
 
+	log.Infof(ctx, "{recipient}: %s", r.Vars()["recipient"])
 	log.Infof(ctx, "Headers:")
 	for _, hk := range enmsg.GetHeaderKeys() {
 		log.Infof(ctx, "%v: %v", hk, enmsg.GetHeader(hk))
@@ -1266,6 +1267,8 @@ func receiveMail(w ResponseWriter, r Request) error {
 			}
 			log.Infof(ctx, "Saved incoming email as forum mail.")
 			return nil
+		} else {
+			log.Infof(ctx, "Alright, %q != %q", r.Vars()["recipient"], forumMail.Address())
 		}
 	}
 
