@@ -37,7 +37,7 @@ func getForumMailKey(ctx context.Context) *datastore.Key {
 }
 
 type ForumMail struct {
-	Secret  string
+	Secret  string `json:"-"`
 	Subject string
 	Body    string
 }
