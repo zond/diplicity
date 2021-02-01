@@ -547,6 +547,12 @@ func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
 	if g.LastYear != o.LastYear {
 		return false
 	}
+	if g.SkipMuster != o.SkipMuster {
+		return false
+	}
+	if g.ChatLanguageISO639_1 != o.ChatLanguageISO639_1 {
+		return false
+	}
 	for _, member := range o.Members {
 		if member.User.Id == avoid.Id {
 			return false
@@ -798,6 +804,8 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 		Filter("DisablePrivateChat=", game.DisablePrivateChat).
 		Filter("NationAllocation=", game.NationAllocation).
 		Filter("Anonymous=", game.Anonymous).
+		Filter("SkipMuster=", game.SkipMuster).
+		Filter("ChatLanguageISO639_1=", game.ChatLanguageISO639_1).
 		GetAll(ctx, &games)
 	if err != nil {
 		return nil, err
