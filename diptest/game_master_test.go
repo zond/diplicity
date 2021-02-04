@@ -37,12 +37,13 @@ func TestGameMasterPreallocationBothPref(t *testing.T) {
 	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 		Follow("invite-user", "Links").Body(map[string]interface{}{
 		"Email":  player1Env.email,
-		"Nation": "USSR",
+		"Nation": "NATO",
 	}).Success()
 	masterEnv.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 		Follow("invite-user", "Links").Body(map[string]interface{}{
-		"Email": player1Env.email,
-	}).Failure()
+		"Email":  player1Env.email,
+		"Nation": "USSR",
+	}).Success()
 	player1Env.GetRoute("Game.Load").RouteParams("id", gameID).Success().
 		Follow("join", "Links").Body(map[string]interface{}{
 		"NationPreferences": "NATO,USSR",
