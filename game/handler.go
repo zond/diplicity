@@ -237,21 +237,17 @@ func (req *gamesReq) handle() error {
 	for err == nil && len(games) < req.limit {
 		var nextBatch Games
 		nextBatch, err = req.h.fetch(req.iter, req.limit-len(games))
-		log.Infof(req.ctx, "next batch %+v", nextBatch)
 		// Remove those not matching programmatic filters.
 		nextBatch.RemoveCustomFiltered(req.detailFilters)
-		log.Infof(req.ctx, "post custom filter: %+v", nextBatch)
 		// Mark failed requirements for games if required.
 		if req.viewerStatsFilter {
 			nextBatch.RemoveFiltered(toJoin, req.userStats, req.viewerFilterRemove)
-			log.Infof(req.ctx, "post stats filter: %+v", nextBatch)
 		}
 		// Mark bans for games if required, and remove them if required.
 		if req.viewerBanFilter {
 			if _, filtErr := nextBatch.RemoveBanned(req.ctx, req.user.Id, req.viewerFilterRemove); filtErr != nil {
 				return filtErr
 			}
-			log.Infof(req.ctx, "post ban filter: %+v", nextBatch)
 		}
 		games = append(games, nextBatch...)
 	}
