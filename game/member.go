@@ -400,6 +400,7 @@ func gameMasterCreateInvitation(w ResponseWriter, r Request) (*GameMasterInvitat
 		return nil, err
 	}
 
+	gmi.Email = strings.TrimSpace(gmi.Email)
 	if gmi.Email == "" {
 		return nil, HTTPErr{"email empty", http.StatusBadRequest}
 	}
