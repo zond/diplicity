@@ -416,19 +416,22 @@ func gameMasterCreateInvitation(w ResponseWriter, r Request) (*GameMasterInvitat
 			return HTTPErr{"unauthorized", http.StatusUnauthorized}
 		}
 
-		if game.Started {
-			return HTTPErr{"game already started", http.StatusPreconditionFailed}
-		}
-
-		if game.IsInvitedByGameMaster(gmi.Email) {
-			return HTTPErr{"email already invited", http.StatusPreconditionFailed}
-		}
-
 		if gmi.Nation != "" && !game.ValidNation(gmi.Nation) {
 			return HTTPErr{"unrecognized nation in variant", http.StatusBadRequest}
 		}
 
-		game.GameMasterInvitations = append(game.GameMasterInvitations, *gmi)
+		found := false
+		for idx := range game.GameMasterInvitations {
+			if game.GameMasterInvitations[idx].Email == gmi.Email {
+				found = true
+				game.GameMasterInvitations[idx] = *gmi
+				break
+			}
+		}
+		if !found {
+			game.GameMasterInvitations = append(game.GameMasterInvitations, *gmi)
+		}
+
 		if _, err := datastore.Put(ctx, gameID, game); err != nil {
 			return err
 		}
