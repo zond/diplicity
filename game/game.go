@@ -749,7 +749,9 @@ func (g *Game) Item(r Request) *Item {
 			}
 			uniqueMemberIds := map[string]bool{}
 			for _, member := range g.Members {
-				uniqueMemberIds[member.User.Id] = true
+				if member.User.Id != "" {
+					uniqueMemberIds[member.User.Id] = true
+				}
 			}
 			for id := range uniqueMemberIds {
 				gameItem.AddLink(r.NewLink(MemberResource.Link("kick-"+id, Delete, []string{"game_id", g.ID.Encode(), "user_id", id})))
