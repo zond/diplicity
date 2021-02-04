@@ -29,7 +29,12 @@ func init() {
 }
 
 func loadForumMail(w ResponseWriter, r Request) (*ForumMail, error) {
-	return GetForumMail(appengine.NewContext(r.Req()))
+	fm, err := GetForumMail(appengine.NewContext(r.Req()))
+	if err != nil {
+		return nil, err
+	}
+	fm.Secret = ""
+	return fm, nil
 }
 
 func getForumMailKey(ctx context.Context) *datastore.Key {
@@ -37,7 +42,7 @@ func getForumMailKey(ctx context.Context) *datastore.Key {
 }
 
 type ForumMail struct {
-	Secret  string `json:"-"`
+	Secret  string
 	Subject string
 	Body    string
 }
