@@ -1385,7 +1385,7 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 	}
 	filtered.RemoveFiltered(toJoin, userStats, false)
 	if !filtered[0].Joinable(user) {
-		log.Infof(ctx, "Game isn't joinable! Debug info follows.")
+		log.Infof(ctx, "Game isn't joinable by %q! Debug info follows.", user.Email)
 		for _, invit := range game.GameMasterInvitations {
 			log.Infof(ctx, "%q is invited as %q", invit.Email, invit.Nation)
 		}
