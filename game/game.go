@@ -966,6 +966,11 @@ func (g *Game) Redact(viewer *auth.User, r Request) {
 	if viewer.Id == g.GameMaster.Id {
 		return
 	}
+	for index := range g.GameMasterInvitations {
+		if strings.ToLower(strings.TrimSpace(g.GameMasterInvitations[index].Email)) != strings.ToLower(strings.TrimSpace(viewer.Email)) {
+			g.GameMasterInvitations[index].Email = ""
+		}
+	}
 	if !g.Finished && ((g.Private && g.Anonymous) || (!g.Private && g.DisablePrivateChat && g.DisableGroupChat && g.DisableConferenceChat)) {
 		for index := range g.Members {
 			if g.Members[index].User.Id == viewer.Id {
