@@ -640,7 +640,7 @@ func (g *Game) Leavable() bool {
 
 func (g *Game) IsInvitedByGameMaster(email string) bool {
 	for _, invitation := range g.GameMasterInvitations {
-		if invitation.Email == email {
+		if strings.ToLower(strings.TrimSpace(invitation.Email)) == strings.ToLower(strings.TrimSpace(email)) {
 			return true
 		}
 	}
@@ -1051,7 +1051,7 @@ func (g *Game) AllocateNations(ctx context.Context) error {
 	preallocatedEmailsMap := map[string]godip.Nation{}
 	for _, invitation := range g.GameMasterInvitations {
 		if invitation.Nation != "" && g.ValidNation(invitation.Nation) {
-			preallocatedEmailsMap[invitation.Email] = invitation.Nation
+			preallocatedEmailsMap[strings.ToLower(strings.TrimSpace(invitation.Email))] = invitation.Nation
 		}
 	}
 
@@ -1061,7 +1061,7 @@ func (g *Game) AllocateNations(ctx context.Context) error {
 	for memberIdx := range g.Members {
 		member := &g.Members[memberIdx]
 		// If there is a prealloc for this member
-		if prealloc, found := preallocatedEmailsMap[member.User.Email]; found {
+		if prealloc, found := preallocatedEmailsMap[strings.ToLower(strings.TrimSpace(member.User.Email))]; found {
 			// Allocate it, and remove the allocated nation
 			log.Infof(ctx, "preallocating %v to %v", prealloc, member.User.Email)
 			member.Nation = prealloc
