@@ -131,7 +131,7 @@ func handleGlobalStats(w ResponseWriter, r Request) error {
 		bumpNamedHistogram("GroupChat", fmt.Sprint(!game.DisableGroupChat), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("PrivateChat", fmt.Sprint(!game.DisablePrivateChat), globalStats.ActiveGameHistograms)
 		bumpNamedHistogram("GameMasterEnabled", fmt.Sprint(game.GameMasterEnabled), globalStats.ActiveGameHistograms)
-		bumpNamedHistogram("RequireGameMasterInvitation", fmt.Sprint(game.RequireGameMasterInvitation), globalStats.ActiveGameHistograms)
+		bumpNamedHistogram("RequireGameMasterInvitation", fmt.Sprint(game.GameMasterEnabled && game.RequireGameMasterInvitation), globalStats.ActiveGameHistograms)
 		if len(game.NewestPhaseMeta) > 0 {
 			bumpNamedHistogram("NewestPhaseOrdinal", game.NewestPhaseMeta[0].PhaseOrdinal, globalStats.ActiveGameHistograms)
 		}
