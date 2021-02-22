@@ -672,6 +672,7 @@ const (
 	diasState
 	eliminatedState
 	nmrState
+	concedeState
 )
 
 func (p *PhaseResolver) Act() error {
@@ -1003,7 +1004,8 @@ func (p *PhaseResolver) Act() error {
 	allReady := true                       // All nations are ready to resolve the new phase as well.
 	soloWinner := variant.SoloWinner(s)    // The nation, if any, reaching solo victory.
 	var soloWinnerUser string              // Will be set to the user of the soloWinner nation.
-	quitters := map[godip.Nation]quitter{} // One per nation that wants to quit, with either dias, eliminated, or nmr.
+	quitters := map[godip.Nation]quitter{} // One per nation that wants to quit, with either dias, eliminated, concede, or nmr.
+	conceders := map[godip.Nation]bool{}   // One per nation that wants to concede.
 	probationaries := []string{}           // One per user that's on probation.
 	newPhaseStates := PhaseStates{}        // The new phase states to save if we want to prepare resolution of a new phase.
 	oldPhaseResult := &PhaseResult{        // A result object for the old phase to simplify collecting user scoped stats.
@@ -1032,18 +1034,25 @@ func (p *PhaseResolver) Act() error {
 						member: member,
 					}
 				}
+				if phaseState.WantsConcede {
+					quitters[member.Nation] = quitter{
+						state:  concedeState,
+						member: member,
+					}
+					conceders[member.Nation] = true
+				}
 				wasOnProbation = phaseState.OnProbation
 				break
 			}
 		}
 		orderOptions := s.Phase().Options(s, member.Nation)
-		newOptions := len(orderOptions)
-		if newOptions > 0 {
+		newOptionsCount := len(orderOptions)
+		if newOptionsCount > 0 {
 			membersWithOptions[member.User.Id] = true
 		}
 		if scCounts[member.Nation] == 0 {
 			wasEliminated = true
-			// Overwrite DIAS with eliminated, you can't be part of a DIAS if you are eliminated...
+			// Overwrite DIAS/Concede with eliminated, you can't be part of a DIAS if you are eliminated...
 			quitters[member.Nation] = quitter{
 				state:  eliminatedState,
 				member: member,
@@ -1054,7 +1063,7 @@ func (p *PhaseResolver) Act() error {
 		}
 
 		// Log what we're doing.
-		stateString := fmt.Sprintf("wasReady = %v, wantedDIAS = %v, onProbation = %v, hadOrders = %v, newOptions = %v, wasEliminated = %v", wasReady, wantedDIAS, wasOnProbation, hadOrders, newOptions, wasEliminated)
+		stateString := fmt.Sprintf("wasReady = %v, wantedDIAS = %v, onProbation = %v, hadOrders = %v, newOptionsCount = %v, wasEliminated = %v", wasReady, wantedDIAS, wasOnProbation, hadOrders, newOptionsCount, wasEliminated)
 		log.Infof(p.Context, "%v at phase change: %s", member.Nation, stateString)
 
 		// Calculate states for next phase.
@@ -1068,7 +1077,7 @@ func (p *PhaseResolver) Act() error {
 		if autoProbation {
 			probationaries = append(probationaries, member.User.Id)
 		}
-		autoReady := newOptions == 0 || autoProbation
+		autoReady := newOptionsCount == 0 || autoProbation
 		autoDIAS := wantedDIAS || autoProbation
 		allReady = allReady && autoReady
 
@@ -1103,7 +1112,7 @@ func (p *PhaseResolver) Act() error {
 			PhaseOrdinal:   newPhase.PhaseOrdinal,
 			Nation:         member.Nation,
 			ReadyToResolve: autoReady,
-			NoOrders:       newOptions == 0,
+			NoOrders:       newOptionsCount == 0,
 			Eliminated:     wasEliminated,
 			WantsDIAS:      autoDIAS,
 			OnProbation:    autoProbation,
@@ -1121,7 +1130,7 @@ func (p *PhaseResolver) Act() error {
 
 	// Check if the game should end.
 
-	if soloWinner != "" || len(quitters) > len(variant.Nations)-1 || (p.Game.LastYear != 0 && newPhase.Year > p.Game.LastYear) {
+	if soloWinner != "" || (len(variant.Nations) == 2 && len(conceders) == 1) || len(quitters) == len(variant.Nations) || (p.Game.LastYear != 0 && newPhase.Year > p.Game.LastYear) {
 		log.Infof(p.Context, "soloWinner: %q, quitters: %v, lastYear: %v => game needs to end", soloWinner, PP(quitters), p.Game.LastYear)
 		// Just to ensure we don't try to resolve it again, even by mistake.
 		newPhase.Resolved = true

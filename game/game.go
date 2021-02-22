@@ -1236,7 +1236,7 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 			log.Errorf(ctx, "phase.ScheduleResolution(...): %v; hope datastore gets fixed", err)
 			return err
 		}
-		log.Infof(ctx, "%v has a %d minutes phase length, scheduled resolve", PP(g), g.PhaseLengthMinutes)
+		log.Infof(ctx, "Scheduling resolve for %v having a %d minutes phase length", PP(g), g.PhaseLengthMinutes)
 
 		memberIds := make([]string, len(g.Members))
 		for i, member := range g.Members {

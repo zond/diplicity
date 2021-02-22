@@ -893,6 +893,54 @@ func verifyNotAnonymous() {
 	}
 }
 
+func TestConcede(t *testing.T) {
+	withStartedGameOpts(func(m map[string]interface{}) {
+		m["Variant"] = "Cold War"
+	}, func() {
+		for i := range startedGameNats {
+			p := startedGames[i].Follow("phases", "Links").Success().
+				Find("Movement", []string{"Properties"}, []string{"Properties", "Type"})
+			p.Follow("phase-states", "Links").Success().
+				Find(startedGameNats[i], []string{"Properties"}, []string{"Properties", "Nation"}).
+				Follow("update", "Links").Body(map[string]interface{}{
+				"ReadyToResolve": true,
+			}).Success()
+		}
+
+		WaitForEmptyQueue("game-asyncResolvePhase")
+
+		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+			Follow("started-games", "Links").Success().
+			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+		p := startedGames[0].Follow("phases", "Links").Success().
+			Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+			AssertEq(false, "Properties", "Resolved")
+		p.Follow("phase-states", "Links").Success().
+			Find(startedGameNats[0], []string{"Properties"}, []string{"Properties", "Nation"}).
+			Follow("update", "Links").Body(map[string]interface{}{
+			"ReadyToResolve": true,
+			"WantsConcede":   true,
+		}).Success()
+
+		p = startedGames[1].Follow("phases", "Links").Success().
+			Find(3, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).
+			AssertEq(false, "Properties", "Resolved")
+		p.Follow("phase-states", "Links").Success().
+			Find(startedGameNats[1], []string{"Properties"}, []string{"Properties", "Nation"}).
+			Follow("update", "Links").Body(map[string]interface{}{
+			"ReadyToResolve": true,
+		}).Success()
+
+		WaitForEmptyQueue("game-asyncResolvePhase")
+
+		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
+			Follow("finished-games", "Links").Success().
+			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+
+	})
+}
+
 func TestAnonymousGames(t *testing.T) {
 	t.Run("PrivateGames", func(t *testing.T) {
 		t.Run("NotGunboat", func(t *testing.T) {

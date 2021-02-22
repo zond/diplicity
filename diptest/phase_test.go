@@ -8,6 +8,7 @@ import (
 
 	"github.com/kr/pretty"
 	"github.com/zond/diplicity/game"
+	"github.com/zond/godip/variants"
 )
 
 var (
@@ -74,16 +75,6 @@ func withStartedGameOpts(conf func(m map[string]interface{}), f func()) {
 func withStartedGameOptsAndOrders(conf func(m map[string]interface{}), orders orderSets, f func()) {
 	gameDesc := String("test-game")
 
-	envs := []*Env{
-		NewEnv().SetUID(String("fake")),
-		NewEnv().SetUID(String("fake")),
-		NewEnv().SetUID(String("fake")),
-		NewEnv().SetUID(String("fake")),
-		NewEnv().SetUID(String("fake")),
-		NewEnv().SetUID(String("fake")),
-		NewEnv().SetUID(String("fake")),
-	}
-
 	opts := map[string]interface{}{
 		"Variant":            "Classical",
 		"NoMerge":            true,
@@ -93,6 +84,12 @@ func withStartedGameOptsAndOrders(conf func(m map[string]interface{}), orders or
 	if conf != nil {
 		conf(opts)
 	}
+
+	envs := []*Env{}
+	for _ = range variants.Variants[opts["Variant"].(string)].Nations {
+		envs = append(envs, NewEnv().SetUID(String("fake")))
+	}
+
 	envs[0].GetRoute(game.IndexRoute).Success().
 		Follow("create-game", "Links").
 		Body(opts).Success().

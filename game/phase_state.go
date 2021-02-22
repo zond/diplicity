@@ -77,6 +77,7 @@ type PhaseState struct {
 	Nation         godip.Nation
 	ReadyToResolve bool `methods:"PUT"`
 	WantsDIAS      bool `methods:"PUT"`
+	WantsConcede   bool `methods:"PUT"`
 	OnProbation    bool
 	NoOrders       bool
 	Eliminated     bool
