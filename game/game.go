@@ -1380,8 +1380,6 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 		game.NewestPhaseMeta[i].Refresh()
 	}
 
-	game.Redact(user, r)
-
 	game.Refresh()
 
 	filtered := Games{*game}
@@ -1395,6 +1393,8 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 			log.Infof(ctx, "%q is invited as %q", invit.Email, invit.Nation)
 		}
 	}
+
+	game.Redact(user, r)
 
 	return &filtered[0], nil
 }
