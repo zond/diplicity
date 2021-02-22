@@ -361,10 +361,11 @@ func gameMasterDeleteInvitation(w ResponseWriter, r Request) (*GameMasterInvitat
 
 		newInvitations := GameMasterInvitations{}
 		for _, invitation := range game.GameMasterInvitations {
-			if strings.ToLower(strings.TrimSpace(invitation.Email)) != strings.ToLower(strings.TrimSpace(r.Vars()["email"])) {
+			if strings.ToLower(TrimSpace(invitation.Email)) != strings.ToLower(TrimSpace(r.Vars()["email"])) {
 				newInvitations = append(newInvitations, invitation)
 			} else {
 				gmi = invitation
+				gmi.Email = strings.ToLower(TrimSpace(gmi.Email))
 			}
 		}
 		game.GameMasterInvitations = newInvitations
@@ -400,7 +401,7 @@ func gameMasterCreateInvitation(w ResponseWriter, r Request) (*GameMasterInvitat
 		return nil, err
 	}
 
-	gmi.Email = strings.ToLower(strings.TrimSpace(gmi.Email))
+	gmi.Email = strings.ToLower(TrimSpace(gmi.Email))
 	if gmi.Email == "" {
 		return nil, HTTPErr{"email empty", http.StatusBadRequest}
 	}
