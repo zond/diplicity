@@ -53,6 +53,10 @@ const (
 	prodKey         = "prod"
 )
 
+const (
+	tokenValidUntil = time.Hour * 20
+)
+
 var (
 	prodOAuth          *OAuth
 	prodOAuthLock      = sync.RWMutex{}
@@ -620,7 +624,7 @@ func getUserFromToken(ctx context.Context, token *oauth2.Token) (*User, error) {
 		return nil, err
 	}
 	user := infoToUser(userInfo)
-	user.ValidUntil = time.Now().Add(time.Hour * 24)
+	user.ValidUntil = time.Now().Add(tokenValidUntil)
 	if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
 		log.Warningf(ctx, "Unable to store user info %+v: %v", user, err)
 		return nil, err
@@ -675,7 +679,7 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 				Id:            fakeID,
 				Name:          "Fakey Fakeson",
 				VerifiedEmail: true,
-				ValidUntil:    time.Now().Add(time.Hour * 24),
+				ValidUntil:    time.Now().Add(tokenValidUntil),
 			}
 			if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
 				return false, err
