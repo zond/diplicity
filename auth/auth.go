@@ -45,6 +45,12 @@ const (
 )
 
 const (
+	redirectToKey    = "redirect-to"
+	tokenDurationKey = "token-duration"
+	stateKey         = "state"
+)
+
+const (
 	UserKind        = "User"
 	naClKind        = "NaCl"
 	oAuthKind       = "OAuth"
@@ -54,7 +60,7 @@ const (
 )
 
 const (
-	tokenValidUntil = time.Hour * 20
+	defaultTokenDuration = time.Hour * 20
 )
 
 var (
@@ -419,9 +425,26 @@ func handleLogin(w ResponseWriter, r Request) error {
 		return err
 	}
 
-	loginURL := conf.AuthCodeURL(r.Req().URL.Query().Get("redirect-to"))
+	tokenDuration := defaultTokenDuration
+	if tokenDurationString := r.Req().URL.Query().Get(tokenDurationKey); tokenDurationString != "" {
+		tokenDurationLong, err := strconv.ParseInt(tokenDurationString, 10, 64)
+		if err != nil {
+			return err
+		}
+		tokenDuration = time.Second * time.Duration(tokenDurationLong)
+	}
 
-	http.Redirect(w, r.Req(), loginURL, http.StatusTemporaryRedirect)
+	redirectURL, err := url.Parse(r.Req().URL.Query().Get(redirectToKey))
+	if err != nil {
+		return err
+	}
+
+	stateString, err := encodeStateString(ctx, redirectURL, tokenDuration)
+	if err != nil {
+		return err
+	}
+
+	http.Redirect(w, r.Req(), conf.AuthCodeURL(stateString), http.StatusSeeOther)
 	return nil
 }
 
@@ -477,32 +500,79 @@ func DecodeBytes(ctx context.Context, b []byte) ([]byte, error) {
 	return plain, nil
 }
 
-func encodeOAuthToken(ctx context.Context, token *oauth2.Token) (string, error) {
-	b, err := json.Marshal(token)
-	if err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(b), nil
-}
-
-func decodeOAuthToken(ctx context.Context, b64 string) (*oauth2.Token, error) {
-	b, err := base64.URLEncoding.DecodeString(b64)
-	if err != nil {
-		return nil, err
-	}
-	token := &oauth2.Token{}
-	if err := json.Unmarshal(b, token); err != nil {
-		return nil, err
-	}
-	return token, nil
-}
-
 func encodeUserToToken(ctx context.Context, user *User) (string, error) {
 	plain, err := json.Marshal(user)
 	if err != nil {
 		return "", err
 	}
 	return EncodeString(ctx, string(plain))
+}
+
+func decodeStateString(ctx context.Context, encryptedState string) (redirectURL *url.URL, tokenDuration time.Duration, err error) {
+	decryptedState, err := DecodeString(ctx, encryptedState)
+	if err != nil {
+		return nil, 0, err
+	}
+	stateQuery, err := url.ParseQuery(decryptedState)
+	if err != nil {
+		return nil, 0, err
+	}
+	log.Infof(ctx, "decoded state query %+v", stateQuery)
+
+	redirectURL, err = url.Parse(stateQuery.Get(redirectToKey))
+	if err != nil {
+		return nil, 0, err
+	}
+	tokenDurationLong, err := strconv.ParseInt(stateQuery.Get(tokenDurationKey), 10, 64)
+	if err != nil {
+		return nil, 0, err
+	}
+	log.Infof(ctx, "returning %v, %v, %v", redirectURL, time.Second*time.Duration(tokenDurationLong), nil)
+	return redirectURL, time.Second * time.Duration(tokenDurationLong), nil
+}
+
+func encodeStateString(ctx context.Context, redirectURL *url.URL, tokenDuration time.Duration) (string, error) {
+	stateQuery := url.Values{}
+	stateQuery.Set(redirectToKey, redirectURL.String())
+	stateQuery.Set(tokenDurationKey, fmt.Sprint(int64(tokenDuration/time.Second)))
+	log.Infof(ctx, "encoded state query %+v", stateQuery)
+
+	return EncodeString(ctx, stateQuery.Encode())
+}
+
+type approveState struct {
+	User        User
+	RedirectURL string
+}
+
+func encodeApproveState(ctx context.Context, redirectURL *url.URL, user *User) (string, error) {
+	b, err := json.Marshal(approveState{User: *user, RedirectURL: redirectURL.String()})
+	if err != nil {
+		return "", err
+	}
+	if b, err = EncodeBytes(ctx, b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+func decodeApproveState(ctx context.Context, b64EncryptedState string) (redirectURL *url.URL, user *User, err error) {
+	encryptedBytes, err := base64.URLEncoding.DecodeString(b64EncryptedState)
+	if err != nil {
+		return nil, nil, err
+	}
+	decryptedBytes, err := DecodeBytes(ctx, encryptedBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	state := approveState{}
+	if err := json.Unmarshal(decryptedBytes, &state); err != nil {
+		return nil, nil, err
+	}
+	if redirectURL, err = url.Parse(state.RedirectURL); err != nil {
+		return nil, nil, err
+	}
+	return redirectURL, &state.User, nil
 }
 
 func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
@@ -523,17 +593,17 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := getUserFromToken(ctx, token)
+	redirectURL, tokenDuration, err := decodeStateString(ctx, r.URL.Query().Get(stateKey))
 	if err != nil {
-		log.Errorf(ctx, "Unable to produce user from token %#v: %v", token, err)
+		log.Errorf(ctx, "Unable to decode state string from %#v: %v", r.URL.Query().Get(stateKey), err)
 		HTTPError(w, r, err)
 		return
 	}
+	log.Infof(ctx, "redirect url is %v", redirectURL)
 
-	state := r.URL.Query().Get("state")
-	redirectURL, err := url.Parse(state)
+	user, err := getUserFromToken(ctx, token, tokenDuration)
 	if err != nil {
-		log.Warningf(ctx, "Unable to parse state parameter %#v to URL: %v", state, err)
+		log.Errorf(ctx, "Unable to produce user from token %#v: %v", token, err)
 		HTTPError(w, r, err)
 		return
 	}
@@ -560,20 +630,13 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 			requestedURL.RawQuery = ""
 			requestedURL.Path = ""
 
-			b64Token, err := encodeOAuthToken(ctx, token)
+			approveState, err := encodeApproveState(ctx, redirectURL, user)
 			if err != nil {
-				log.Errorf(ctx, "Unable to encode OAuth2 token %+v to base64: %v", token, err)
+				log.Errorf(ctx, "Unable to encode approve state %v, %+v, %q: %v", redirectURL, token, user.Id, err)
 				HTTPError(w, r, err)
 				return
 			}
 
-			clear := fmt.Sprintf("%s,%s,%s", redirectURL.String(), user.Id, b64Token)
-			cipher, err := EncodeString(ctx, clear)
-			if err != nil {
-				log.Errorf(ctx, "Unable to encrypt  %#v: %v", clear, err)
-				HTTPError(w, r, err)
-				return
-			}
 			approveURL, err := router.Get(ApproveRedirectRoute).URL()
 			if err != nil {
 				log.Errorf(ctx, "Unable to get ApproveRedirectRoute %#v: %v", ApproveRedirectRoute, err)
@@ -591,7 +654,7 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	  </span>
 
       <div class="buttonlayout">
-        <form method="GET" action="%s">
+        <form method="POST" action="%s">
 	   	  <input type="hidden" name="state" value="%s">
 		  <input class="pure-material-button-text" style="align-self:flex-start" type="submit" value="Yes, I want to play"/>
 		</form>
@@ -599,7 +662,7 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		  <input class="pure-material-button-text" style="align-self:flex-start" type="submit" value="Cancel"/>
 		</form>
       </div>
-`, strippedRedirectURL.String(), approveURL.String(), cipher, redirectURL.String()))
+`, strippedRedirectURL.String(), approveURL.String(), approveState, redirectURL.String()))
 			return
 		} else if err != nil {
 			log.Errorf(ctx, "Unable to load approved redirect URL for %+v: %v", approvedURL, err)
@@ -611,7 +674,7 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	finishLogin(ctx, w, r, user, redirectURL)
 }
 
-func getUserFromToken(ctx context.Context, token *oauth2.Token) (*User, error) {
+func getUserFromToken(ctx context.Context, token *oauth2.Token, duration time.Duration) (*User, error) {
 	client := oauth2.NewClient(ctx, oauth2.StaticTokenSource(token))
 	service, err := oauth2service.New(client)
 	if err != nil {
@@ -624,7 +687,7 @@ func getUserFromToken(ctx context.Context, token *oauth2.Token) (*User, error) {
 		return nil, err
 	}
 	user := infoToUser(userInfo)
-	user.ValidUntil = time.Now().Add(tokenValidUntil)
+	user.ValidUntil = time.Now().Add(duration)
 	if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
 		log.Warningf(ctx, "Unable to store user info %+v: %v", user, err)
 		return nil, err
@@ -644,11 +707,11 @@ func finishLogin(ctx context.Context, w http.ResponseWriter, r *http.Request, us
 	query.Set("token", userToken)
 	redirectURL.RawQuery = query.Encode()
 
-	http.Redirect(w, r, redirectURL.String(), http.StatusTemporaryRedirect)
+	http.Redirect(w, r, redirectURL.String(), http.StatusSeeOther)
 }
 
 func handleLogout(w ResponseWriter, r Request) error {
-	http.Redirect(w, r.Req(), r.Req().URL.Query().Get("redirect-to"), http.StatusTemporaryRedirect)
+	http.Redirect(w, r.Req(), r.Req().URL.Query().Get(redirectToKey), http.StatusSeeOther)
 	return nil
 }
 
@@ -679,7 +742,7 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 				Id:            fakeID,
 				Name:          "Fakey Fakeson",
 				VerifiedEmail: true,
-				ValidUntil:    time.Now().Add(tokenValidUntil),
+				ValidUntil:    time.Now().Add(defaultTokenDuration),
 			}
 			if _, err := datastore.Put(ctx, UserID(ctx, user.Id), user); err != nil {
 				return false, err
@@ -803,10 +866,10 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 			return false, err
 		}
 		queryParams := loginURL.Query()
-		queryParams.Set("redirect-to", redirectURL.String())
+		queryParams.Set(redirectToKey, redirectURL.String())
 		loginURL.RawQuery = queryParams.Encode()
 
-		http.Redirect(w, r.Req(), loginURL.String(), http.StatusTemporaryRedirect)
+		http.Redirect(w, r.Req(), loginURL.String(), http.StatusSeeOther)
 		return false, nil
 	}
 
@@ -816,22 +879,13 @@ func loginRedirect(w ResponseWriter, r Request, errI error) (bool, error) {
 func handleApproveRedirect(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
-	state := r.Req().URL.Query().Get("state")
-	plain, err := DecodeString(ctx, state)
-	if err != nil {
-		log.Warningf(ctx, "Unable to decode state %#v: %v", state, err)
+	if err := r.Req().ParseForm(); err != nil {
 		return err
 	}
 
-	parts := strings.Split(plain, ",")
-	if len(parts) != 3 {
-		log.Warningf(ctx, "Plain text token %+v is not three strings joined by ','.", plain)
-		return fmt.Errorf("plain text token is not three strings joined by ','")
-	}
-
-	toApproveURL, err := url.Parse(parts[0])
+	toApproveURL, user, err := decodeApproveState(ctx, r.Req().Form.Get(stateKey))
 	if err != nil {
-		log.Warningf(ctx, "Unable to parse part of plain text %#v to URL: %v", parts[0], err)
+		log.Warningf(ctx, "Unable to decode approve state %#v: %v", r.Req().Form.Get(stateKey), err)
 		return err
 	}
 
@@ -839,28 +893,13 @@ func handleApproveRedirect(w ResponseWriter, r Request) error {
 	strippedToApproveURL.RawQuery = ""
 	strippedToApproveURL.Path = ""
 
-	userId := parts[1]
-
 	approvedURL := &RedirectURL{
-		UserId:      userId,
+		UserId:      user.Id,
 		RedirectURL: strippedToApproveURL.String(),
 	}
 
 	if _, err := datastore.Put(ctx, approvedURL.ID(ctx), approvedURL); err != nil {
 		log.Errorf(ctx, "Unable to save approved url %+v: %v", approvedURL, err)
-		return err
-	}
-
-	b64Token := parts[2]
-	token, err := decodeOAuthToken(ctx, b64Token)
-	if err != nil {
-		log.Warningf(ctx, "Unable to decode base64 encoded OAuth2 token %#v: %v", b64Token, err)
-		return err
-	}
-
-	user, err := getUserFromToken(ctx, token)
-	if err != nil {
-		log.Warningf(ctx, "Unable to fetch user from token %#v: %v", token, err)
 		return err
 	}
 
@@ -916,7 +955,7 @@ func unsubscribe(w ResponseWriter, r Request) error {
 		if err != nil {
 			return err
 		}
-		http.Redirect(w, r.Req(), redirURL, http.StatusTemporaryRedirect)
+		http.Redirect(w, r.Req(), redirURL, http.StatusSeeOther)
 		return nil
 	}
 
@@ -1035,7 +1074,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
 	// Don't use `Handle` here, because we don't want CORS support for this particular route.
 	router.Path("/Auth/OAuth2Callback").Methods("GET").Name(OAuth2CallbackRoute).HandlerFunc(handleOAuth2Callback)
-	Handle(router, "/Auth/ApproveRedirect", []string{"GET"}, ApproveRedirectRoute, handleApproveRedirect)
+	Handle(router, "/Auth/ApproveRedirect", []string{"POST"}, ApproveRedirectRoute, handleApproveRedirect)
 	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
 	Handle(router, "/User/{user_id}/FCMToken/{replace_token}/Replace", []string{"PUT"}, ReplaceFCMRoute, replaceFCM)
 	AddFilter(decorateAPILevel)
