@@ -936,7 +936,10 @@ func TestConcede(t *testing.T) {
 
 		startedGameEnvs[0].GetRoute(game.IndexRoute).Success().
 			Follow("finished-games", "Links").Success().
-			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"})
+			Find(startedGameDesc, []string{"Properties"}, []string{"Properties", "Desc"}).
+			Follow("game-result", "Links").Success().
+			Find(startedGameNats[1], []string{"Properties", "SoloWinnerMember"}).
+			Find(startedGameEnvs[1].uid, []string{"Properties", "SoloWinnerUser"})
 
 	})
 }

@@ -1013,8 +1013,8 @@ func (p *PhaseResolver) Act() error {
 		PhaseOrdinal: p.Phase.PhaseOrdinal,
 		Private:      p.Game.Private,
 	}
+	membersWithOptions := map[string]bool{} // All user Ids with order options.
 
-	membersWithOptions := map[string]bool{}
 	for i := range p.Game.Members {
 		member := &p.Game.Members[i]
 
@@ -1022,12 +1022,14 @@ func (p *PhaseResolver) Act() error {
 		_, hadOrders := orderMap[member.Nation]
 		wasReady := false
 		wantedDIAS := false
+		wantedConcede := false
 		wasOnProbation := false
 		wasEliminated := false
 		for _, phaseState := range p.PhaseStates {
 			if phaseState.Nation == member.Nation {
 				wasReady = phaseState.ReadyToResolve
 				wantedDIAS = phaseState.WantsDIAS
+				wantedConcede = phaseState.WantsConcede
 				if phaseState.WantsDIAS {
 					quitters[member.Nation] = quitter{
 						state:  diasState,
@@ -1063,7 +1065,7 @@ func (p *PhaseResolver) Act() error {
 		}
 
 		// Log what we're doing.
-		stateString := fmt.Sprintf("wasReady = %v, wantedDIAS = %v, onProbation = %v, hadOrders = %v, newOptionsCount = %v, wasEliminated = %v", wasReady, wantedDIAS, wasOnProbation, hadOrders, newOptionsCount, wasEliminated)
+		stateString := fmt.Sprintf("wasReady = %v, wantedDIAS = %v, wantedConcede = %v, onProbation = %v, hadOrders = %v, newOptionsCount = %v, wasEliminated = %v", wasReady, wantedDIAS, wantedConcede, wasOnProbation, hadOrders, newOptionsCount, wasEliminated)
 		log.Infof(p.Context, "%v at phase change: %s", member.Nation, stateString)
 
 		// Calculate states for next phase.
@@ -1130,14 +1132,28 @@ func (p *PhaseResolver) Act() error {
 
 	// Check if the game should end.
 
-	if soloWinner != "" || (len(variant.Nations) == 2 && len(conceders) == 1) || len(quitters) == len(variant.Nations) || (p.Game.LastYear != 0 && newPhase.Year > p.Game.LastYear) {
-		log.Infof(p.Context, "soloWinner: %q, quitters: %v, lastYear: %v => game needs to end", soloWinner, PP(quitters), p.Game.LastYear)
+	finishGame := func() {
 		// Just to ensure we don't try to resolve it again, even by mistake.
 		newPhase.Resolved = true
 		newPhase.ResolvedAt = time.Now()
 		p.Game.Finished = true
 		p.Game.FinishedAt = time.Now()
 		p.Game.Closed = true
+	}
+	if soloWinner != "" || len(quitters) == len(variant.Nations) || (p.Game.LastYear != 0 && newPhase.Year > p.Game.LastYear) {
+		log.Infof(p.Context, "soloWinner: %q, quitters: %v, lastYear: %v => game needs to end", soloWinner, PP(quitters), p.Game.LastYear)
+		finishGame()
+	} else if len(variant.Nations) == 2 && len(conceders) == 1 {
+		log.Infof(p.Context, "variant nations: 2, conceders: %v => game needs to end", PP(conceders))
+		for _, member := range p.Game.Members {
+			if !conceders[member.Nation] {
+				soloWinner = member.Nation
+				soloWinnerUser = member.User.Id
+				log.Infof(p.Context, "Marking %q/%q as solo winner", soloWinner, soloWinnerUser)
+				break
+			}
+		}
+		finishGame()
 	}
 
 	// Save the old phase result.
