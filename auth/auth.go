@@ -601,7 +601,8 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	// security measure anyway, and don't really need them anyway (since they are
 	// mostly there to prevent evil blogs using your pre-recorded approval log in
 	// as you to diplicity.
-	if r.URL.Query().Get("approve-redirect") == "true" {
+	approveRedirect := r.URL.Query().Get("approve-redirect")
+	if approveRedirect == "true" {
 		redirectURL, err := url.Parse(state)
 		if err != nil {
 			log.Warningf(ctx, "Unable to parse state parameter %#v to URL: %v", state, err)
@@ -725,7 +726,7 @@ func finishLogin(ctx context.Context, w http.ResponseWriter, r *http.Request, us
 	query.Set("token", userToken)
 	redirectURL.RawQuery = query.Encode()
 
-	http.Redirect(w, r, redirectURL.String(), http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL.String(), http.StatusTemporaryRedirect)
 }
 
 func handleLogout(w ResponseWriter, r Request) error {
