@@ -593,13 +593,39 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectURL, tokenDuration, err := decodeStateString(ctx, r.URL.Query().Get(stateKey))
+	state := r.URL.Query().Get(stateKey)
+
+	// Clients that are able to call this endpoint independently (without being
+	// redirected from Google OAuth2 service) - which is what is necessary to
+	// set the 'approve-redirect' query parameter - can work around the approved redirect
+	// security measure anyway, and don't really need them anyway (since they are
+	// mostly there to prevent evil blogs using your pre-recorded approval log in
+	// as you to diplicity.
+	if r.URL.Query().Get("approve-redirect") == "true" {
+		redirectURL, err := url.Parse(state)
+		if err != nil {
+			log.Warningf(ctx, "Unable to parse state parameter %#v to URL: %v", state, err)
+			HTTPError(w, r, err)
+			return
+		}
+
+		user, err := getUserFromToken(ctx, token, defaultTokenDuration)
+		if err != nil {
+			log.Errorf(ctx, "Unable to produce user from token %#v: %v", token, err)
+			HTTPError(w, r, err)
+			return
+		}
+
+		finishLogin(ctx, w, r, user, redirectURL)
+		return
+	}
+
+	redirectURL, tokenDuration, err := decodeStateString(ctx, state)
 	if err != nil {
-		log.Errorf(ctx, "Unable to decode state string from %#v: %v", r.URL.Query().Get(stateKey), err)
+		log.Errorf(ctx, "Unable to decode state string from %#v: %v", state, err)
 		HTTPError(w, r, err)
 		return
 	}
-	log.Infof(ctx, "redirect url is %v", redirectURL)
 
 	user, err := getUserFromToken(ctx, token, tokenDuration)
 	if err != nil {
@@ -608,43 +634,36 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clients that are able to call this endpoint independently (without being
-	// redirected from Google OAuth2 service) - which is what is necessary to
-	// set the 'approve-redirect' query parameter - can work around the approved redirect
-	// security measure anyway, and don't really need them anyway (since they are
-	// mostly there to prevent evil blogs using your pre-recorded approval log in
-	// as you to diplicity.
-	if r.URL.Query().Get("approve-redirect") != "true" {
-		strippedRedirectURL := *redirectURL
-		strippedRedirectURL.RawQuery = ""
-		strippedRedirectURL.Path = ""
+	strippedRedirectURL := *redirectURL
+	strippedRedirectURL.RawQuery = ""
+	strippedRedirectURL.Path = ""
 
-		approvedURL := &RedirectURL{
-			UserId:      user.Id,
-			RedirectURL: strippedRedirectURL.String(),
+	approvedURL := &RedirectURL{
+		UserId:      user.Id,
+		RedirectURL: strippedRedirectURL.String(),
+	}
+	if err := datastore.Get(ctx, approvedURL.ID(ctx), approvedURL); err == datastore.ErrNoSuchEntity {
+		requestedURL := r.URL
+		requestedURL.Host = r.Host
+		requestedURL.Scheme = DefaultScheme
+		requestedURL.RawQuery = ""
+		requestedURL.Path = ""
+
+		approveState, err := encodeApproveState(ctx, redirectURL, user)
+		if err != nil {
+			log.Errorf(ctx, "Unable to encode approve state %v, %+v, %q: %v", redirectURL, token, user.Id, err)
+			HTTPError(w, r, err)
+			return
 		}
-		if err := datastore.Get(ctx, approvedURL.ID(ctx), approvedURL); err == datastore.ErrNoSuchEntity {
-			requestedURL := r.URL
-			requestedURL.Host = r.Host
-			requestedURL.Scheme = DefaultScheme
-			requestedURL.RawQuery = ""
-			requestedURL.Path = ""
 
-			approveState, err := encodeApproveState(ctx, redirectURL, user)
-			if err != nil {
-				log.Errorf(ctx, "Unable to encode approve state %v, %+v, %q: %v", redirectURL, token, user.Id, err)
-				HTTPError(w, r, err)
-				return
-			}
+		approveURL, err := router.Get(ApproveRedirectRoute).URL()
+		if err != nil {
+			log.Errorf(ctx, "Unable to get ApproveRedirectRoute %#v: %v", ApproveRedirectRoute, err)
+			HTTPError(w, r, err)
+			return
+		}
 
-			approveURL, err := router.Get(ApproveRedirectRoute).URL()
-			if err != nil {
-				log.Errorf(ctx, "Unable to get ApproveRedirectRoute %#v: %v", ApproveRedirectRoute, err)
-				HTTPError(w, r, err)
-				return
-			}
-
-			renderMessage(w, "Approval requested", fmt.Sprintf(`
+		renderMessage(w, "Approval requested", fmt.Sprintf(`
       <span class="title">Play Diplomacy on the Diplicity server?</span>
       <span class="messagetext">You just logged in to a Diplomacy game for the first time. Welcome!
         <br /><br />
@@ -663,12 +682,11 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		</form>
       </div>
 `, strippedRedirectURL.String(), approveURL.String(), approveState, redirectURL.String()))
-			return
-		} else if err != nil {
-			log.Errorf(ctx, "Unable to load approved redirect URL for %+v: %v", approvedURL, err)
-			HTTPError(w, r, err)
-			return
-		}
+		return
+	} else if err != nil {
+		log.Errorf(ctx, "Unable to load approved redirect URL for %+v: %v", approvedURL, err)
+		HTTPError(w, r, err)
+		return
 	}
 
 	finishLogin(ctx, w, r, user, redirectURL)
