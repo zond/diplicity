@@ -50,9 +50,9 @@ func (gs GameScores) Assign() {
 
 	if numSCs == 0 {
 		scorePerPlayer := 100.0 / float64(len(gs))
-		// Degenrate case, just spread all points evenly.
+		// Degenerate case, just spread all points evenly.
 		for i := range gs {
-			gs[i].Explanation = fmt.Sprintf("Degenerate result, no SCs owned:%v", scorePerPlayer)
+			gs[i].Explanation = fmt.Sprintf("Degenerate result, no SCs owned: %v", scorePerPlayer)
 			gs[i].Score = scorePerPlayer
 		}
 		return
