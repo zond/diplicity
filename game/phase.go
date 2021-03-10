@@ -542,9 +542,11 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 		return nil
 	}
 
-	userConfigKeys := make([]*datastore.Key, len(game.Members))
-	for idx := range userConfigKeys {
-		userConfigKeys[idx] = auth.UserConfigID(ctx, auth.UserID(ctx, game.Members[idx].User.Id))
+	userConfigKeys := []*datastore.Key{}
+	for _, member := range game.Members {
+		if !member.NewestPhaseState.Eliminated {
+			userConfigKeys = append(userConfigKeys, auth.UserConfigID(ctx, auth.UserID(ctx, member.User.Id)))
+		}
 	}
 	userConfigs := make([]auth.UserConfig, len(game.Members))
 	if err := datastore.GetMulti(ctx, userConfigKeys, userConfigs); err != nil {
