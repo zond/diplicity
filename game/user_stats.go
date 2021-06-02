@@ -85,6 +85,10 @@ func UpdateUserStatsASAP(ctx context.Context, uids []string) error {
 func updateUserStat(ctx context.Context, userId string) error {
 	log.Infof(ctx, "updateUserStat(..., %q)", userId)
 
+	if userId == "" {
+		return nil
+	}
+
 	userStats := &UserStats{
 		UserId: userId,
 	}

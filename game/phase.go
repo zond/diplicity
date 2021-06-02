@@ -1249,6 +1249,12 @@ func (p *PhaseResolver) Act() error {
 			CreatedAt:         time.Now(),
 		}
 		gameResult.AssignScores()
+		for _, score := range gameResult.Scores {
+			if score.UserId == "" {
+				log.Errorf(p.Context, "Phase resolution created score with empty userId - wtf?")
+				return err
+			}
+		}
 		if err := gameResult.DBSave(p.Context, p.Game); err != nil {
 			log.Errorf(p.Context, "Unable to save game result %v: %v; hope datastore gets fixed", PP(gameResult), err)
 			return err
