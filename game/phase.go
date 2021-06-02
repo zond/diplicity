@@ -532,6 +532,10 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 		return err
 	}
 
+	if phase.Resolved {
+		return nil
+	}
+
 	if err := timeoutResolvePhaseFunc.EnqueueAt(ctx, phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal); err != nil {
 		log.Errorf(ctx, "timeoutResolvePhaseFunc.EnqueueAt(..., %v, %v, %v): %v; hope taskqueues get fixed", phase.DeadlineAt, phase.GameID, phase.PhaseOrdinal, err)
 		return err
@@ -1249,12 +1253,6 @@ func (p *PhaseResolver) Act() error {
 			CreatedAt:         time.Now(),
 		}
 		gameResult.AssignScores()
-		for _, score := range gameResult.Scores {
-			if score.UserId == "" {
-				log.Errorf(p.Context, "Phase resolution created score with empty userId - wtf?")
-				return err
-			}
-		}
 		if err := gameResult.DBSave(p.Context, p.Game); err != nil {
 			log.Errorf(p.Context, "Unable to save game result %v: %v; hope datastore gets fixed", PP(gameResult), err)
 			return err
