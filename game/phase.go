@@ -233,6 +233,10 @@ func ejectProbationaries(ctx context.Context, probationaries []string) error {
 func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *datastore.Key, phaseOrdinal int64, userId string) error {
 	log.Infof(ctx, "sendPhaseNotificationsToMail(..., %q, %v, %v, %q)", host, gameID, phaseOrdinal, userId)
 
+	if userId == "" {
+		return nil
+	}
+
 	msgContext, err := getPhaseNotificationContext(ctx, host, gameID, phaseOrdinal, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
