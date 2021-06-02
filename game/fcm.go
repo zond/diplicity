@@ -334,7 +334,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 			delay = at.Sub(time.Now())
 		}
 		// Finally, try to schedule again. If we can't then fuckall we'll try again with the entire payload.
-		if err := FCMSendToTokensFunc.EnqueueIn(ctx, delay, delay, notif, data, tokens); err != nil {
+		if err := FCMSendToTokensFunc.EnqueueIn(ctx, delay, delay, notif, data, idsToRetry); err != nil {
 			log.Errorf(ctx, "Unable to schedule retry of %v, %v to %+v in %v: %v", PP(notif), PP(data), tokens, delay, err)
 			return err
 		}
