@@ -609,14 +609,17 @@ func resolvePhaseHelper(ctx context.Context, gameID *datastore.Key, phaseOrdinal
 		if err := datastore.GetMulti(ctx, keys, values); err != nil {
 			if merr, ok := err.(appengine.MultiError); ok {
 				for idx, serr := range merr {
-					if idx == 1 && serr == datastore.ErrNoSuchEntity {
-						log.Warningf(ctx, "Phase is missing, assuming this is manually deleted, giving up")
+					if serr == datastore.ErrNoSuchEntity {
+						log.Warningf(ctx, "Game or Phase is missing, manually deleted or whatever - can't do anything else, giving up")
 						return nil
 					} else {
 						log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; hope datastore will get fixed", keys, values, err)
 						return err
 					}
 				}
+			} else if err == datastore.ErrNoSuchEntity {
+				log.Warningf(ctx, "Game or Phase is missing, manually deleted or whatever - can't do anything else, giving up")
+				return nil
 			} else {
 				log.Errorf(ctx, "datastore.GetMulti(..., %v, %v): %v; hope datastore will get fixed", keys, values, err)
 				return err
