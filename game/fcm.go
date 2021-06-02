@@ -318,7 +318,7 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 	}
 
 	if len(idsToRetry) > 0 {
-		if lastDelay < time.Hour*2 {
+		if lastDelay < time.Hour*8 {
 			// Right, we still have something to retry, but might also have a Retry-After header.
 			// First, assume we just double the old delay (or 1 sec).
 			delay := lastDelay * 2
