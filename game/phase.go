@@ -300,6 +300,10 @@ func sendPhaseNotificationsToMail(ctx context.Context, host string, gameID *data
 func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datastore.Key, phaseOrdinal int64, userId string, finishedTokens map[string]struct{}) error {
 	log.Infof(ctx, "sendPhaseNotificationsToFCM(..., %q, %v, %v, %q, %+v)", host, gameID, phaseOrdinal, userId, finishedTokens)
 
+	if userId == "" {
+		return nil
+	}
+
 	msgContext, err := getPhaseNotificationContext(ctx, host, gameID, phaseOrdinal, userId)
 	if err == noConfigError {
 		log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
@@ -748,6 +752,11 @@ func (p *PhaseResolver) Act() error {
 		for _, member := range p.Game.Members {
 			allUserIds = append(allUserIds, member.User.Id)
 			if readyNationMap[member.Nation] {
+				if member.User.Id == "" {
+					msg := fmt.Sprintf("Finding readyUserIds: Broken member user!? Empty User.Id!?!? %+v", member)
+					log.Errorf(p.Context, msg)
+					return fmt.Errorf(msg)
+				}
 				readyUserIds = append(readyUserIds, member.User.Id)
 			}
 		}
@@ -1214,6 +1223,11 @@ func (p *PhaseResolver) Act() error {
 				}
 			}
 
+			if member.User.Id == "" {
+				msg := fmt.Sprintf("Finding scores: Broken member user!? Empty User.Id!?!? %+v", member)
+				log.Errorf(p.Context, msg)
+				return fmt.Errorf(msg)
+			}
 			scores = append(scores, GameScore{
 				UserId: member.User.Id,
 				Member: member.Nation,
@@ -1320,6 +1334,11 @@ func (p *PhaseResolver) Act() error {
 	membersToNotify := []string{}
 	for _, member := range p.Game.Members {
 		if p.nonEliminatedUserIds[member.User.Id] || membersWithOptions[member.User.Id] {
+			if member.User.Id == "" {
+				msg := fmt.Sprintf("Finding membersToNotify: Broken member user!? Empty User.Id!?!? %+v", member)
+				log.Errorf(p.Context, msg)
+				return fmt.Errorf(msg)
+			}
 			membersToNotify = append(membersToNotify, member.User.Id)
 		}
 	}
