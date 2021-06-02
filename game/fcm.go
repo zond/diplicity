@@ -318,25 +318,26 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 	}
 
 	if len(idsToRetry) > 0 {
-		// Right, we still have something to retry, but might also have a Retry-After header.
-		// First, assume we just double the old delay (or 1 sec).
-		delay := lastDelay * 2
-		if delay < time.Second {
-			delay = time.Second
-		}
-		if delay > time.Hour {
-			delay = time.Hour
-		}
-		// Then, try to honor the Retry-After header.
-		if n, err := strconv.ParseInt(resp.RetryAfter, 10, 64); err == nil {
-			delay = time.Duration(n) * time.Minute
-		} else if at, err := time.Parse(time.RFC1123, resp.RetryAfter); err == nil {
-			delay = at.Sub(time.Now())
-		}
-		// Finally, try to schedule again. If we can't then fuckall we'll try again with the entire payload.
-		if err := FCMSendToTokensFunc.EnqueueIn(ctx, delay, delay, notif, data, idsToRetry); err != nil {
-			log.Errorf(ctx, "Unable to schedule retry of %v, %v to %+v in %v: %v", PP(notif), PP(data), tokens, delay, err)
-			return err
+		if lastDelay < time.Hour*2 {
+			// Right, we still have something to retry, but might also have a Retry-After header.
+			// First, assume we just double the old delay (or 1 sec).
+			delay := lastDelay * 2
+			if delay < time.Second {
+				delay = time.Second
+			}
+			// Then, try to honor the Retry-After header.
+			if n, err := strconv.ParseInt(resp.RetryAfter, 10, 64); err == nil {
+				delay = time.Duration(n) * time.Minute
+			} else if at, err := time.Parse(time.RFC1123, resp.RetryAfter); err == nil {
+				delay = at.Sub(time.Now())
+			}
+			// Finally, try to schedule again. If we can't then fuckall we'll try again with the entire payload.
+			if err := FCMSendToTokensFunc.EnqueueIn(ctx, delay, delay, notif, data, idsToRetry); err != nil {
+				log.Errorf(ctx, "Unable to schedule retry of %v, %v to %+v in %v: %v", PP(notif), PP(data), idsToRetry, delay, err)
+				return err
+			}
+		} else {
+			log.Errorf(ctx, "Still have %+v to retry, but last delay was %v, so I'm giving up", idsToRetry, lastDelay)
 		}
 	}
 
