@@ -726,9 +726,7 @@ func finishLogin(ctx context.Context, w http.ResponseWriter, r *http.Request, us
 	query.Set("token", userToken)
 	redirectURL.RawQuery = query.Encode()
 
-	// TODO(zond): Change this to a SeeOther after the Android app accepts any kind of redirects...
-	// NB: Android app handling all 300-399 responses was launched 2021-03-05.
-	http.Redirect(w, r, redirectURL.String(), http.StatusTemporaryRedirect)
+	http.Redirect(w, r, redirectURL.String(), http.StatusSeeOther)
 }
 
 func handleLogout(w ResponseWriter, r Request) error {
