@@ -1260,6 +1260,9 @@ func receiveMail(w ResponseWriter, r Request) error {
 		if forumMail != nil && r.Vars()["recipient"] == forumMail.Address() {
 			forumMail.Subject = enmsg.GetHeader("Subject")
 			forumMail.Body = mailstrip.Parse(enmsg.Text).String()
+			if len(forumMail.Body) > 1500 {
+				forumMail.Body = forumMail.Body[:1500]
+			}
 			if err := forumMail.Save(ctx); err != nil {
 				e := fmt.Sprintf("Unable to save root forum email %+v: %v", forumMail, err)
 				log.Errorf(ctx, e)
