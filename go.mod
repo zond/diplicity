@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/aymerick/raymond v2.0.2+incompatible
 	github.com/davecgh/go-spew v1.1.1
+	github.com/dustin/go-humanize v1.0.0
 	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/gorilla/feeds v1.1.1
 	github.com/gorilla/mux v1.8.0
