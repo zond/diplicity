@@ -704,82 +704,6 @@ const (
 	concedeState
 )
 
-func (p *PhaseResolver) provideGrace(orderMap map[godip.Nation]map[godip.Province][]string) (bool, error) {
-	if p.Game.GracePeriodMinutes == 0 || p.Game.GracePeriodsPerPlayer == 0 {
-		return false, nil
-	}
-
-	provideGrace := false
-	graceNations := []string{}
-	for memberIdx, member := range p.Game.Members {
-		_, hadOrders := orderMap[member.Nation]
-		wasReady := false
-		for _, phaseState := range p.PhaseStates {
-			if phaseState.Nation == member.Nation {
-				wasReady = phaseState.ReadyToResolve
-			}
-		}
-		if !wasReady && !hadOrders && member.GracePeriodsUsed < p.Game.GracePeriodsPerPlayer {
-			p.Game.Members[memberIdx].GracePeriodsUsed++
-			provideGrace = true
-			graceNations = append(graceNations, string(member.Nation))
-		}
-	}
-
-	if provideGrace {
-		// Postpone the phase.
-		now := time.Now()
-		p.Phase.DeadlineAt = now.Add(time.Minute * p.Game.GracePeriodMinutes)
-
-		// Save everything.
-		phaseID, err := p.Phase.ID(p.Context)
-		if err != nil {
-			log.Errorf(p.Context, "p.Phase.ID(...): %v; wtf?", err)
-			return false, err
-		}
-		toSave := []interface{}{
-			p.Game, p.Phase,
-		}
-		keys := []*datastore.Key{
-			p.Game.ID, phaseID,
-		}
-		if _, err := datastore.PutMulti(p.Context, keys, toSave); err != nil {
-			log.Errorf(p.Context, "datastore.PutMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, toSave, err)
-			return false, err
-		}
-
-		// Notify everyone.
-		allMembers := []string{}
-		for _, nat := range p.Variant.Nations {
-			allMembers = append(allMembers, string(nat))
-		}
-		notificationBody := fmt.Sprintf(
-			"%v weren't ready to resolve and gave no orders, since they still have grace periods phase resolution has been postponed %v (until %v).",
-			english.OxfordWordSeries(graceNations, "and"),
-			p.Phase.DeadlineAt.Sub(now).Round(time.Minute),
-			p.Phase.DeadlineAt.Format(time.RFC822),
-		)
-		if err := AsyncSendMsgFunc.EnqueueIn(
-			p.Context, 0,
-			p.Phase.GameID,
-			DiplicitySender,
-			allMembers,
-			notificationBody,
-			p.Phase.Host,
-		); err != nil {
-			log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, p.Variant.Nations, notificationBody, p.Phase.Host, err)
-			return false, err
-		}
-
-		if err := p.Phase.ScheduleResolution(p.Context); err != nil {
-			log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(p.Phase), err)
-			return false, err
-		}
-		return true, nil
-	}
-	return false, nil
-}
-
 func (p *PhaseResolver) Act() error {
 	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act()", p.Phase.GameID, p.Phase.PhaseOrdinal)
 
@@ -1296,6 +1220,82 @@ func (p *PhaseResolver) Act() error {
 	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
 
 	return nil
+}
+
+func (p *PhaseResolver) provideGrace(orderMap map[godip.Nation]map[godip.Province][]string) (bool, error) {
+	if p.Game.GracePeriodMinutes == 0 || p.Game.GracePeriodsPerPlayer == 0 {
+		return false, nil
+	}
+
+	provideGrace := false
+	graceNations := []string{}
+	for memberIdx, member := range p.Game.Members {
+		_, hadOrders := orderMap[member.Nation]
+		wasReady := false
+		for _, phaseState := range p.PhaseStates {
+			if phaseState.Nation == member.Nation {
+				wasReady = phaseState.ReadyToResolve
+			}
+		}
+		if !wasReady && !hadOrders && member.GracePeriodsUsed < p.Game.GracePeriodsPerPlayer {
+			p.Game.Members[memberIdx].GracePeriodsUsed++
+			provideGrace = true
+			graceNations = append(graceNations, string(member.Nation))
+		}
+	}
+
+	if provideGrace {
+		// Postpone the phase.
+		now := time.Now()
+		p.Phase.DeadlineAt = now.Add(time.Minute * p.Game.GracePeriodMinutes)
+
+		// Save everything.
+		phaseID, err := p.Phase.ID(p.Context)
+		if err != nil {
+			log.Errorf(p.Context, "p.Phase.ID(...): %v; wtf?", err)
+			return false, err
+		}
+		toSave := []interface{}{
+			p.Game, p.Phase,
+		}
+		keys := []*datastore.Key{
+			p.Game.ID, phaseID,
+		}
+		if _, err := datastore.PutMulti(p.Context, keys, toSave); err != nil {
+			log.Errorf(p.Context, "datastore.PutMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, toSave, err)
+			return false, err
+		}
+
+		// Notify everyone.
+		allMembers := []string{}
+		for _, nat := range p.Variant.Nations {
+			allMembers = append(allMembers, string(nat))
+		}
+		notificationBody := fmt.Sprintf(
+			"%v weren't ready to resolve and gave no orders, since they still have grace periods phase resolution has been postponed %v (until %v).",
+			english.OxfordWordSeries(graceNations, "and"),
+			p.Phase.DeadlineAt.Sub(now).Round(time.Minute),
+			p.Phase.DeadlineAt.Format(time.RFC822),
+		)
+		if err := AsyncSendMsgFunc.EnqueueIn(
+			p.Context, 0,
+			p.Phase.GameID,
+			DiplicitySender,
+			allMembers,
+			notificationBody,
+			p.Phase.Host,
+		); err != nil {
+			log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, p.Variant.Nations, notificationBody, p.Phase.Host, err)
+			return false, err
+		}
+
+		if err := p.Phase.ScheduleResolution(p.Context); err != nil {
+			log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(p.Phase), err)
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func (p *PhaseResolver) actNonMustered() error {
