@@ -25,7 +25,6 @@ import (
 	"google.golang.org/appengine/log"
 
 	dvars "github.com/zond/diplicity/variants"
-	"github.com/zond/godip/variants/common"
 	vrt "github.com/zond/godip/variants/common"
 
 	. "github.com/zond/goaeoas"
@@ -674,7 +673,7 @@ type PhaseResolver struct {
 	Phase            *Phase
 	PhaseStates      PhaseStates
 	TimeoutTriggered bool
-	Variant          common.Variant
+	Variant          vrt.Variant
 
 	// Don't populate this yourself, it's calculated by the PhaseResolver when you trigger it.
 	nonEliminatedUserIds map[string]bool
