@@ -850,6 +850,10 @@ func (p *PhaseResolver) Act() error {
 				log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, variant.Nations, notificationBody, p.Phase.Host, err)
 				return err
 			}
+			if err := p.Phase.ScheduleResolution(p.Context); err != nil {
+				log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(p.Phase), err)
+				return err
+			}
 			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY PROMOTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
 		} else if !p.Game.GameMasterEnabled && len(readyNationMap) == 0 {
 			allKeys = append(allKeys, p.Game.ID)
