@@ -638,6 +638,15 @@ func resolvePhaseHelper(ctx context.Context, gameID *datastore.Key, phaseOrdinal
 			return err
 		}
 
+		variant, found := variants.Variants[game.Variant]
+		if !found {
+			variantNames := []string{}
+			for name := range variants.Variants {
+				variantNames = append(variantNames, name)
+			}
+			log.Errorf(ctx, "Variant %#v not recognized? We only know of %+v", game.Variant, variantNames)
+		}
+
 		log.Infof(ctx, "resolvePhaseHelper(..., %v, %v, %v) running PhaseResolver.Act()", gameID, phaseOrdinal, timeoutTriggered)
 		return (&PhaseResolver{
 			Context:          ctx,
@@ -645,6 +654,7 @@ func resolvePhaseHelper(ctx context.Context, gameID *datastore.Key, phaseOrdinal
 			Phase:            phase,
 			PhaseStates:      phaseStates,
 			TimeoutTriggered: timeoutTriggered,
+			Variant:          variant,
 		}).Act()
 	}, &datastore.TransactionOptions{XG: true}); err != nil {
 		log.Errorf(ctx, "Unable to commit resolve tx: %v", err)
@@ -662,6 +672,7 @@ type PhaseResolver struct {
 	Phase            *Phase
 	PhaseStates      PhaseStates
 	TimeoutTriggered bool
+	Variant          vrt.Variant
 
 	// Don't populate this yourself, it's calculated by the PhaseResolver when you trigger it.
 	nonEliminatedUserIds map[string]bool
@@ -707,229 +718,11 @@ func (p *PhaseResolver) Act() error {
 		return nil
 	}
 
-	variant, found := variants.Variants[p.Game.Variant]
-	if !found {
-		variantNames := []string{}
-		for name := range variants.Variants {
-			variantNames = append(variantNames, name)
-		}
-		log.Errorf(p.Context, "Variant %#v not recognized? We only know of %+v", p.Game.Variant, variantNames)
-	}
-
 	// Make mustering games go back to staging after deleting their phases,
 	// all non-ready members, and all phase states - if not everyone is ready.
 	// Otherwise just mark the game as mustered, push the deadline, and reschedule.
 	if !p.Game.Mustered {
-
-		allMembers := []string{}
-		for _, nat := range variant.Nations {
-			allMembers = append(allMembers, string(nat))
-		}
-
-		// Collect IDs for phase and phase states, in case we need to delete them in a bit.
-
-		allKeys := []*datastore.Key{}
-		phaseID, err := p.Phase.ID(p.Context)
-		if err != nil {
-			log.Errorf(p.Context, "p.Phase.ID(...): %v; fix it?", err)
-			return err
-		}
-		allKeys = append(allKeys, phaseID)
-
-		// Find ready members.
-
-		phaseStateKeys := []*datastore.Key{}
-		readyNationMap := map[godip.Nation]bool{}
-		for _, phaseState := range p.PhaseStates {
-			stateID, err := phaseState.ID(p.Context)
-			if err != nil {
-				log.Errorf(p.Context, "phaseState.ID(...): %v; fix it?", err)
-				return err
-			}
-			allKeys = append(allKeys, stateID)
-			phaseStateKeys = append(phaseStateKeys, stateID)
-			if phaseState.ReadyToResolve {
-				readyNationMap[phaseState.Nation] = true
-			}
-		}
-
-		// Find all userIds.
-		allUserIds := []string{}
-		readyUserIds := []string{}
-		for _, member := range p.Game.Members {
-			allUserIds = append(allUserIds, member.User.Id)
-			if readyNationMap[member.Nation] {
-				if member.User.Id == "" {
-					msg := fmt.Sprintf("Finding readyUserIds: Broken member user!? Empty User.Id!?!? %+v", member)
-					log.Errorf(p.Context, msg)
-					return fmt.Errorf(msg)
-				}
-				readyUserIds = append(readyUserIds, member.User.Id)
-			}
-		}
-
-		// Depending on whether everyone is ready...
-		if len(readyNationMap) == len(variant.Nations) {
-			p.Game.Mustered = true
-			if p.Phase.Type != godip.Movement && p.Game.NonMovementPhaseLengthMinutes != 0 {
-				p.Phase.DeadlineAt = time.Now().Add(time.Minute * p.Game.NonMovementPhaseLengthMinutes)
-			} else {
-				p.Phase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
-			}
-			p.Game.NewestPhaseMeta = []PhaseMeta{p.Phase.PhaseMeta}
-			// Delete all the old phase states.
-			if err := datastore.DeleteMulti(p.Context, phaseStateKeys); err != nil {
-				log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", phaseStateKeys, err)
-				return err
-			}
-			phaseID, err := p.Phase.ID(p.Context)
-			if err != nil {
-				log.Errorf(p.Context, "p.Phase.ID(...): %v; wtf?", err)
-				return err
-			}
-			toSave := []interface{}{
-				p.Game, p.Phase,
-			}
-			keys := []*datastore.Key{
-				p.Game.ID, phaseID,
-			}
-			// Create the state for this phase.
-			s, err := p.Phase.State(p.Context, variant, map[godip.Nation]map[godip.Province][]string{})
-			if err != nil {
-				log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", PP(p.Phase), err)
-				return err
-			}
-			// And the phase states for the members.
-			for idx := range p.Game.Members {
-				options := s.Phase().Options(s, p.Game.Members[idx].Nation)
-				profile, counts := s.GetProfile()
-				for k, v := range profile {
-					log.Debugf(p.Context, "Profiling state: %v => %v, %v", k, v, counts[k])
-				}
-				zippedOptions, err := zipOptions(p.Context, options)
-				if err != nil {
-					log.Errorf(p.Context, "zipOptions(..., %+v): %v", options, err)
-					return err
-				}
-
-				phaseState := &PhaseState{
-					GameID:        p.Game.ID,
-					PhaseOrdinal:  p.Phase.PhaseOrdinal,
-					Nation:        p.Game.Members[idx].Nation,
-					NoOrders:      len(options) == 0,
-					Messages:      strings.Join(s.Phase().Messages(s, p.Game.Members[idx].Nation), ","),
-					ZippedOptions: zippedOptions,
-					Note:          fmt.Sprintf("Created by Diplicity at %v due to game muster.", time.Now()),
-				}
-				phaseStateID, err := phaseState.ID(p.Context)
-				if err != nil {
-					log.Errorf(p.Context, "phaseState.ID(...): %v", err)
-					return err
-				}
-
-				p.Game.Members[idx].NewestPhaseState = *phaseState
-
-				toSave = append(toSave, phaseState)
-				keys = append(keys, phaseStateID)
-			}
-			// Save everything.
-			if _, err := datastore.PutMulti(p.Context, keys, toSave); err != nil {
-				log.Errorf(p.Context, "datastore.PutMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, toSave, err)
-				return err
-			}
-			// Notify everyone that the game has properly started.
-			notificationBody := "All players are ready, and the game has started for real. Be nice to each other, and have fun!"
-			if err := AsyncSendMsgFunc.EnqueueIn(
-				p.Context, 0,
-				p.Phase.GameID,
-				DiplicitySender,
-				allMembers,
-				notificationBody,
-				p.Phase.Host,
-			); err != nil {
-				log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, variant.Nations, notificationBody, p.Phase.Host, err)
-				return err
-			}
-			if err := p.Phase.ScheduleResolution(p.Context); err != nil {
-				log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(p.Phase), err)
-				return err
-			}
-			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY PROMOTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
-		} else if !p.Game.GameMasterEnabled && len(readyNationMap) == 0 {
-			allKeys = append(allKeys, p.Game.ID)
-			// Delete the game, the phase, and all it's phase states.
-			if err := datastore.DeleteMulti(p.Context, allKeys); err != nil {
-				log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", allKeys, err)
-				return err
-			}
-			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY DELETED MUSTERING ABANDONED GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
-			return nil
-		} else {
-			p.Game.Started = false
-			p.Game.StartedAt = time.Time{}
-			p.Game.Closed = false
-			p.Game.NewestPhaseMeta = nil
-			newMembers := []Member{}
-			probationUids := []string{}
-			allUIds := []string{}
-			for i := range p.Game.Members {
-				member := p.Game.Members[i]
-				allUIds = append(allUIds, member.User.Id)
-				if readyNationMap[member.Nation] {
-					newMembers = append(newMembers, member)
-				} else {
-					probationUids = append(probationUids, member.User.Id)
-				}
-			}
-			// Make the game have only the ready members.
-			p.Game.Members = newMembers
-			// Eject anyone not ready from any staging games.
-			if err := ejectProbationariesFunc.EnqueueIn(p.Context, 0, probationUids); err != nil {
-				log.Errorf(p.Context, "Unable to enqueue ejection of probationaries %+v: %v; hope datastore gets fixed", probationUids, err)
-				return err
-			}
-			// Save the game with the new state of being staging, and no longer closed.
-			if err := p.Game.DBSave(p.Context); err != nil {
-				log.Errorf(p.Context, "Unable to save game %v: %v; hope datastore will get fixed", PP(p.Game), err)
-				return err
-			}
-			// Update all users with the new stats about joined/started games.
-			if err := UpdateUserStatsASAP(p.Context, allUIds); err != nil {
-				log.Errorf(p.Context, "UpdateUserStatsASAP(..., %+v): %v; hope datastore gets fixed", allUIds, err)
-				return err
-			}
-			// Delete the phase and all it's phase states.
-			if err := datastore.DeleteMulti(p.Context, allKeys); err != nil {
-				log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", allKeys, err)
-				return err
-			}
-			notificationBody := fmt.Sprintf("Unfortunately %v players weren't ready, so the game has re-entered the staging state. Once it has enough players it will re-enter the mustering state again.", len(variant.Nations)-len(readyNationMap))
-			if err := AsyncSendMsgFunc.EnqueueIn(
-				p.Context, 0,
-				p.Phase.GameID,
-				DiplicitySender,
-				allMembers,
-				notificationBody,
-				p.Phase.Host,
-			); err != nil {
-				log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, variant.Nations, notificationBody, p.Phase.Host, err)
-				return err
-			}
-			log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY REVERTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
-		}
-		if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(
-			p.Context,
-			0,
-			p.Phase.Host,
-			p.Game.ID,
-			p.Phase.PhaseOrdinal,
-			readyUserIds,
-		); err != nil {
-			log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
-			return err
-		}
-		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** Notified all members of the new phase state ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
-		return nil
+		return p.actNonMustered()
 	}
 
 	// Clean up old phase states, and populate the nonEliminatedUserIds slice if necessary.
@@ -977,7 +770,7 @@ func (p *PhaseResolver) Act() error {
 	}
 	log.Infof(p.Context, "Orders at resolve time: %v", PP(orderMap))
 
-	s, err := p.Phase.State(p.Context, variant, orderMap)
+	s, err := p.Phase.State(p.Context, p.Variant, orderMap)
 	if err != nil {
 		log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", PP(p.Phase), err)
 		return err
@@ -1013,7 +806,7 @@ func (p *PhaseResolver) Act() error {
 	// Create the new phase.
 
 	newPhase := NewPhase(s, p.Phase.GameID, p.Phase.PhaseOrdinal+1, p.Phase.Host)
-	newPhase.SoloSCCount = variant.SoloSCCount(s)
+	newPhase.SoloSCCount = p.Variant.SoloSCCount(s)
 	// To make old games work.
 	if p.Game.PhaseLengthMinutes == 0 {
 		p.Game.PhaseLengthMinutes = MAX_PHASE_DEADLINE
@@ -1028,7 +821,7 @@ func (p *PhaseResolver) Act() error {
 
 	// Prepare some data to collect.
 	allReady := true                       // All nations are ready to resolve the new phase as well.
-	soloWinner := variant.SoloWinner(s)    // The nation, if any, reaching solo victory.
+	soloWinner := p.Variant.SoloWinner(s)  // The nation, if any, reaching solo victory.
 	var soloWinnerUser string              // Will be set to the user of the soloWinner nation.
 	quitters := map[godip.Nation]quitter{} // One per nation that wants to quit, with either dias, eliminated, concede, or nmr.
 	conceders := map[godip.Nation]bool{}   // One per nation that wants to concede.
@@ -1166,10 +959,10 @@ func (p *PhaseResolver) Act() error {
 		p.Game.FinishedAt = time.Now()
 		p.Game.Closed = true
 	}
-	if soloWinner != "" || len(quitters) == len(variant.Nations) || (p.Game.LastYear != 0 && newPhase.Year > p.Game.LastYear) {
+	if soloWinner != "" || len(quitters) == len(p.Variant.Nations) || (p.Game.LastYear != 0 && newPhase.Year > p.Game.LastYear) {
 		log.Infof(p.Context, "soloWinner: %q, quitters: %v, lastYear: %v => game needs to end", soloWinner, PP(quitters), p.Game.LastYear)
 		finishGame()
-	} else if len(variant.Nations) == 2 && len(conceders) == 1 {
+	} else if len(p.Variant.Nations) == 2 && len(conceders) == 1 {
 		log.Infof(p.Context, "variant nations: 2, conceders: %v => game needs to end", PP(conceders))
 		for _, member := range p.Game.Members {
 			if !conceders[member.Nation] {
@@ -1415,6 +1208,222 @@ func (p *PhaseResolver) Act() error {
 
 	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESS ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
 
+	return nil
+}
+
+func (p *PhaseResolver) actNonMustered() error {
+	if p.Game.Mustered {
+		return fmt.Errorf("Game %+v is mustered!", p.Game)
+	}
+
+	allMembers := []string{}
+	for _, nat := range p.Variant.Nations {
+		allMembers = append(allMembers, string(nat))
+	}
+
+	// Collect IDs for phase and phase states, in case we need to delete them in a bit.
+
+	allKeys := []*datastore.Key{}
+	phaseID, err := p.Phase.ID(p.Context)
+	if err != nil {
+		log.Errorf(p.Context, "p.Phase.ID(...): %v; fix it?", err)
+		return err
+	}
+	allKeys = append(allKeys, phaseID)
+
+	// Find ready members.
+
+	phaseStateKeys := []*datastore.Key{}
+	readyNationMap := map[godip.Nation]bool{}
+	for _, phaseState := range p.PhaseStates {
+		stateID, err := phaseState.ID(p.Context)
+		if err != nil {
+			log.Errorf(p.Context, "phaseState.ID(...): %v; fix it?", err)
+			return err
+		}
+		allKeys = append(allKeys, stateID)
+		phaseStateKeys = append(phaseStateKeys, stateID)
+		if phaseState.ReadyToResolve {
+			readyNationMap[phaseState.Nation] = true
+		}
+	}
+
+	// Find all userIds.
+	allUserIds := []string{}
+	readyUserIds := []string{}
+	for _, member := range p.Game.Members {
+		allUserIds = append(allUserIds, member.User.Id)
+		if readyNationMap[member.Nation] {
+			if member.User.Id == "" {
+				msg := fmt.Sprintf("Finding readyUserIds: Broken member user!? Empty User.Id!?!? %+v", member)
+				log.Errorf(p.Context, msg)
+				return fmt.Errorf(msg)
+			}
+			readyUserIds = append(readyUserIds, member.User.Id)
+		}
+	}
+
+	// Depending on whether everyone is ready...
+	if len(readyNationMap) == len(p.Variant.Nations) {
+		p.Game.Mustered = true
+		if p.Phase.Type != godip.Movement && p.Game.NonMovementPhaseLengthMinutes != 0 {
+			p.Phase.DeadlineAt = time.Now().Add(time.Minute * p.Game.NonMovementPhaseLengthMinutes)
+		} else {
+			p.Phase.DeadlineAt = time.Now().Add(time.Minute * p.Game.PhaseLengthMinutes)
+		}
+		p.Game.NewestPhaseMeta = []PhaseMeta{p.Phase.PhaseMeta}
+		// Delete all the old phase states.
+		if err := datastore.DeleteMulti(p.Context, phaseStateKeys); err != nil {
+			log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", phaseStateKeys, err)
+			return err
+		}
+		phaseID, err := p.Phase.ID(p.Context)
+		if err != nil {
+			log.Errorf(p.Context, "p.Phase.ID(...): %v; wtf?", err)
+			return err
+		}
+		toSave := []interface{}{
+			p.Game, p.Phase,
+		}
+		keys := []*datastore.Key{
+			p.Game.ID, phaseID,
+		}
+		// Create the state for this phase.
+		s, err := p.Phase.State(p.Context, p.Variant, map[godip.Nation]map[godip.Province][]string{})
+		if err != nil {
+			log.Errorf(p.Context, "Unable to create godip State for %v: %v; fix godip!", PP(p.Phase), err)
+			return err
+		}
+		// And the phase states for the members.
+		for idx := range p.Game.Members {
+			options := s.Phase().Options(s, p.Game.Members[idx].Nation)
+			profile, counts := s.GetProfile()
+			for k, v := range profile {
+				log.Debugf(p.Context, "Profiling state: %v => %v, %v", k, v, counts[k])
+			}
+			zippedOptions, err := zipOptions(p.Context, options)
+			if err != nil {
+				log.Errorf(p.Context, "zipOptions(..., %+v): %v", options, err)
+				return err
+			}
+
+			phaseState := &PhaseState{
+				GameID:        p.Game.ID,
+				PhaseOrdinal:  p.Phase.PhaseOrdinal,
+				Nation:        p.Game.Members[idx].Nation,
+				NoOrders:      len(options) == 0,
+				Messages:      strings.Join(s.Phase().Messages(s, p.Game.Members[idx].Nation), ","),
+				ZippedOptions: zippedOptions,
+				Note:          fmt.Sprintf("Created by Diplicity at %v due to game muster.", time.Now()),
+			}
+			phaseStateID, err := phaseState.ID(p.Context)
+			if err != nil {
+				log.Errorf(p.Context, "phaseState.ID(...): %v", err)
+				return err
+			}
+
+			p.Game.Members[idx].NewestPhaseState = *phaseState
+
+			toSave = append(toSave, phaseState)
+			keys = append(keys, phaseStateID)
+		}
+		// Save everything.
+		if _, err := datastore.PutMulti(p.Context, keys, toSave); err != nil {
+			log.Errorf(p.Context, "datastore.PutMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, toSave, err)
+			return err
+		}
+		// Notify everyone that the game has properly started.
+		notificationBody := "All players are ready, and the game has started for real. Be nice to each other, and have fun!"
+		if err := AsyncSendMsgFunc.EnqueueIn(
+			p.Context, 0,
+			p.Phase.GameID,
+			DiplicitySender,
+			allMembers,
+			notificationBody,
+			p.Phase.Host,
+		); err != nil {
+			log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, p.Variant.Nations, notificationBody, p.Phase.Host, err)
+			return err
+		}
+		if err := p.Phase.ScheduleResolution(p.Context); err != nil {
+			log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(p.Phase), err)
+			return err
+		}
+		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY PROMOTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+	} else if !p.Game.GameMasterEnabled && len(readyNationMap) == 0 {
+		allKeys = append(allKeys, p.Game.ID)
+		// Delete the game, the phase, and all it's phase states.
+		if err := datastore.DeleteMulti(p.Context, allKeys); err != nil {
+			log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", allKeys, err)
+			return err
+		}
+		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY DELETED MUSTERING ABANDONED GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+		return nil
+	} else {
+		p.Game.Started = false
+		p.Game.StartedAt = time.Time{}
+		p.Game.Closed = false
+		p.Game.NewestPhaseMeta = nil
+		newMembers := []Member{}
+		probationUids := []string{}
+		allUIds := []string{}
+		for i := range p.Game.Members {
+			member := p.Game.Members[i]
+			allUIds = append(allUIds, member.User.Id)
+			if readyNationMap[member.Nation] {
+				newMembers = append(newMembers, member)
+			} else {
+				probationUids = append(probationUids, member.User.Id)
+			}
+		}
+		// Make the game have only the ready members.
+		p.Game.Members = newMembers
+		// Eject anyone not ready from any staging games.
+		if err := ejectProbationariesFunc.EnqueueIn(p.Context, 0, probationUids); err != nil {
+			log.Errorf(p.Context, "Unable to enqueue ejection of probationaries %+v: %v; hope datastore gets fixed", probationUids, err)
+			return err
+		}
+		// Save the game with the new state of being staging, and no longer closed.
+		if err := p.Game.DBSave(p.Context); err != nil {
+			log.Errorf(p.Context, "Unable to save game %v: %v; hope datastore will get fixed", PP(p.Game), err)
+			return err
+		}
+		// Update all users with the new stats about joined/started games.
+		if err := UpdateUserStatsASAP(p.Context, allUIds); err != nil {
+			log.Errorf(p.Context, "UpdateUserStatsASAP(..., %+v): %v; hope datastore gets fixed", allUIds, err)
+			return err
+		}
+		// Delete the phase and all it's phase states.
+		if err := datastore.DeleteMulti(p.Context, allKeys); err != nil {
+			log.Errorf(p.Context, "datastore.DeleteMulti(..., %+v): %v; hope datastore gets fixed", allKeys, err)
+			return err
+		}
+		notificationBody := fmt.Sprintf("Unfortunately %v players weren't ready, so the game has re-entered the staging state. Once it has enough players it will re-enter the mustering state again.", len(p.Variant.Nations)-len(readyNationMap))
+		if err := AsyncSendMsgFunc.EnqueueIn(
+			p.Context, 0,
+			p.Phase.GameID,
+			DiplicitySender,
+			allMembers,
+			notificationBody,
+			p.Phase.Host,
+		); err != nil {
+			log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, p.Variant.Nations, notificationBody, p.Phase.Host, err)
+			return err
+		}
+		log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** SUCCESSFULLY REVERTED MUSTERING GAME ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
+	}
+	if err := sendPhaseNotificationsToUsersFunc.EnqueueIn(
+		p.Context,
+		0,
+		p.Phase.Host,
+		p.Game.ID,
+		p.Phase.PhaseOrdinal,
+		readyUserIds,
+	); err != nil {
+		log.Errorf(p.Context, "Unable to enqueue notification to game members: %v; hope datastore will get fixed", err)
+		return err
+	}
+	log.Infof(p.Context, "PhaseResolver{GameID: %v, PhaseOrdinal: %v}.Act() *** Notified all members of the new phase state ***", p.Phase.GameID, p.Phase.PhaseOrdinal)
 	return nil
 }
 
