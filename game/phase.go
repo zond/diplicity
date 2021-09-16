@@ -1223,11 +1223,10 @@ func (p *PhaseResolver) Act() error {
 }
 
 func (p *PhaseResolver) provideGrace(orderMap map[godip.Nation]map[godip.Province][]string) (bool, error) {
-	if p.Game.GracePeriodMinutes == 0 || p.Game.GracePeriodsPerPlayer == 0 {
+	if p.Game.GracePeriodMinutes == 0 || p.Game.GracePeriodsPerPlayer == 0 || p.Phase.PhaseMeta.GraceUsed {
 		return false, nil
 	}
 
-	provideGrace := false
 	graceNations := []string{}
 	for memberIdx, member := range p.Game.Members {
 		_, hadOrders := orderMap[member.Nation]
@@ -1239,15 +1238,16 @@ func (p *PhaseResolver) provideGrace(orderMap map[godip.Nation]map[godip.Provinc
 		}
 		if !wasReady && !hadOrders && member.GracePeriodsUsed < p.Game.GracePeriodsPerPlayer {
 			p.Game.Members[memberIdx].GracePeriodsUsed++
-			provideGrace = true
+			p.Phase.GraceUsed = true
 			graceNations = append(graceNations, string(member.Nation))
 		}
 	}
 
-	if provideGrace {
+	if p.Phase.GraceUsed {
 		// Postpone the phase.
 		now := time.Now()
 		p.Phase.DeadlineAt = now.Add(time.Minute * p.Game.GracePeriodMinutes)
+		p.Game.NewestPhaseMeta = []PhaseMeta{p.Phase.PhaseMeta}
 
 		// Save everything.
 		phaseID, err := p.Phase.ID(p.Context)
@@ -1586,6 +1586,7 @@ type PhaseMeta struct {
 	Year           int
 	Type           godip.PhaseType
 	Resolved       bool
+	GraceUsed      bool
 	CreatedAt      time.Time
 	CreatedAgo     time.Duration `datastore:"-" ticker:"true"`
 	ResolvedAt     time.Time
