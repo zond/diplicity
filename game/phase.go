@@ -679,6 +679,55 @@ type PhaseResolver struct {
 	nonEliminatedUserIds map[string]bool
 }
 
+func (p *PhaseResolver) delayForMissingMembers() (bool, error) {
+	missingMembers := sort.StringSlice{}
+	allMembers := sort.StringSlice{}
+	for _, member := range p.Game.Members {
+		allMembers = append(allMembers, string(member.Nation))
+		if member.User.Id == "" {
+			missingMembers = append(missingMembers, string(member.Nation))
+		}
+	}
+	if len(missingMembers) > 0 {
+		delay := 24 * time.Hour
+		p.Phase.DeadlineAt = p.Phase.DeadlineAt.Add(delay)
+		phaseID, err := p.Phase.ID(p.Context)
+		if err != nil {
+			log.Errorf(p.Context, "p.Phase.ID(...): %v; fix it?", err)
+			return false, err
+		}
+		if _, err := datastore.Put(p.Context, phaseID, p.Phase); err != nil {
+			log.Errorf(p.Context, "datastore.Put(..., %v, %+v): %v", phaseID, p.Phase, err)
+			return false, err
+		}
+
+		sort.Sort(missingMembers)
+		// Notify everyone that the game has properly started.
+		notificationBody := fmt.Sprintf("%v %v currently have players. Phase resolution postponed %v until %v.",
+			english.OxfordWordSeries(missingMembers, "and"),
+			english.Plural(len(missingMembers), "doesn't", "don't"),
+			delay.Round(time.Minute),
+			p.Phase.DeadlineAt.Format(time.RFC822))
+		if err := AsyncSendMsgFunc.EnqueueIn(
+			p.Context, 0,
+			p.Phase.GameID,
+			DiplicitySender,
+			allMembers,
+			notificationBody,
+			p.Phase.Host,
+		); err != nil {
+			log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, p.Variant.Nations, notificationBody, p.Phase.Host, err)
+			return false, err
+		}
+		if err := p.Phase.ScheduleResolution(p.Context); err != nil {
+			log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(p.Phase), err)
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
 func (p *PhaseResolver) SCCounts(s *state.State) map[godip.Nation]int {
 	res := map[godip.Nation]int{}
 	for _, nat := range s.SupplyCenters() {
@@ -716,6 +765,16 @@ func (p *PhaseResolver) Act() error {
 
 	if p.Phase.Resolved {
 		log.Infof(p.Context, "Already resolved; %v; skipping resolution", PP(p.Phase))
+		return nil
+	}
+
+	// Check that all players are "real" players and not empty places after GM kicked someone.
+	delayed, err := p.delayForMissingMembers()
+	if err != nil {
+		log.Errorf(p.Context, "Unable to check for missing members: %v")
+		return err
+	}
+	if delayed {
 		return nil
 	}
 
