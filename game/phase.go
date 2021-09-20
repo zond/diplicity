@@ -1331,8 +1331,9 @@ func (p *PhaseResolver) provideGrace(orderMap map[godip.Nation]map[godip.Provinc
 			allMembers = append(allMembers, string(nat))
 		}
 		notificationBody := fmt.Sprintf(
-			"%v weren't ready to resolve and gave no orders, since they still have grace periods phase resolution has been postponed %v (until %v).",
+			"%v %v ready to resolve and gave no orders, since they still have grace periods phase resolution has been postponed %v (until %v).",
 			english.OxfordWordSeries(graceNations, "and"),
+			english.Plural(len(graceNations), "wasn't", "weren't"),
 			p.Phase.DeadlineAt.Sub(now).Round(time.Minute),
 			p.Phase.DeadlineAt.Format(time.RFC822),
 		)
