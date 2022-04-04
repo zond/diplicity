@@ -557,7 +557,7 @@ func planPhaseTimeout(ctx context.Context, gameID *datastore.Key, phaseOrdinal i
 
 	userConfigKeys := []*datastore.Key{}
 	for _, member := range game.Members {
-		if !member.NewestPhaseState.Eliminated {
+		if member.User.Id != "" && !member.NewestPhaseState.Eliminated {
 			userConfigKeys = append(userConfigKeys, auth.UserConfigID(ctx, auth.UserID(ctx, member.User.Id)))
 		}
 	}
