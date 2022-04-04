@@ -15,7 +15,6 @@ import (
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/zond/diplicity/auth"
-	"github.com/zond/go-fcm"
 	"github.com/zond/godip"
 	"github.com/zond/godip/state"
 	"github.com/zond/godip/variants"
@@ -25,6 +24,7 @@ import (
 	"google.golang.org/appengine/log"
 
 	dvars "github.com/zond/diplicity/variants"
+	fcm "github.com/zond/go-fcm"
 	vrt "github.com/zond/godip/variants/common"
 
 	. "github.com/zond/goaeoas"
@@ -482,7 +482,7 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 	}
 	log.Infof(ctx, "Found member %+v", member)
 
-	if !game.Finished && !phase.Resolved && !member.NewestPhaseState.ReadyToResolve {
+	if member.User.Id != "" && !game.Finished && !phase.Resolved && !member.NewestPhaseState.ReadyToResolve {
 		userConfigKey := auth.UserConfigID(ctx, auth.UserID(ctx, member.User.Id))
 		userConfig := &auth.UserConfig{}
 		if err := datastore.Get(ctx, userConfigKey, userConfig); err == datastore.ErrNoSuchEntity {
@@ -712,7 +712,7 @@ func (p *PhaseResolver) delayForMissingMembers() (bool, error) {
 			p.Context, 0,
 			p.Phase.GameID,
 			DiplicitySender,
-			allMembers,
+			([]string)(allMembers),
 			notificationBody,
 			p.Phase.Host,
 		); err != nil {
