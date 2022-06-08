@@ -16,7 +16,7 @@ import (
 	"github.com/kvannotten/mailstrip"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/enmime"
-	"github.com/zond/go-fcm"
+	fcm "github.com/zond/go-fcm"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
@@ -141,9 +141,12 @@ func getMsgNotificationContext(ctx context.Context, host string, gameID *datasto
 	)
 	if err != nil {
 		if merr, ok := err.(appengine.MultiError); ok {
-			if merr[3] == datastore.ErrNoSuchEntity {
+			if merr[3] == datastore.ErrNoSuchEntity || merr[3] == datastore.ErrInvalidKey {
 				log.Infof(ctx, "%q has no configuration, will skip sending notification", userId)
 				return nil, noConfigError
+			}
+			for idx, serr := range merr {
+				log.Infof(ctx, "Error idx %v: %v", idx, serr)
 			}
 			log.Errorf(ctx, "Unable to load game, channel, message, user and user config: %v; hope datastore gets fixed", err)
 			return nil, err
@@ -435,6 +438,9 @@ func sendMsgNotificationsToUsers(ctx context.Context, host string, gameID *datas
 			log.Errorf(ctx, "Unable to enqueue sending mail to %q: %v; hope datastore gets fixed", uids[0], err)
 			return err
 		}
+		for len(uids) > 0 && uids[0] == "" {
+			uids = uids[1:]
+		}
 		if len(uids) > 1 {
 			if err := sendMsgNotificationsToUsersFunc.EnqueueIn(ctx, 0, host, gameID, channelMembers, messageID, uids[1:]); err != nil {
 				log.Errorf(ctx, "Unable to enqueue sending to rest: %v; hope datastore gets fixed", err)
@@ -690,7 +696,7 @@ func (m *Message) NotifyRecipients(ctx context.Context, host string, game *Game)
 	memberIds := []string{}
 	for _, nat := range unmutedMembers {
 		for _, member := range game.Members {
-			if member.Nation == nat {
+			if member.Nation == nat && member.User.Id != "" {
 				memberIds = append(memberIds, member.User.Id)
 				break
 			}
