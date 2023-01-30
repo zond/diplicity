@@ -785,6 +785,23 @@ func (p *PhaseResolver) Act() error {
 		return p.actNonMustered()
 	}
 
+	// Load order map, which is necessary for grace period calculation.
+	orderMap, err := p.Phase.Orders(p.Context)
+	if err != nil {
+		log.Errorf(p.Context, "Unable to load orders for %v: %v; fix phase.Orders or hope datastore will get fixed", PP(p.Phase), err)
+		return err
+	}
+	log.Infof(p.Context, "Orders at resolve time: %v", PP(orderMap))
+
+	// Check if we should postpone due to grace periods.
+	providedGrace, err := p.provideGrace(orderMap)
+	if err != nil {
+		return err
+	}
+	if providedGrace {
+		return nil
+	}
+
 	// Clean up old phase states, and populate the nonEliminatedUserIds slice if necessary.
 
 	phaseStateIDs := make([]*datastore.Key, len(p.PhaseStates))
@@ -822,13 +839,6 @@ func (p *PhaseResolver) Act() error {
 	// Roll forward the game state.
 
 	log.Infof(p.Context, "PhaseStates at resolve time: %v", PP(p.PhaseStates))
-
-	orderMap, err := p.Phase.Orders(p.Context)
-	if err != nil {
-		log.Errorf(p.Context, "Unable to load orders for %v: %v; fix phase.Orders or hope datastore will get fixed", PP(p.Phase), err)
-		return err
-	}
-	log.Infof(p.Context, "Orders at resolve time: %v", PP(orderMap))
 
 	s, err := p.Phase.State(p.Context, p.Variant, orderMap)
 	if err != nil {
@@ -1271,6 +1281,83 @@ func (p *PhaseResolver) Act() error {
 	return nil
 }
 
+func (p *PhaseResolver) provideGrace(orderMap map[godip.Nation]map[godip.Province][]string) (bool, error) {
+	if p.Game.GracePeriodMinutes == 0 || p.Game.GracePeriodsPerPlayer == 0 || p.Phase.PhaseMeta.GraceUsed {
+		return false, nil
+	}
+
+	graceNations := []string{}
+	for memberIdx, member := range p.Game.Members {
+		_, hadOrders := orderMap[member.Nation]
+		wasReady := false
+		for _, phaseState := range p.PhaseStates {
+			if phaseState.Nation == member.Nation {
+				wasReady = phaseState.ReadyToResolve
+			}
+		}
+		if !wasReady && !hadOrders && member.GracePeriodsUsed < p.Game.GracePeriodsPerPlayer {
+			p.Game.Members[memberIdx].GracePeriodsUsed++
+			p.Phase.GraceUsed = true
+			graceNations = append(graceNations, string(member.Nation))
+		}
+	}
+
+	if p.Phase.GraceUsed {
+		// Postpone the phase.
+		now := time.Now()
+		p.Phase.DeadlineAt = now.Add(time.Minute * p.Game.GracePeriodMinutes)
+		p.Game.NewestPhaseMeta = []PhaseMeta{p.Phase.PhaseMeta}
+
+		// Save everything.
+		phaseID, err := p.Phase.ID(p.Context)
+		if err != nil {
+			log.Errorf(p.Context, "p.Phase.ID(...): %v; wtf?", err)
+			return false, err
+		}
+		toSave := []interface{}{
+			p.Game, p.Phase,
+		}
+		keys := []*datastore.Key{
+			p.Game.ID, phaseID,
+		}
+		if _, err := datastore.PutMulti(p.Context, keys, toSave); err != nil {
+			log.Errorf(p.Context, "datastore.PutMulti(..., %+v, %+v): %v; hope datastore gets fixed", keys, toSave, err)
+			return false, err
+		}
+
+		// Notify everyone.
+		allMembers := []string{}
+		for _, nat := range p.Variant.Nations {
+			allMembers = append(allMembers, string(nat))
+		}
+		notificationBody := fmt.Sprintf(
+			"%v %v ready to resolve and gave no orders, since they still have grace periods phase resolution has been postponed %v (until %v).",
+			english.OxfordWordSeries(graceNations, "and"),
+			english.Plural(len(graceNations), "wasn't", "weren't"),
+			p.Phase.DeadlineAt.Sub(now).Round(time.Minute),
+			p.Phase.DeadlineAt.Format(time.RFC822),
+		)
+		if err := AsyncSendMsgFunc.EnqueueIn(
+			p.Context, 0,
+			p.Phase.GameID,
+			DiplicitySender,
+			allMembers,
+			notificationBody,
+			p.Phase.Host,
+		); err != nil {
+			log.Errorf(p.Context, "AsyncSendMsgFunc(..., %v, %v, %+v, %q, %q): %v; fix it?", p.Phase.GameID, DiplicitySender, p.Variant.Nations, notificationBody, p.Phase.Host, err)
+			return false, err
+		}
+
+		if err := p.Phase.ScheduleResolution(p.Context); err != nil {
+			log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(p.Phase), err)
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
 func (p *PhaseResolver) actNonMustered() error {
 	if p.Game.Mustered {
 		return fmt.Errorf("Game %+v is mustered!", p.Game)
@@ -1559,6 +1646,7 @@ type PhaseMeta struct {
 	Year           int
 	Type           godip.PhaseType
 	Resolved       bool
+	GraceUsed      bool
 	CreatedAt      time.Time
 	CreatedAgo     time.Duration `datastore:"-" ticker:"true"`
 	ResolvedAt     time.Time

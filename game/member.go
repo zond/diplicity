@@ -59,6 +59,7 @@ type Member struct {
 	NewestPhaseState  PhaseState
 	UnreadMessages    int
 	Replaceable       bool
+	GracePeriodsUsed  int
 }
 
 type Members []Member
@@ -90,6 +91,7 @@ func (m *Member) Anonymize(r Request) {
 	m.NationPreferences = ""
 	m.UnreadMessages = 0
 	m.NewestPhaseState = PhaseState{}
+	m.GracePeriodsUsed = 0
 	m.User.Email = ""
 	m.User.FamilyName = "Doe"
 	m.User.GivenName = "John"

@@ -454,6 +454,8 @@ type Game struct {
 	ChatLanguageISO639_1          string           `methods:"POST,PUT"`
 	GameMasterEnabled             bool             `methods:"POST"`
 	RequireGameMasterInvitation   bool             `methods:"POST,PUT"`
+	GracePeriodMinutes            time.Duration    `methods:"POST,PUT"`
+	GracePeriodsPerPlayer         int              `methods:"POST,PUT"`
 
 	GameMasterInvitations GameMasterInvitations
 	GameMaster            auth.User
@@ -540,6 +542,12 @@ func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
 		return false
 	}
 	if g.NationAllocation != o.NationAllocation {
+		return false
+	}
+	if g.GracePeriodMinutes != o.GracePeriodMinutes {
+		return false
+	}
+	if g.GracePeriodsPerPlayer != o.GracePeriodsPerPlayer {
 		return false
 	}
 	if g.Anonymous != o.Anonymous {
@@ -812,6 +820,8 @@ func merge(ctx context.Context, r Request, game *Game, user *auth.User) (*Game, 
 		Filter("DisableGroupChat=", game.DisableGroupChat).
 		Filter("DisablePrivateChat=", game.DisablePrivateChat).
 		Filter("NationAllocation=", game.NationAllocation).
+		Filter("GracePeriodMinutes=", game.GracePeriodMinutes).
+		Filter("GracePeriodsPerPlayer=", game.GracePeriodsPerPlayer).
 		Filter("Anonymous=", game.Anonymous).
 		Filter("SkipMuster=", game.SkipMuster).
 		Filter("ChatLanguageISO639_1=", game.ChatLanguageISO639_1).
