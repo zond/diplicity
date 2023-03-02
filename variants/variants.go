@@ -11,9 +11,10 @@ import (
 	"github.com/zond/goaeoas"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
+	"github.com/zond/godip/variants/beta/threekingdoms"
+	"github.com/zond/godip/variants/beta/spiceislands"
 	"github.com/zond/godip/variants/ancientmediterranean"
 	"github.com/zond/godip/variants/canton"
-	"github.com/zond/godip/variants/beta/spiceislands"
 	"github.com/zond/godip/variants/chaos"
 	"github.com/zond/godip/variants/classical"
 	"github.com/zond/godip/variants/coldwar"
@@ -46,8 +47,9 @@ var (
 	// has at least level 1, the Youngstown Redux entry is just an example.
 	// (And used when testing, by artificially forcing API level 0.)
 	LaunchSchedule = map[string]int{
-		ancientmediterranean.AncientMediterraneanVariant.Name: 8,
+		threekingdoms.ThreeKingdomsVariant.Name:               9,
 		spiceislands.SpiceIslandsVariant.Name:                 9,
+		ancientmediterranean.AncientMediterraneanVariant.Name: 8,
 		canton.CantonVariant.Name:                             8,
 		chaos.ChaosVariant.Name:                               8,
 		classical.ClassicalVariant.Name:                       8,
