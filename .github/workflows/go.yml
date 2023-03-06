@@ -31,7 +31,6 @@ jobs:
               id: setup-python2
               with:
                   python-version: 2.7
-                  update-environment: false
             - name: Start test server
               run: ${GITHUB_WORKSPACE}/diptest/start_test_server.sh
             - name: Run tests
