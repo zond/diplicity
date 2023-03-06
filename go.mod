@@ -22,7 +22,7 @@ require (
 	github.com/zond/go-fcm v0.1.0
 	github.com/zond/goaeoas v0.1.9
 	github.com/zond/godip v0.3.7
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	golang.org/x/crypto v0.1.0
 	golang.org/x/net v0.7.0
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	google.golang.org/api v0.19.0
