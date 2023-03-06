@@ -37,7 +37,11 @@ func QueueEmpty(name string) (bool, error) {
 	if resp.StatusCode != 200 {
 		return false, fmt.Errorf("Status: %v, Body: %v", resp.StatusCode, body)
 	}
-	return strings.Index(body, "This queue doesn't contain any tasks.") != -1, nil
+	isempty := strings.Index(body, "This queue doesn't contain any tasks.") != -1
+	if isempty {
+		return true, nil
+	}
+	return false, fmt.Errorf("Body: %q", body)
 }
 
 func WaitForEmptyQueue(name string) {
