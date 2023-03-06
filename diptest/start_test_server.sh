@@ -5,7 +5,6 @@ ${GCLOUD_ROOT}/bin/dev_appserver.py --require_indexes --skip_sdk_update_check=tr
 echo "Waiting for it to start serving"
 while ! curl -s -o /dev/null http://localhost:8080/; do
   sleep 10
-  echo "Waiting ($(date))"
-  cat /tmp/start_test_server.log
+  echo "Waiting.. ($(date))"
 done
 echo "done"
