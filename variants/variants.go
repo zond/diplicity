@@ -11,15 +11,29 @@ import (
 	"github.com/zond/goaeoas"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
+	"github.com/zond/godip/variants/beta/threekingdoms"
+	"github.com/zond/godip/variants/beta/spiceislands"
+	"github.com/zond/godip/variants/ancientmediterranean"
+	"github.com/zond/godip/variants/canton"
 	"github.com/zond/godip/variants/chaos"
-	"github.com/zond/godip/variants/empiresandcoalitions"
+	"github.com/zond/godip/variants/classical"
+	"github.com/zond/godip/variants/coldwar"
+	"github.com/zond/godip/variants/common"
 	"github.com/zond/godip/variants/europe1939"
+	"github.com/zond/godip/variants/fleetrome"
+	"github.com/zond/godip/variants/franceaustria"
 	"github.com/zond/godip/variants/hundred"
+	"github.com/zond/godip/variants/italygermany"
 	"github.com/zond/godip/variants/northseawars"
+	"github.com/zond/godip/variants/pure"
+	"github.com/zond/godip/variants/sengoku"
 	"github.com/zond/godip/variants/twentytwenty"
+	"github.com/zond/godip/variants/unconstitutional"
+	"github.com/zond/godip/variants/vietnamwar"
 	"github.com/zond/godip/variants/westernworld901"
 	"github.com/zond/godip/variants/year1908"
 	"github.com/zond/godip/variants/youngstownredux"
+	"github.com/zond/godip/variants/empiresandcoalitions"
 
 	vrt "github.com/zond/godip/variants/common"
 
@@ -33,15 +47,28 @@ var (
 	// has at least level 1, the Youngstown Redux entry is just an example.
 	// (And used when testing, by artificially forcing API level 0.)
 	LaunchSchedule = map[string]int{
-		year1908.Year1908Variant.Name:                         8,
+		threekingdoms.ThreeKingdomsVariant.Name:               9,
+		spiceislands.SpiceIslandsVariant.Name:                 9,
+		ancientmediterranean.AncientMediterraneanVariant.Name: 8,
+		canton.CantonVariant.Name:                             8,
+		chaos.ChaosVariant.Name:                               8,
+		classical.ClassicalVariant.Name:                       8,
+		coldwar.ColdWarVariant.Name:                           8,
 		empiresandcoalitions.EmpiresAndCoalitionsVariant.Name: 8,
-		europe1939.Europe1939Variant.Name:                     7,
-		northseawars.NorthSeaWarsVariant.Name:                 6,
-		twentytwenty.TwentyTwentyVariant.Name:                 5,
-		westernworld901.WesternWorld901Variant.Name:           4,
-		chaos.ChaosVariant.Name:                               3,
-		hundred.HundredVariant.Name:                           2,
-		youngstownredux.YoungstownReduxVariant.Name:           1,
+		europe1939.Europe1939Variant.Name:                     8,
+		fleetrome.FleetRomeVariant.Name:                       8,
+		franceaustria.FranceAustriaVariant.Name:               8,
+		hundred.HundredVariant.Name:                           8,
+		italygermany.ItalyGermanyVariant.Name:                 8,
+		northseawars.NorthSeaWarsVariant.Name:                 8,
+		pure.PureVariant.Name:                                 8,
+		sengoku.SengokuVariant.Name:                           8,
+		twentytwenty.TwentyTwentyVariant.Name:                 8,
+		unconstitutional.UnconstitutionalVariant.Name:         8,
+		vietnamwar.VietnamWarVariant.Name:                     8,
+		westernworld901.WesternWorld901Variant.Name:           8,
+		year1908.Year1908Variant.Name:                         8,
+		youngstownredux.YoungstownReduxVariant.Name:           8,
 	}
 
 	VariantResource *Resource
