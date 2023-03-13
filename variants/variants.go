@@ -16,6 +16,7 @@ import (
 	"github.com/zond/godip/variants/europe1939"
 	"github.com/zond/godip/variants/hundred"
 	"github.com/zond/godip/variants/northseawars"
+	"github.com/zond/godip/variants/beta/threekingdoms"
 	"github.com/zond/godip/variants/twentytwenty"
 	"github.com/zond/godip/variants/westernworld901"
 	"github.com/zond/godip/variants/year1908"
@@ -33,6 +34,7 @@ var (
 	// has at least level 1, the Youngstown Redux entry is just an example.
 	// (And used when testing, by artificially forcing API level 0.)
 	LaunchSchedule = map[string]int{
+		threekingdoms.ThreeKingdomsVariant.Name:               9,
 		year1908.Year1908Variant.Name:                         8,
 		empiresandcoalitions.EmpiresAndCoalitionsVariant.Name: 8,
 		europe1939.Europe1939Variant.Name:                     7,
