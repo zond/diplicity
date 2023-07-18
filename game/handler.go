@@ -982,6 +982,8 @@ func handleReSave(w ResponseWriter, r Request) error {
 func reScheduleAll(w ResponseWriter, r Request, onlyBroken bool) error {
 	ctx := appengine.NewContext(r.Req())
 
+	log.Infof(ctx, "reScheduleAll(..., %v)", onlyBroken)
+
 	if !appengine.IsDevAppServer() {
 		user, ok := r.Values()["user"].(*auth.User)
 		if !ok {
@@ -997,6 +999,8 @@ func reScheduleAll(w ResponseWriter, r Request, onlyBroken bool) error {
 			return HTTPErr{"unauthorized", http.StatusForbidden}
 		}
 	}
+
+	log.Infof(ctx, "Authorized!")
 
 	games := Games{}
 	ids, err := datastore.NewQuery(gameKind).Filter("Started=", true).Filter("Finished=", false).GetAll(ctx, &games)

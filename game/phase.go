@@ -447,7 +447,7 @@ func multilog(ctx context.Context, format string, args ...interface{}) {
 		if toSlice > len(chars) {
 			toSlice = len(chars)
 		}
-		log.Info(ctx, chars[:toSlice])
+		log.Infof(ctx, string(chars[:toSlice]))
 		chars = chars[toSlice:]
 	}
 }
