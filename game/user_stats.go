@@ -306,7 +306,7 @@ func (u *UserStatsNumbers) Recalculate(ctx context.Context, private bool, userId
 	if u.FinishedGames, err = datastore.NewQuery(gameKind).Filter("Members.User.Id=", userId).Filter("Finished=", true).Filter("Private=", private).Count(ctx); err != nil {
 		return err
 	}
-	if u.MasteredGames, err = datastore.NewQuery(gameKind).Filter("GameMaster.User.Id=", userId).Filter("Private=", private).Count(ctx); err != nil {
+	if u.MasteredGames, err = datastore.NewQuery(gameKind).Filter("GameMaster.Id=", userId).Filter("Private=", private).Count(ctx); err != nil {
 		return err
 	}
 
