@@ -439,6 +439,19 @@ func timeoutResolvePhase(ctx context.Context, gameID *datastore.Key, phaseOrdina
 	return resolvePhaseHelper(ctx, gameID, phaseOrdinal, true)
 }
 
+func multilog(ctx context.Context, format string, args ...interface{}) {
+	message := fmt.Sprintf(format, args...)
+	chars := []rune(message)
+	for len(chars) > 0 {
+		toSlice := 8000
+		if toSlice > len(chars) {
+			toSlice = len(chars)
+		}
+		log.Info(ctx, chars[:toSlice])
+		chars = chars[toSlice:]
+	}
+}
+
 func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseOrdinal int64, nation string) error {
 	log.Infof(ctx, "sendPhaseDeadlineWarning(..., %v, %v, %v)", gameID, phaseOrdinal, nation)
 
@@ -473,7 +486,7 @@ func sendPhaseDeadlineWarning(ctx context.Context, gameID *datastore.Key, phaseO
 			return err
 		}
 	}
-	log.Infof(ctx, "Loaded game %+v and phase %+v", game, phase)
+	multilog(ctx, "Loaded game %+v and phase %+v", game, phase)
 
 	member, found := game.GetMemberByNation(godip.Nation(nation))
 	if !found {
@@ -1185,8 +1198,8 @@ func (p *PhaseResolver) Act() error {
 				log.Errorf(p.Context, "Unable to schedule resolution for %v: %v; fix ScheduleResolution or hope datastore gets fixed", PP(newPhase), err)
 				return err
 			}
-			log.Infof(
-				p.Context, "%v has phase length of %v/%v minutes, scheduled new resolve",
+			multilog(
+				p.Context, "Scheduled new resolve, %v has phase length of %v/%v minutes",
 				PP(p.Game),
 				p.Game.PhaseLengthMinutes,
 				p.Game.NonMovementPhaseLengthMinutes)
