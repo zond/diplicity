@@ -15,12 +15,12 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
-	"github.com/zond/diplicity/delayed"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine/v2"
 	"google.golang.org/appengine/v2/datastore"
+	"google.golang.org/appengine/v2/delay"
 	"google.golang.org/appengine/v2/log"
 	"google.golang.org/appengine/v2/taskqueue"
 
@@ -170,7 +170,7 @@ func PP(i interface{}) string {
 type DelayFunc struct {
 	queue       string
 	backendType reflect.Type
-	backend     *delayed.Function
+	backend     *delay.Function
 }
 
 var formattingCharRegexp = regexp.MustCompile("\\p{Cf}")
@@ -190,7 +190,7 @@ func NewDelayFunc(queue string, backend interface{}) *DelayFunc {
 	}
 	df := &DelayFunc{
 		queue:       queue,
-		backend:     delayed.Func(queue, backend),
+		backend:     delay.MustRegister(queue, backend),
 		backendType: typ,
 	}
 	return df
