@@ -6,9 +6,9 @@ import (
 	"github.com/aymerick/raymond"
 	"github.com/zond/go-fcm"
 	"golang.org/x/net/context"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/v2"
+	"google.golang.org/appengine/v2/datastore"
+	"google.golang.org/appengine/v2/log"
 
 	. "github.com/zond/goaeoas"
 )

@@ -14,9 +14,9 @@ import (
 	"github.com/zond/godip"
 
 	"github.com/gorilla/feeds"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/memcache"
+	"google.golang.org/appengine/v2"
+	"google.golang.org/appengine/v2/datastore"
+	"google.golang.org/appengine/v2/memcache"
 
 	. "github.com/zond/goaeoas"
 )
@@ -61,10 +61,11 @@ func hashStr(inputStr string) string {
 }
 
 // Write the RSS feed.
-//   w The writer to use.
-//   rss The body of the RSS feed.
-//   etag A value to indicate the version of the feed.
-//   cacheControl How long the page should be cached for.
+//
+//	w The writer to use.
+//	rss The body of the RSS feed.
+//	etag A value to indicate the version of the feed.
+//	cacheControl How long the page should be cached for.
 func writeRss(w ResponseWriter, rss string, etag string, lastModified string, cacheControl string) {
 	w.Header().Set("Etag", etag)
 	w.Header().Set("Last-Modified", lastModified)
@@ -190,12 +191,13 @@ func makeSummary(phase Phase, format string) string {
 }
 
 // Supported query parameters:
-//   gameID: Limit the feed to a single game.
-//   variant: Limit the feed to a single variant.
-//   phaseType: Limit the feed to a single phase type.
-//   gameLimit: The maximum number of games to return in the results.
-//   phaseLimit: The maximum number of phases from each game to return.
-//   format: The format of the description (e.g. "html" or "markdown").
+//
+//	gameID: Limit the feed to a single game.
+//	variant: Limit the feed to a single variant.
+//	phaseType: Limit the feed to a single phase type.
+//	gameLimit: The maximum number of games to return in the results.
+//	phaseLimit: The maximum number of phases from each game to return.
+//	format: The format of the description (e.g. "html" or "markdown").
 func handleRss(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 

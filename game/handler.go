@@ -15,9 +15,9 @@ import (
 	"github.com/zond/diplicity/variants"
 	"github.com/zond/godip"
 	"golang.org/x/net/context"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/v2"
+	"google.golang.org/appengine/v2/datastore"
+	"google.golang.org/appengine/v2/log"
 
 	dipVariants "github.com/zond/godip/variants"
 

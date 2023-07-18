@@ -13,9 +13,9 @@ import (
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/go-fcm"
 	"golang.org/x/net/context"
-	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/urlfetch"
+	"google.golang.org/appengine/v2/datastore"
+	"google.golang.org/appengine/v2/log"
+	"google.golang.org/appengine/v2/urlfetch"
 
 	. "github.com/zond/goaeoas"
 )

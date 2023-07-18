@@ -21,7 +21,7 @@ import (
 	"github.com/kr/pretty"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/diplicity/routes"
-	"google.golang.org/appengine/aetest"
+	"google.golang.org/appengine/v2/aetest"
 )
 
 func QueueEmpty(name string) (bool, error) {

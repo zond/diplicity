@@ -6,7 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/zond/diplicity/routes"
-	"google.golang.org/appengine"
+	"google.golang.org/appengine/v2"
 
 	. "github.com/zond/goaeoas"
 )

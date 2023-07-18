@@ -8,9 +8,9 @@ import (
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip"
 	"golang.org/x/net/context"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/v2"
+	"google.golang.org/appengine/v2/datastore"
+	"google.golang.org/appengine/v2/log"
 
 	trueskill "github.com/mafredri/go-trueskill"
 	. "github.com/zond/goaeoas"
