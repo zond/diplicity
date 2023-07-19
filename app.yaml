@@ -11,9 +11,6 @@ handlers:
     - url: /_reap-inactive-waiting-players
       script: auto
       login: admin
-    - url: /_true-skill-rate-game-results
-      script: auto
-      login: admin
     - url: /_ah/queue/go/delay
       script: auto
       login: admin
