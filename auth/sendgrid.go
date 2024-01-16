@@ -88,30 +88,24 @@ func (e *EMail) SendWithoutUnsubscribeHeader(ctx context.Context) error {
 	if e.FromAddr == "" || e.ToAddr == "" || e.Subject == "" || (e.TextBody == "" && e.HTMLBody == "") {
 		return fmt.Errorf("invalid EMail %+v", e)
 	}
+	if(e.FromName == nil){
+		e.FromName = ""
+	}
+	if(e.ToName == nil) {
+		e.ToName = ""
+	}
+
+	from := mail.NewEmail(e.FromName, e.FromAddr)
+    subject := e.Subject
+    to := mail.NewEmail(e.ToName, e.ToAddr)
+    plainTextContent := e.TextBody
+    htmlContent := e.HTMLBody
+    msg := mail.NewSingleEmail(from, subject, to, plainTextContent, htmlContent)
 
 	sendGridConf, err := GetSendGrid(ctx)
 	if err != nil {
 		return err
 	}
-
-	msg := mail.NewV3Mail()
-	if e.TextBody != "" {
-		msg.AddContent(mail.NewContent(
-			"text/plain",
-			e.TextBody,
-		))
-	}
-	if e.HTMLBody != "" {
-		msg.AddContent(mail.NewContent(
-			"text/html",
-			e.HTMLBody,
-		))
-	}
-	msg.Subject = e.Subject
-	p := mail.NewPersonalization()
-	p.AddTos(mail.NewEmail(e.ToName, e.ToAddr))
-	msg.AddPersonalizations(p)
-	msg.SetFrom(mail.NewEmail(e.FromName, e.FromAddr))
 	if e.UnsubscribeURL != "" {
 		msg.SetHeader("List-Unsubscribe", fmt.Sprintf("<%s>", e.UnsubscribeURL))
 	}

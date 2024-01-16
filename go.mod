@@ -14,7 +14,7 @@ require (
 	github.com/mafredri/go-trueskill v0.0.0-20190101120706-fc89fbba5a88
 	github.com/oddg/hungarian-algorithm v0.0.0-20170809162819-9567cbc363de
 	github.com/sendgrid/rest v2.4.1+incompatible
-	github.com/sendgrid/sendgrid-go v3.5.0+incompatible
+	github.com/sendgrid/sendgrid-go v3.14.0+incompatible
 	github.com/zond/enmime v0.6.1
 	github.com/zond/go-fcm v0.1.0
 	github.com/zond/goaeoas v0.1.10
