@@ -12,6 +12,7 @@ import (
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"github.com/zond/godip/variants/chaos"
+	"github.com/zond/godip/variants/classicalcrowded"
 	"github.com/zond/godip/variants/empiresandcoalitions"
 	"github.com/zond/godip/variants/europe1939"
 	"github.com/zond/godip/variants/hundred"
@@ -35,6 +36,7 @@ var (
 	// (And used when testing, by artificially forcing API level 0.)
 	LaunchSchedule = map[string]int{
 		threekingdoms.ThreeKingdomsVariant.Name:               9,
+		classicalcrowded.ClassicalCrowdedVariant.Name:         8,
 		year1908.Year1908Variant.Name:                         8,
 		empiresandcoalitions.EmpiresAndCoalitionsVariant.Name: 8,
 		europe1939.Europe1939Variant.Name:                     7,
