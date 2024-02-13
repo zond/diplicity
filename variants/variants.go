@@ -35,7 +35,7 @@ var (
 	// has at least level 1, the Youngstown Redux entry is just an example.
 	// (And used when testing, by artificially forcing API level 0.)
 	LaunchSchedule = map[string]int{
-		threekingdoms.ThreeKingdomsVariant.Name:               9,
+		threekingdoms.ThreeKingdomsVariant.Name:               8,
 		classicalcrowded.ClassicalCrowdedVariant.Name:         8,
 		year1908.Year1908Variant.Name:                         8,
 		empiresandcoalitions.EmpiresAndCoalitionsVariant.Name: 8,
