@@ -11,13 +11,14 @@ import (
 	"github.com/zond/goaeoas"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
+	"github.com/zond/godip/variants/beta/gatewaywest"
+	"github.com/zond/godip/variants/beta/threekingdoms"
 	"github.com/zond/godip/variants/chaos"
 	"github.com/zond/godip/variants/classicalcrowded"
 	"github.com/zond/godip/variants/empiresandcoalitions"
 	"github.com/zond/godip/variants/europe1939"
 	"github.com/zond/godip/variants/hundred"
 	"github.com/zond/godip/variants/northseawars"
-	"github.com/zond/godip/variants/beta/threekingdoms"
 	"github.com/zond/godip/variants/twentytwenty"
 	"github.com/zond/godip/variants/westernworld901"
 	"github.com/zond/godip/variants/year1908"
@@ -35,7 +36,8 @@ var (
 	// has at least level 1, the Youngstown Redux entry is just an example.
 	// (And used when testing, by artificially forcing API level 0.)
 	LaunchSchedule = map[string]int{
-		threekingdoms.ThreeKingdomsVariant.Name:               8,
+		gatewaywest.GatewayWestVariant.Name:                   8,
+        threekingdoms.ThreeKingdomsVariant.Name:               8,
 		classicalcrowded.ClassicalCrowdedVariant.Name:         8,
 		year1908.Year1908Variant.Name:                         8,
 		empiresandcoalitions.EmpiresAndCoalitionsVariant.Name: 8,
