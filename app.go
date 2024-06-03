@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/gorilla/mux"
+	"github.com/zond/diplicity/discord/handlers"
 	"github.com/zond/diplicity/routes"
 	"github.com/zond/godip/variants"
 	"google.golang.org/appengine/v2"
@@ -17,48 +18,12 @@ import (
 )
 
 var (
-	commands = []discordgo.ApplicationCommand{
-		{
-			Name:        "create-order",
-			Description: "Create a new order",
-		},
-		{
-			Name:        "create-game",
-			Description: "Create a new game",
-		}
+	APPLICATION_ID = "1246942452791644281"
+	commands       = []discordgo.ApplicationCommand{
+		handlers.CreateOrderCommand,
 	}
 	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
-		"create-order": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Title: "Create Order",
-					Components: []discordgo.MessageComponent{
-						&discordgo.ActionsRow{
-							Components: []discordgo.MessageComponent{
-								&discordgo.SelectMenu{
-									CustomID:    "source",
-									Placeholder: "Select a unit to move",
-									Options: []discordgo.SelectMenuOption{
-										{
-											Label: "Army Berlin",
-											Value: "berlin",
-										},
-										{
-											Label: "Fleet Kiel",
-											Value: "kiel",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			})
-			if err != nil {
-				panic(err)
-			}
-		},
+		"create-order": handlers.CreateOrderCommandHandler,
 	}
 )
 
@@ -100,7 +65,7 @@ func main() {
 	cmdIDs := make(map[string]string, len(commands))
 
 	for _, cmd := range commands {
-		rcmd, err := discord.ApplicationCommandCreate("1246942452791644281", "", &cmd)
+		rcmd, err := discord.ApplicationCommandCreate(APPLICATION_ID, "", &cmd)
 		if err != nil {
 			log.Fatalf("Cannot create slash command %q: %v", cmd.Name, err)
 		}
