@@ -1,39 +1,41 @@
 name: Test diplicity
 
 on:
-    push:
-        branches: [master]
-    pull_request:
-        branches: [master]
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: python:2.7.18-buster
 
-        steps:
-            - name: Setup Go
-              uses: actions/setup-go@v3
-              with:
-                  go-version: '1.20'
-                  check-latest: true
-            - name: Check Go version
-              run: go version
-            - name: Set up GoogleCloudPlatform
-              uses: google-github-actions/setup-gcloud@v0
-            - name: Debug log GoogleCloudPlatform info
-              run: gcloud info
-            - name: Install App Engine Go
-              run: gcloud components install app-engine-go
-            - name: Extract GoogleCloudPlatform installation root
-              run: echo "GCLOUD_ROOT=$(gcloud info | grep 'Installation Root:' | sed -e 's/.*\[\([^]]\+\).*/\1/')" >> $GITHUB_ENV
-            - name: Check out code
-              uses: actions/checkout@v2
-            - name: Set up Python2.7
-              uses: actions/setup-python@v4
-              id: setup-python2
-              with:
-                  python-version: 2.7
-            - name: Start test server
-              run: ${GITHUB_WORKSPACE}/diptest/start_test_server.sh
-            - name: Run tests
-              run: cd diptest && go test -v -timeout 40m
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: "1.20"
+          check-latest: true
+      - name: Check Go version
+        run: go version
+      - name: Set up GoogleCloudPlatform
+        uses: google-github-actions/setup-gcloud@v0
+      - name: Debug log GoogleCloudPlatform info
+        run: gcloud info
+      - name: Install App Engine Go
+        run: gcloud components install app-engine-go
+      - name: Extract GoogleCloudPlatform installation root
+        run: echo "GCLOUD_ROOT=$(gcloud info | grep 'Installation Root:' | sed -e 's/.*\[\([^]]\+\).*/\1/')" >> $GITHUB_ENV
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Set up Python2.7
+        uses: actions/setup-python@v4
+        id: setup-python2
+        with:
+          python-version: 2.7
+      - name: Start test server
+        run: ${GITHUB_WORKSPACE}/diptest/start_test_server.sh
+      - name: Run tests
+        run: cd diptest && go test -v -timeout 40m
