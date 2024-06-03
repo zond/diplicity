@@ -18,8 +18,10 @@ jobs:
                   check-latest: true
             - name: Check Go version
               run: go version
-            - name: Set up GoogleCloudPlatform
-              uses: google-github-actions/setup-gcloud@v0
+            - name: Set up Python 2.7
+              run: sudo apt install python2.7
+            - name: Set up Cloud SDK
+              uses: google-github-actions/setup-gcloud@v2
             - name: Debug log GoogleCloudPlatform info
               run: gcloud info
             - name: Install App Engine Go
@@ -28,11 +30,6 @@ jobs:
               run: echo "GCLOUD_ROOT=$(gcloud info | grep 'Installation Root:' | sed -e 's/.*\[\([^]]\+\).*/\1/')" >> $GITHUB_ENV
             - name: Check out code
               uses: actions/checkout@v2
-            - name: Set up Python2.7
-              uses: actions/setup-python@v4
-              id: setup-python2
-              with:
-                  python-version: 2.7
             - name: Start test server
               run: ${GITHUB_WORKSPACE}/diptest/start_test_server.sh
             - name: Run tests
