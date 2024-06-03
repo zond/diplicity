@@ -22,10 +22,10 @@ ENV PATH $PATH:/usr/local/gcloud/google-cloud-sdk/bin
 WORKDIR /go/src/app
 
 # Copy the current directory contents into the container at /go/src/app
-COPY . .
+COPY ../ .
 
 # Remove Dockerfile to prevent issue with App Engine
-RUN rm Dockerfile
+# RUN rm Dockerfile
 
 # Expose port 8080 to the outside world
 EXPOSE 8080
