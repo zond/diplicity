@@ -7,7 +7,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v1.0.0
 	github.com/gorilla/feeds v1.1.1
-	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/mux v1.8.1
 	github.com/jmoiron/jsonq v0.0.0-20150511023944-e874b168d07e
 	github.com/kr/pretty v0.2.0
 	github.com/kvannotten/mailstrip v0.0.0-20181210132851-650244c72ccd
@@ -28,10 +28,12 @@ require (
 
 require (
 	cloud.google.com/go v0.38.0 // indirect
+	github.com/bwmarrin/discordgo v0.28.1 // indirect
 	github.com/gogs/chardet v0.0.0-20150115103509-2404f7772561 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
 	github.com/gorilla/schema v1.2.0 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/jaytaylor/html2text v0.0.0-20180606194806-57d518f124b0 // indirect
 	github.com/kr/text v0.1.0 // indirect
@@ -42,6 +44,7 @@ require (
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/stretchr/testify v1.5.1 // indirect
 	go.opencensus.io v0.21.0 // indirect
+	go.uber.org/mock v0.4.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

@@ -78,7 +78,7 @@ func init() {
 	GameResource = &Resource{
 		Load:   loadGame,
 		Delete: gameMasterDeleteGame,
-		Create: createGame,
+		Create: CreateGame,
 		Update: gameMasterUpdateGame,
 		Listers: []Lister{
 			{
@@ -887,7 +887,7 @@ func gameMasterDeleteGame(w ResponseWriter, r Request) (*Game, error) {
 	return game, nil
 }
 
-func createGame(w ResponseWriter, r Request) (*Game, error) {
+func CreateGame(w ResponseWriter, r Request) (*Game, error) {
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*auth.User)

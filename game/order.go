@@ -25,7 +25,7 @@ var OrderResource *Resource
 
 func init() {
 	OrderResource = &Resource{
-		Create:     createOrder,
+		Create:     CreateOrder,
 		Update:     updateOrder,
 		Delete:     deleteOrder,
 		CreatePath: "/Game/{game_id}/Phase/{phase_ordinal}/Order",
@@ -250,7 +250,7 @@ func updateOrder(w ResponseWriter, r Request) (*Order, error) {
 }
 
 func createAndCorroborate(w ResponseWriter, r Request) error {
-	_, err := createOrder(w, r)
+	_, err := CreateOrder(w, r)
 	if err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func createAndCorroborate(w ResponseWriter, r Request) error {
 	return corroboratePhase(w, r)
 }
 
-func createOrder(w ResponseWriter, r Request) (*Order, error) {
+func CreateOrder(w ResponseWriter, r Request) (*Order, error) {
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*auth.User)
