@@ -4,257 +4,322 @@ package handlers
 // and subsequent interactions
 
 import (
+	"encoding/json"
+	"fmt"
+	"log"
+
 	"github.com/bwmarrin/discordgo"
+	"github.com/zond/diplicity/discord/api"
 )
 
-// Declare a Discord application command
+var (
+	CreateOrderInteractionIdPrefix = "create-order-interaction-"
+	CreateOrderSubmitIdPrefix      = "create-order-submit-"
+)
+
+type OrderData struct {
+	Source         string `json:"source,omitempty"`
+	Type           string `json:"type,omitempty"`
+	Destination    string `json:"destination,omitempty"`
+	Aux            string `json:"aux,omitempty"`
+	AuxDestination string `json:"auxDestination,omitempty"`
+}
+
 var CreateOrderCommand = discordgo.ApplicationCommand{
 	Name:        "create-order",
 	Description: "Create a new order",
 }
 
-type OrderData struct {
-	Source      string
-	OrderType   string
-	AuxUnit     string
-	Destination string
-}
+func CreateOrderCommandHandlerFactory(api *api.Api) func(Session, *discordgo.InteractionCreate) {
+	return func(s Session, i *discordgo.InteractionCreate) {
+		log.Printf("Handling create order command\n")
 
-type Session interface {
-	InteractionRespond(interaction *discordgo.Interaction, response *discordgo.InteractionResponse) error
-}
+		userId, channelId := GetUserAndChannelId(i)
 
-type InteractionCreate struct {
-	Interaction *discordgo.Interaction
-	Member      *discordgo.Member
-	Type        discordgo.InteractionType
-}
+		orderData := &OrderData{}
 
-type Api interface {
-	ListAvailableSourceUnits(userID, gameID, phaseID string) ([]discordgo.SelectMenuOption, error)
-}
+		if i.Type == discordgo.InteractionApplicationCommand {
+			// TODO allow user to pass arguments with command
+		} else {
+			err := UnmarshalMessageComponentData(i, orderData)
+			if err != nil {
+				RespondWithError("Failed to unmarshal message component data", s, i, err)
+				return
+			}
+		}
 
-func NewCreateOrderCommandHandler(s Session, i InteractionCreate, api Api) {
-	options, err := api.ListAvailableSourceUnits(i.Member.User.ID, "gameID", "phaseID")
+		sourceProvinces, err := api.SourceProvinces(userId, channelId)
+		if err != nil {
+			RespondWithError("Failed to unmarshal message component data", s, i, err)
+			return
+		}
 
-	if err != nil {
-		panic(err)
-	}
+		orderTypes, err := api.OrderTypes(userId, channelId, orderData.Source)
+		if err != nil {
+			RespondWithError("Failed to unmarshal message component data", s, i, err)
+			return
+		}
 
-	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Title: "Create Order",
+		destinationProvinces, err := api.DestinationProvinces(userId, channelId, orderData.Source, orderData.Type)
+		if err != nil {
+			RespondWithError("Failed to unmarshal message component data", s, i, err)
+			return
+		}
+
+		auxProvinces, err := api.AuxProvinces(userId, channelId, orderData.Source, orderData.Type)
+		if err != nil {
+			RespondWithError("Failed to unmarshal message component data", s, i, err)
+			return
+		}
+
+		auxDestinationProvinces, err := api.AuxDestinationProvinces(userId, channelId, orderData.Source, orderData.Type, orderData.Aux)
+		if err != nil {
+			RespondWithError("Failed to unmarshal message component data", s, i, err)
+			return
+		}
+
+		orderDataString, err := json.Marshal(orderData)
+		if err != nil {
+			RespondWithError("Failed to unmarshal message component data", s, i, err)
+			return
+		}
+
+		sourceProvinceOptions := createOptions(orderData, provincesToItemTypes(sourceProvinces), setSource, setDefaultSource)
+		orderTypeOptions := createOptions(orderData, orderTypesToItemTypes(orderTypes), setOrderType, setDefaultOrderType)
+		destinationProvinceOptions := createOptions(orderData, provincesToItemTypes(destinationProvinces), setDestination, setDefaultDestination)
+		auxProvinceOptions := createOptions(orderData, provincesToItemTypes(auxProvinces), setAux, setDefaultAux)
+		auxDestinationProvinceOptions := createOptions(orderData, provincesToItemTypes(auxDestinationProvinces), setAuxDestination, setDefaultAuxDestination)
+
+		components := []discordgo.MessageComponent{}
+		components = append(components, &discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
-				&discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{
-						&discordgo.SelectMenu{
-							CustomID:    "source",
-							Placeholder: "Select a unit to move",
-							Options:     options,
-						},
-					},
+				&discordgo.SelectMenu{
+					CustomID:    fmt.Sprintf("%s%s", CreateOrderInteractionIdPrefix, "source"),
+					Placeholder: "Select a unit to move",
+					Options:     sourceProvinceOptions,
 				},
 			},
-		},
-	})
-	if err != nil {
-		panic(err)
+		})
+		components = append(components, &discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				&discordgo.SelectMenu{
+					CustomID:    fmt.Sprintf("%s%s", CreateOrderInteractionIdPrefix, "type"),
+					Placeholder: "Select order type",
+					Options:     orderTypeOptions,
+					Disabled:    orderData.Source == "",
+				},
+			},
+		})
+		if orderData.Type == "move" {
+			components = append(components, &discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					&discordgo.SelectMenu{
+						CustomID:    fmt.Sprintf("%s%s", CreateOrderInteractionIdPrefix, "destination"),
+						Placeholder: "Select destination",
+						Options:     destinationProvinceOptions,
+					},
+				},
+			})
+		}
+		if orderData.Type == "support" || orderData.Type == "convoy" {
+			components = append(components, &discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					&discordgo.SelectMenu{
+						CustomID:    fmt.Sprintf("%s%s", CreateOrderInteractionIdPrefix, "aux"),
+						Placeholder: "Select auxiliary unit",
+						Options:     auxProvinceOptions,
+					},
+				},
+			})
+			components = append(components, &discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					&discordgo.SelectMenu{
+						CustomID:    fmt.Sprintf("%s%s", CreateOrderInteractionIdPrefix, "aux-destination"),
+						Placeholder: "Select destination for auxiliary unit",
+						Options:     auxDestinationProvinceOptions,
+						Disabled:    orderData.Aux == "",
+					},
+				},
+			})
+		}
+		components = append(components, &discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				&discordgo.Button{
+					CustomID: "cancel",
+					Label:    "Cancel",
+					Style:    discordgo.SecondaryButton,
+				},
+				&discordgo.Button{
+					CustomID: fmt.Sprintf("%s%s", CreateOrderSubmitIdPrefix, string(orderDataString)),
+					Label:    "Submit",
+					Style:    discordgo.SuccessButton,
+					Disabled: !orderReadyToSubmit(orderData),
+				},
+			},
+		})
+
+		responseData := &discordgo.InteractionResponseData{
+			Title:      "Create Order",
+			Components: components,
+		}
+
+		err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: responseData,
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
-// // Executed when the Discord command is invoked by a user
-// func CreateOrderCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
-// 	// TODO add mechanism to ensure that command is being called from the
-// 	// correct channel OR check if command can be added such that it is only
-// 	// available in some channels
+func SubmitOrderInteractionHandlerFactory(api *api.Api) func(Session, *discordgo.InteractionCreate) {
+	return func(s Session, i *discordgo.InteractionCreate) {
+		userId, channelId := GetUserAndChannelId(i)
+		buttonId := i.MessageComponentData().CustomID
+		orderDataString := buttonId[len(CreateOrderSubmitIdPrefix):]
+		orderData := &OrderData{}
+		err := json.Unmarshal([]byte(orderDataString), orderData)
+		if err != nil {
+			panic(err)
+		}
 
-// 	// TODO add mechanism to ensure that command is being called by a user
-// 	// who is in the game (role). If not, return an error message
+		_, error := api.CreateOrder(userId, channelId)
+		if error != nil {
+			panic(error)
+		}
 
-// 	options := api.ListAvailableSourceUnits(i.Member.User.ID, "gameID", "phaseID")
+		err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				// TODO better success message, see create_game
+				Content: "Order created!",
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+}
 
-// 	// TODO add mechanism to return error message if there are no units
-// 	// to order
+func orderReadyToSubmit(orderData *OrderData) bool {
+	if orderData.Type == "hold" {
+		return orderData.Source != "" && orderData.Type != ""
+	}
+	if orderData.Type == "move" {
+		return orderData.Source != "" && orderData.Type != "" && orderData.Destination != ""
+	}
+	if orderData.Type == "support" || orderData.Type == "convoy" {
+		return orderData.Source != "" && orderData.Type != "" && orderData.Aux != "" && orderData.AuxDestination != ""
+	}
+	return false
+}
 
-// 	orderData := OrderData{}
+// Note, this function is a bit complex. The create-order process is a multi-step process
+// but we don't want our bot to be stateful. So instead, we pass the current state of the
+// order as a JSON string in the value of the select menu options. This way, we can
+// continuously reconstruct the order state from the interaction data.
+func createOptions(orderData *OrderData, items []itemType, setValueFunc setValue, setDefaultFunc setDefault) []discordgo.SelectMenuOption {
+	options := make([]discordgo.SelectMenuOption, len(items))
+	if len(items) == 0 {
+		return DummySelectMenuOptions
+	}
+	for i, item := range items {
+		optionOrderData := &OrderData{
+			Source:         orderData.Source,
+			Type:           orderData.Type,
+			Destination:    orderData.Destination,
+			Aux:            orderData.Aux,
+			AuxDestination: orderData.AuxDestination,
+		}
+		optionOrderData = setValueFunc(optionOrderData, item)
+		value, error := json.Marshal(optionOrderData)
+		if error != nil {
+			panic(error)
+		}
+		options[i] = discordgo.SelectMenuOption{
+			Label:   item.Name,
+			Value:   string(value),
+			Default: setDefaultFunc(orderData, item),
+		}
+	}
+	return options
+}
 
-// 	// check that interaction is ApplicationCommand type
-// 	if i.Type == discordgo.InteractionApplicationCommand {
-// 		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-// 			Type: discordgo.InteractionResponseChannelMessageWithSource,
-// 			Data: &discordgo.InteractionResponseData{
-// 				Title: "Create Order",
-// 				Components: []discordgo.MessageComponent{
-// 					&discordgo.ActionsRow{
-// 						Components: []discordgo.MessageComponent{
-// 							&discordgo.SelectMenu{
-// 								CustomID:    "source",
-// 								Placeholder: "Select a unit to move",
-// 								Options:     options,
-// 							},
-// 						},
-// 					},
-// 				},
-// 			},
-// 		})
-// 		if err != nil {
-// 			panic(err)
-// 		}
-// 	}
+// NOTE the types and functions below are required to make the createOptions function reusable
+// for each property of OrderData.
+type itemType struct {
+	Name string
+	Key  string
+}
 
-// 	// Add a handler for the InteractionCreate event
-// 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-// 		// Check that the interaction is not the ApplicationCommand type
-// 		if i.Type != discordgo.InteractionApplicationCommand {
-// 			// Check if the interaction is a select menu interaction
-// 			if i.MessageComponentData().CustomID == "source" {
-// 				// Get the selected option
-// 				selectedOption := i.MessageComponentData().Values[0]
-// 				orderData.Source = selectedOption
+type setValue func(*OrderData, itemType) *OrderData
 
-// 				// Get the available order types for the selected unit
-// 				options := api.ListAvailableOrderTypes(i.Member.User.ID, "gameID", "phaseID", selectedOption)
+type setDefault func(*OrderData, itemType) bool
 
-// 				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-// 					Type: discordgo.InteractionResponseChannelMessageWithSource,
-// 					Data: &discordgo.InteractionResponseData{
-// 						Title: "Create Order",
-// 						Components: []discordgo.MessageComponent{
-// 							&discordgo.ActionsRow{
-// 								Components: []discordgo.MessageComponent{
-// 									&discordgo.SelectMenu{
-// 										CustomID:    "order-type",
-// 										Placeholder: "Select an order type",
-// 										Options:     options,
-// 									},
-// 								},
-// 							},
-// 						},
-// 					},
-// 				})
-// 				if err != nil {
-// 					panic(err)
-// 				}
-// 			} else if i.MessageComponentData().CustomID == "order-type" {
-// 				// Get the selected option
-// 				selectedOption := i.MessageComponentData().Values[0]
-// 				orderData.OrderType = selectedOption
+func provincesToItemTypes(province []api.Province) []itemType {
+	items := make([]itemType, len(province))
+	for i, p := range province {
+		items[i] = itemType{
+			Name: p.Name,
+			Key:  p.Key,
+		}
+	}
+	return items
+}
 
-// 				// Check if an aux unit is required for the selected order type
-// 				auxUnitRequired := api.AuxUnitRequired(orderData.OrderType)
+func orderTypesToItemTypes(orderTypes []api.OrderType) []itemType {
+	items := make([]itemType, len(orderTypes))
+	for i, ot := range orderTypes {
+		items[i] = itemType{
+			Name: ot.Name,
+			Key:  ot.Key,
+		}
+	}
+	return items
+}
 
-// 				// Check if a destination is required for the selected order type
-// 				destinationRequired := api.DestinationRequired(orderData.OrderType)
+func setSource(orderData *OrderData, item itemType) *OrderData {
+	orderData.Source = item.Key
+	return orderData
+}
 
-// 				if auxUnitRequired {
-// 					options := api.ListAvailableAuxUnits(i.Member.User.ID, "gameID", "phaseID", orderData.Source, orderData.OrderType)
-// 					err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-// 						Type: discordgo.InteractionResponseChannelMessageWithSource,
-// 						Data: &discordgo.InteractionResponseData{
-// 							Title: "Create Order",
-// 							Components: []discordgo.MessageComponent{
-// 								&discordgo.ActionsRow{
-// 									Components: []discordgo.MessageComponent{
-// 										&discordgo.SelectMenu{
-// 											CustomID:    "aux-unit",
-// 											Placeholder: "Select an aux unit",
-// 											Options:     options,
-// 										},
-// 									},
-// 								},
-// 							},
-// 						},
-// 					})
-// 					if err != nil {
-// 						panic(err)
-// 					}
-// 				} else if destinationRequired {
-// 					options := api.ListAvailableDestinations(i.Member.User.ID, "gameID", "phaseID", orderData.Source, orderData.OrderType)
-// 					err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-// 						Type: discordgo.InteractionResponseChannelMessageWithSource,
-// 						Data: &discordgo.InteractionResponseData{
-// 							Title: "Create Order",
-// 							Components: []discordgo.MessageComponent{
-// 								&discordgo.ActionsRow{
-// 									Components: []discordgo.MessageComponent{
-// 										&discordgo.SelectMenu{
-// 											CustomID:    "destination",
-// 											Placeholder: "Select a destination",
-// 											Options:     options,
-// 										},
-// 									},
-// 								},
-// 							},
-// 						},
-// 					})
+func setDefaultSource(orderData *OrderData, item itemType) bool {
+	return item.Key == orderData.Source
+}
 
-// 					if err != nil {
-// 						panic(err)
-// 					}
-// 				} else {
-// 					// Create string representation of the order
-// 					orderString := fmt.Sprintf("%s %s", orderData.Source, orderData.OrderType)
-// 					// TODO add mechanism to create the order
+func setOrderType(orderData *OrderData, item itemType) *OrderData {
+	orderData.Type = item.Key
+	return orderData
+}
 
-// 					// Clear the order data
-// 					orderData = OrderData{}
-// 					err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-// 						Type: discordgo.InteractionResponseChannelMessageWithSource,
-// 						Data: &discordgo.InteractionResponseData{
-// 							Content: fmt.Sprintf("Order created: %s", orderString),
-// 						},
-// 					})
-// 					if err != nil {
-// 						panic(err)
-// 					}
-// 				}
-// 			} else if i.MessageComponentData().CustomID == "aux-unit" {
-// 				// Get the selected option
-// 				selectedOption := i.MessageComponentData().Values[0]
-// 				orderData.AuxUnit = selectedOption
+func setDefaultOrderType(orderData *OrderData, item itemType) bool {
+	return item.Key == orderData.Type
+}
 
-// 				options := api.ListAvailableAuxDestinations(i.Member.User.ID, "gameID", "phaseID", orderData.Source, orderData.OrderType, orderData.AuxUnit)
-// 				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-// 					Type: discordgo.InteractionResponseChannelMessageWithSource,
-// 					Data: &discordgo.InteractionResponseData{
-// 						Title: "Create Order",
-// 						Components: []discordgo.MessageComponent{
-// 							&discordgo.ActionsRow{
-// 								Components: []discordgo.MessageComponent{
-// 									&discordgo.SelectMenu{
-// 										CustomID:    "destination",
-// 										Placeholder: "Select a destination",
-// 										Options:     options,
-// 									},
-// 								},
-// 							},
-// 						},
-// 					},
-// 				})
+func setDestination(orderData *OrderData, item itemType) *OrderData {
+	orderData.Destination = item.Key
+	return orderData
+}
 
-// 				if err != nil {
-// 					panic(err)
-// 				}
-// 			} else if i.MessageComponentData().CustomID == "destination" {
-// 				// Get the selected option
-// 				selectedOption := i.MessageComponentData().Values[0]
-// 				orderData.Destination = selectedOption
-// 				orderString := fmt.Sprintf("%s %s %s %s", orderData.Source, orderData.OrderType, orderData.AuxUnit, orderData.Destination)
+func setDefaultDestination(orderData *OrderData, item itemType) bool {
+	return item.Key == orderData.Destination
+}
 
-// 				// TODO add mechanism to create the order
-// 				// Clear the order data
-// 				orderData = OrderData{}
-// 				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-// 					Type: discordgo.InteractionResponseChannelMessageWithSource,
-// 					Data: &discordgo.InteractionResponseData{
-// 						Content: fmt.Sprintf("Order created: %s", orderString),
-// 					},
-// 				})
-// 				if err != nil {
-// 					panic(err)
-// 				}
-// 			}
-// 		}
-// 	})
-// }
+func setAux(orderData *OrderData, item itemType) *OrderData {
+	orderData.Aux = item.Key
+	return orderData
+}
+
+func setDefaultAux(orderData *OrderData, item itemType) bool {
+	return item.Key == orderData.Aux
+}
+
+func setAuxDestination(orderData *OrderData, item itemType) *OrderData {
+	orderData.AuxDestination = item.Key
+	return orderData
+}
+
+func setDefaultAuxDestination(orderData *OrderData, item itemType) bool {
+	return item.Key == orderData.AuxDestination
+}
