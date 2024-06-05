@@ -34,6 +34,9 @@ To enable debugging the JSON output in a browser, adding the query parameter `ac
 
 ## Running locally using Docker (recommended)
 
+- **Note** you need to create a `.env` file in the root directory of the repo an
+  add `DISCORD_BOT_TOKEN` value, e.g. `DISCORD_BOT_TOKEN=abc123` (no quote marks).
+  Create a Discord app and get a token if you want to test Discord locally.
 - Download Docker
 - Navigate to the root directory of this project
 - Use `ps1` files for Windows and `sh` files for UNIX
