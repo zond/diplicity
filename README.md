@@ -36,8 +36,10 @@ To enable debugging the JSON output in a browser, adding the query parameter `ac
 
 - Download Docker
 - Navigate to the root directory of this project
-- Run `docker build --tag 'diplicity' .`
-- Run `docker run -p 8080:8080 -p 8000:8000 diplicity`
+- Use `ps1` files for Windows and `sh` files for UNIX
+- Run `.\.docker\docker-build.ps1` **or** `.\.docker\docker-build.sh` (only required once)
+- Run `.\.docker\docker-network.ps1` **or** `.\.docker\docker-network.sh` (only required once)
+- Run `.\.docker\docker-run.ps1` **or** `.\.docker\docker-run.sh`
 - The API is now available on your machine at `localhost:8080`
 - The Admin server is now available on your machine at `localhost:8000`
 
