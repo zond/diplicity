@@ -33,15 +33,16 @@ var (
 )
 
 const (
-	LoginRoute            = "Login"
-	LogoutRoute           = "Logout"
-	RedirectRoute         = "Redirect"
-	OAuth2CallbackRoute   = "OAuth2Callback"
-	UnsubscribeRoute      = "Unsubscribe"
-	ApproveRedirectRoute  = "ApproveRedirect"
-	ListRedirectURLsRoute = "ListRedirectURLs"
-	ReplaceFCMRoute       = "ReplaceFCM"
-	TestUpdateUserRoute   = "TestUpdateUser"
+	LoginRoute               = "Login"
+	LogoutRoute              = "Logout"
+	TokenForDiscordUserRoute = "TokenForDiscordUser"
+	RedirectRoute            = "Redirect"
+	OAuth2CallbackRoute      = "OAuth2Callback"
+	UnsubscribeRoute         = "Unsubscribe"
+	ApproveRedirectRoute     = "ApproveRedirect"
+	ListRedirectURLsRoute    = "ListRedirectURLs"
+	ReplaceFCMRoute          = "ReplaceFCM"
+	TestUpdateUserRoute      = "TestUpdateUser"
 )
 
 const (
@@ -415,6 +416,79 @@ func getOAuth2Config(ctx context.Context, r *http.Request) (*oauth2.Config, erro
 		},
 		Endpoint: google.Endpoint,
 	}, nil
+}
+
+type TokenForDiscordUserResponse struct {
+	token string
+}
+
+func handleGetTokenForDiscordUser(w ResponseWriter, r Request) (*TokenForDiscordUserResponse, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	user, ok := r.Values()["user"].(*User)
+	if !ok {
+		return nil, HTTPErr{
+			Body:   "Unauthenticated",
+			Status: http.StatusUnauthorized,
+		}
+	}
+
+	if !appengine.IsDevAppServer() {
+
+		superusers, err := GetSuperusers(ctx)
+		if err != nil {
+			return nil, HTTPErr{
+				Body:   "Unable to load superusers",
+				Status: http.StatusInternalServerError,
+			}
+		}
+
+		if !superusers.Includes(user.Id) {
+			return nil, HTTPErr{
+				Body:   "Unauthorized",
+				Status: http.StatusForbidden,
+			}
+		}
+	}
+
+	discordUserId := r.Vars()["user_id"]
+	if discordUserId == "" {
+		return nil, HTTPErr{
+			Body:   "Must provide discord user id",
+			Status: http.StatusBadRequest,
+		}
+	}
+
+	discordUser := createUserFromDiscordUserId(discordUserId)
+
+	if _, err := datastore.Put(ctx, UserID(ctx, discordUser.Id), discordUser); err != nil {
+		return nil, HTTPErr{
+			Body:   "Unable to store user",
+			Status: http.StatusInternalServerError,
+		}
+	}
+
+	token, err := encodeUserToToken(ctx, discordUser)
+	if err != nil {
+		return nil, HTTPErr{
+			Body:   "Unable to encode user to token",
+			Status: http.StatusInternalServerError,
+		}
+	}
+
+	return &TokenForDiscordUserResponse{token: token}, nil
+}
+
+func createUserFromDiscordUserId(discordUserId string) *User {
+	return &User{
+		Email:         "discord-user@discord-user.fake",
+		FamilyName:    "Discord User",
+		GivenName:     "Discord User",
+		Id:            discordUserId,
+		Name:          "Discord User",
+		VerifiedEmail: true,
+		ValidUntil:    time.Now().Add(time.Hour * 24 * 365 * 10),
+	}
 }
 
 func handleLogin(w ResponseWriter, r Request) error {
@@ -1096,6 +1170,7 @@ func SetupRouter(r *mux.Router) {
 	Handle(router, "/Auth/ApproveRedirect", []string{"POST"}, ApproveRedirectRoute, handleApproveRedirect)
 	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
 	Handle(router, "/User/{user_id}/FCMToken/{replace_token}/Replace", []string{"PUT"}, ReplaceFCMRoute, replaceFCM)
+	Handle(router, "/User/{user_id}/TokenForDiscordUser", []string{"GET"}, TokenForDiscordUserRoute, handleGetTokenForDiscordUser)
 	AddFilter(decorateAPILevel)
 	AddFilter(tokenFilter)
 	AddFilter(logHeaders)
