@@ -53,12 +53,13 @@ const (
 )
 
 const (
-	UserKind        = "User"
-	naClKind        = "NaCl"
-	oAuthKind       = "OAuth"
-	redirectURLKind = "RedirectURL"
-	superusersKind  = "Superusers"
-	prodKey         = "prod"
+	UserKind                  = "User"
+	naClKind                  = "NaCl"
+	oAuthKind                 = "OAuth"
+	redirectURLKind           = "RedirectURL"
+	superusersKind            = "Superusers"
+	discordBotCredentialsKind = "DiscordBotCredentials"
+	prodKey                   = "prod"
 )
 
 const (
@@ -66,16 +67,57 @@ const (
 )
 
 var (
-	prodOAuth          *OAuth
-	prodOAuthLock      = sync.RWMutex{}
-	prodNaCl           *naCl
-	prodNaClLock       = sync.RWMutex{}
-	prodSuperusers     *Superusers
-	prodSuperusersLock = sync.RWMutex{}
-	router             *mux.Router
+	prodOAuth                     *OAuth
+	prodOAuthLock                 = sync.RWMutex{}
+	prodNaCl                      *naCl
+	prodNaClLock                  = sync.RWMutex{}
+	prodSuperusers                *Superusers
+	prodSuperusersLock            = sync.RWMutex{}
+	prodDiscordBotCredentials     *DiscordBotCredentials
+	prodDiscordBotCredentialsLock = sync.RWMutex{}
+	router                        *mux.Router
 
 	RedirectURLResource *Resource
 )
+
+type DiscordBotCredentials struct {
+	Username string
+	Password string
+}
+
+func getDiscordBotCredentialsKey(ctx context.Context) *datastore.Key {
+	return datastore.NewKey(ctx, discordBotCredentialsKind, prodKey, 0, nil)
+}
+
+func SetDiscordBotCredentials(ctx context.Context, discordBotCredentials *DiscordBotCredentials) error {
+	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		currentDiscordBotCredentials := &DiscordBotCredentials{}
+		if err := datastore.Get(ctx, getDiscordBotCredentialsKey(ctx), currentDiscordBotCredentials); err == nil {
+			return HTTPErr{"DiscordBotCredentials already configured", http.StatusBadRequest}
+		}
+		if _, err := datastore.Put(ctx, getDiscordBotCredentialsKey(ctx), discordBotCredentials); err != nil {
+			return err
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: false})
+}
+
+func getDiscordBotCredentials(ctx context.Context) (*DiscordBotCredentials, error) {
+	prodDiscordBotCredentialsLock.RLock()
+	if prodDiscordBotCredentials != nil {
+		defer prodDiscordBotCredentialsLock.RUnlock()
+		return prodDiscordBotCredentials, nil
+	}
+	prodDiscordBotCredentialsLock.RUnlock()
+	prodDiscordBotCredentialsLock.Lock()
+	defer prodDiscordBotCredentialsLock.Unlock()
+	foundDiscordBotCredentials := &DiscordBotCredentials{}
+	if err := datastore.Get(ctx, getDiscordBotCredentialsKey(ctx), foundDiscordBotCredentials); err != nil {
+		return nil, err
+	}
+	prodDiscordBotCredentials = foundDiscordBotCredentials
+	return prodDiscordBotCredentials, nil
+}
 
 func init() {
 	RedirectURLResource = &Resource{
@@ -532,63 +574,41 @@ func handleLogin(w ResponseWriter, r Request) error {
 	return nil
 }
 
-var USERNAME = "username"
-var PASSWORD = "password"
-
 func handleDiscordBotLogin(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
+	discordBotCredentials, err := getDiscordBotCredentials(ctx)
+	if err != nil {
+		return HTTPErr{"Unable to load discord bot credentials", http.StatusInternalServerError}
+	}
+
 	authHeader := r.Req().Header.Get("Authorization")
 	if !strings.HasPrefix(authHeader, "Basic ") {
-		// return HTTPErr{
-		// 	Body:   "Authorization header must be Basic",
-		// 	Status: http.StatusBadRequest,
-		// }
 		return HTTPErr{"Authorization header must be Basic", http.StatusBadRequest}
 	}
 
 	decoded, err := base64.StdEncoding.DecodeString(authHeader[6:])
 	if err != nil {
-		// return HTTPErr{
-		// 	Body:   "Unable to decode authorization header",
-		// 	Status: http.StatusBadRequest,
-		// }
 		return HTTPErr{"Unable to decode authorization header", http.StatusBadRequest}
 	}
 
 	parts := strings.Split(string(decoded), ":")
 	if len(parts) != 2 {
-		// return HTTPErr{
-		// 	Body:   "Authorization header format not username:password",
-		// 	Status: http.StatusBadRequest,
-		// }
 		return HTTPErr{"Authorization header format not username:password", http.StatusBadRequest}
 	}
 
-	if parts[0] != USERNAME || parts[1] != PASSWORD {
-		// return HTTPErr{
-		// 	Body:   "Unauthorized",
-		// 	Status: http.StatusUnauthorized,
-		// }
+	if parts[0] != discordBotCredentials.Username || parts[1] != discordBotCredentials.Password {
 		return HTTPErr{"Unauthorized", http.StatusUnauthorized}
 	}
 
 	discordBotUser := createDiscordBotUser()
 
 	if _, err := datastore.Put(ctx, UserID(ctx, discordBotUser.Id), discordBotUser); err != nil {
-		// return HTTPErr{
-		// 	Body:   "Unable to store user",
-		// 	Status: http.StatusInternalServerError,
-		// }
 		return HTTPErr{"Unable to store user", http.StatusInternalServerError}
 	}
 
 	token, err := encodeUserToToken(ctx, discordBotUser)
 	if err != nil {
-		// return HTTPErr{
-		// 	Body:   "Unable to encode user to token",
-		// 	Status: http.StatusInternalServerError,
-		// }
 		return HTTPErr{"Unable to encode user to token", http.StatusInternalServerError}
 	}
 

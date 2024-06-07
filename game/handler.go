@@ -655,16 +655,20 @@ func createAllocation(w ResponseWriter, r Request) (*Allocation, error) {
 }
 
 type configuration struct {
-	OAuth      *auth.OAuth
-	FCMConf    *FCMConf
-	SendGrid   *auth.SendGrid
-	Superusers *auth.Superusers
+	OAuth                 *auth.OAuth
+	FCMConf               *FCMConf
+	SendGrid              *auth.SendGrid
+	Superusers            *auth.Superusers
+	DiscordBotCredentials *auth.DiscordBotCredentials
 }
 
 func handleConfigure(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
+	log.Infof(ctx, "handleConfigure called")
+	fmt.Printf("handleConfigure called")
 
 	conf := &configuration{}
+	log.Infof(ctx, "handleConfigure called with %+v", conf)
 	if err := json.NewDecoder(r.Req().Body).Decode(conf); err != nil {
 		return err
 	}
@@ -685,6 +689,13 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	}
 	if conf.Superusers != nil {
 		if err := auth.SetSuperusers(ctx, conf.Superusers); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("DiscordBotCredentials: %+v", conf.DiscordBotCredentials)
+	log.Infof(ctx, "DiscordBotCredentials: %+v", conf.DiscordBotCredentials)
+	if conf.DiscordBotCredentials != nil {
+		if err := auth.SetDiscordBotCredentials(ctx, conf.DiscordBotCredentials); err != nil {
 			return err
 		}
 	}

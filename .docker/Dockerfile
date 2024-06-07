@@ -15,9 +15,6 @@ RUN /usr/local/gcloud/google-cloud-sdk/bin/gcloud components install app-engine-
 # Add the gcloud command-line tool to your path.
 ENV PATH $PATH:/usr/local/gcloud/google-cloud-sdk/bin
 
-# # Run dev_appserver.py . from inside the repo
-# RUN dev_appserver.py .
-
 # Set the working directory in the container
 WORKDIR /go/src/app
 
@@ -29,6 +26,8 @@ EXPOSE 8080
 
 # Expose port 80 for http traffic
 EXPOSE 80
+
+RUN chmod +x set-discord-bot-credentials.sh
 
 # Expose port 8000 to the outside world
 EXPOSE 8000
