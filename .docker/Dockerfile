@@ -27,9 +27,12 @@ COPY ../ .
 # Expose port 8080 to the outside world
 EXPOSE 8080
 
+# Expose port 80 for http traffic
+EXPOSE 80
+
 # Expose port 8000 to the outside world
 EXPOSE 8000
 
 # Start the process
-CMD ["python3", "../../../usr/local/gcloud/google-cloud-sdk/bin/dev_appserver.py", "--host=0.0.0.0", "--admin_host=0.0.0.0", "."]
+CMD ["python3", "../../../usr/local/gcloud/google-cloud-sdk/bin/dev_appserver.py", "--host=0.0.0.0", "--admin_host=0.0.0.0", "--enable_host_checking=False", "."]
 

@@ -36,6 +36,7 @@ const (
 	LoginRoute               = "Login"
 	LogoutRoute              = "Logout"
 	TokenForDiscordUserRoute = "TokenForDiscordUser"
+	DiscordBotLoginRoute     = "DiscordBotLogin"
 	RedirectRoute            = "Redirect"
 	OAuth2CallbackRoute      = "OAuth2Callback"
 	UnsubscribeRoute         = "Unsubscribe"
@@ -418,16 +419,12 @@ func getOAuth2Config(ctx context.Context, r *http.Request) (*oauth2.Config, erro
 	}, nil
 }
 
-type TokenForDiscordUserResponse struct {
-	token string
-}
-
-func handleGetTokenForDiscordUser(w ResponseWriter, r Request) (*TokenForDiscordUserResponse, error) {
+func handleGetTokenForDiscordUser(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*User)
 	if !ok {
-		return nil, HTTPErr{
+		return HTTPErr{
 			Body:   "Unauthenticated",
 			Status: http.StatusUnauthorized,
 		}
@@ -437,14 +434,14 @@ func handleGetTokenForDiscordUser(w ResponseWriter, r Request) (*TokenForDiscord
 
 		superusers, err := GetSuperusers(ctx)
 		if err != nil {
-			return nil, HTTPErr{
+			return HTTPErr{
 				Body:   "Unable to load superusers",
 				Status: http.StatusInternalServerError,
 			}
 		}
 
 		if !superusers.Includes(user.Id) {
-			return nil, HTTPErr{
+			return HTTPErr{
 				Body:   "Unauthorized",
 				Status: http.StatusForbidden,
 			}
@@ -453,7 +450,7 @@ func handleGetTokenForDiscordUser(w ResponseWriter, r Request) (*TokenForDiscord
 
 	discordUserId := r.Vars()["user_id"]
 	if discordUserId == "" {
-		return nil, HTTPErr{
+		return HTTPErr{
 			Body:   "Must provide discord user id",
 			Status: http.StatusBadRequest,
 		}
@@ -462,7 +459,7 @@ func handleGetTokenForDiscordUser(w ResponseWriter, r Request) (*TokenForDiscord
 	discordUser := createUserFromDiscordUserId(discordUserId)
 
 	if _, err := datastore.Put(ctx, UserID(ctx, discordUser.Id), discordUser); err != nil {
-		return nil, HTTPErr{
+		return HTTPErr{
 			Body:   "Unable to store user",
 			Status: http.StatusInternalServerError,
 		}
@@ -470,13 +467,14 @@ func handleGetTokenForDiscordUser(w ResponseWriter, r Request) (*TokenForDiscord
 
 	token, err := encodeUserToToken(ctx, discordUser)
 	if err != nil {
-		return nil, HTTPErr{
+		return HTTPErr{
 			Body:   "Unable to encode user to token",
 			Status: http.StatusInternalServerError,
 		}
 	}
 
-	return &TokenForDiscordUserResponse{token: token}, nil
+	w.SetContent(NewItem(token).SetName("token"))
+	return nil
 }
 
 func createUserFromDiscordUserId(discordUserId string) *User {
@@ -486,6 +484,18 @@ func createUserFromDiscordUserId(discordUserId string) *User {
 		GivenName:     "Discord User",
 		Id:            discordUserId,
 		Name:          "Discord User",
+		VerifiedEmail: true,
+		ValidUntil:    time.Now().Add(time.Hour * 24 * 365 * 10),
+	}
+}
+
+func createDiscordBotUser() *User {
+	return &User{
+		Email:         "discord-bot@discord-bot.fake",
+		FamilyName:    "Discord Bot",
+		GivenName:     "Discord Bot",
+		Id:            "discord-bot-user-id",
+		Name:          "Discord Bot",
 		VerifiedEmail: true,
 		ValidUntil:    time.Now().Add(time.Hour * 24 * 365 * 10),
 	}
@@ -519,6 +529,70 @@ func handleLogin(w ResponseWriter, r Request) error {
 	}
 
 	http.Redirect(w, r.Req(), conf.AuthCodeURL(stateString), http.StatusSeeOther)
+	return nil
+}
+
+var USERNAME = "username"
+var PASSWORD = "password"
+
+func handleDiscordBotLogin(w ResponseWriter, r Request) error {
+	ctx := appengine.NewContext(r.Req())
+
+	authHeader := r.Req().Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Basic ") {
+		// return HTTPErr{
+		// 	Body:   "Authorization header must be Basic",
+		// 	Status: http.StatusBadRequest,
+		// }
+		return HTTPErr{"Authorization header must be Basic", http.StatusBadRequest}
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(authHeader[6:])
+	if err != nil {
+		// return HTTPErr{
+		// 	Body:   "Unable to decode authorization header",
+		// 	Status: http.StatusBadRequest,
+		// }
+		return HTTPErr{"Unable to decode authorization header", http.StatusBadRequest}
+	}
+
+	parts := strings.Split(string(decoded), ":")
+	if len(parts) != 2 {
+		// return HTTPErr{
+		// 	Body:   "Authorization header format not username:password",
+		// 	Status: http.StatusBadRequest,
+		// }
+		return HTTPErr{"Authorization header format not username:password", http.StatusBadRequest}
+	}
+
+	if parts[0] != USERNAME || parts[1] != PASSWORD {
+		// return HTTPErr{
+		// 	Body:   "Unauthorized",
+		// 	Status: http.StatusUnauthorized,
+		// }
+		return HTTPErr{"Unauthorized", http.StatusUnauthorized}
+	}
+
+	discordBotUser := createDiscordBotUser()
+
+	if _, err := datastore.Put(ctx, UserID(ctx, discordBotUser.Id), discordBotUser); err != nil {
+		// return HTTPErr{
+		// 	Body:   "Unable to store user",
+		// 	Status: http.StatusInternalServerError,
+		// }
+		return HTTPErr{"Unable to store user", http.StatusInternalServerError}
+	}
+
+	token, err := encodeUserToToken(ctx, discordBotUser)
+	if err != nil {
+		// return HTTPErr{
+		// 	Body:   "Unable to encode user to token",
+		// 	Status: http.StatusInternalServerError,
+		// }
+		return HTTPErr{"Unable to encode user to token", http.StatusInternalServerError}
+	}
+
+	w.SetContent(NewItem(token).SetName("token"))
 	return nil
 }
 
@@ -864,7 +938,7 @@ func tokenFilter(w ResponseWriter, r Request) (bool, error) {
 	token := r.Req().URL.Query().Get("token")
 	if token == "" {
 		queryToken = false
-		if authHeader := r.Req().Header.Get("Authorization"); authHeader != "" {
+		if authHeader := r.Req().Header.Get("Authorization"); authHeader != "" && !strings.HasPrefix(authHeader, "Basic") {
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 {
 				return false, HTTPErr{"Authorization header not two parts joined by space", http.StatusBadRequest}
@@ -1164,13 +1238,14 @@ func SetupRouter(r *mux.Router) {
 	HandleResource(router, RedirectURLResource)
 	Handle(router, "/_test_update_user", []string{"PUT"}, TestUpdateUserRoute, handleTestUpdateUser)
 	Handle(router, "/Auth/Login", []string{"GET"}, LoginRoute, handleLogin)
+	Handle(router, "/Auth/DiscordBotLogin", []string{"GET"}, DiscordBotLoginRoute, handleDiscordBotLogin)
+	Handle(router, "/Auth/{user_id}/TokenForDiscordUser", []string{"GET"}, TokenForDiscordUserRoute, handleGetTokenForDiscordUser)
 	Handle(router, "/Auth/Logout", []string{"GET"}, LogoutRoute, handleLogout)
 	// Don't use `Handle` here, because we don't want CORS support for this particular route.
 	router.Path("/Auth/OAuth2Callback").Methods("GET").Name(OAuth2CallbackRoute).HandlerFunc(handleOAuth2Callback)
 	Handle(router, "/Auth/ApproveRedirect", []string{"POST"}, ApproveRedirectRoute, handleApproveRedirect)
 	Handle(router, "/User/{user_id}/Unsubscribe", []string{"GET"}, UnsubscribeRoute, unsubscribe)
 	Handle(router, "/User/{user_id}/FCMToken/{replace_token}/Replace", []string{"PUT"}, ReplaceFCMRoute, replaceFCM)
-	Handle(router, "/User/{user_id}/TokenForDiscordUser", []string{"GET"}, TokenForDiscordUserRoute, handleGetTokenForDiscordUser)
 	AddFilter(decorateAPILevel)
 	AddFilter(tokenFilter)
 	AddFilter(logHeaders)

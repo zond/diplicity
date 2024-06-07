@@ -1,0 +1,29 @@
+version: "3.9"
+services:
+  diplicity-application:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile
+    container_name: diplicity-application
+    entrypoint:
+      [
+        "python3",
+        "../../../usr/local/gcloud/google-cloud-sdk/bin/dev_appserver.py",
+        "--host=0.0.0.0",
+        "--admin_host=0.0.0.0",
+        "--enable_host_checking=False",
+        ".",
+      ]
+    volumes:
+      - .:/go/src/app
+    networks:
+      - diplicity-net
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+      - "8000:8000"
+networks:
+  diplicity-net:
+    name: diplicity-net
+    driver: bridge
