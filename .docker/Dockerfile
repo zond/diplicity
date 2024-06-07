@@ -27,8 +27,6 @@ EXPOSE 8080
 # Expose port 80 for http traffic
 EXPOSE 80
 
-RUN chmod +x set-discord-bot-credentials.sh
-
 # Expose port 8000 to the outside world
 EXPOSE 8000
 

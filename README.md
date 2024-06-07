@@ -36,12 +36,11 @@ To enable debugging the JSON output in a browser, adding the query parameter `ac
 
 - Download Docker
 - Navigate to the root directory of this project
-- Use `ps1` files for Windows and `sh` files for UNIX
-- Run `.\.docker\docker-build.ps1` **or** `.\.docker\docker-build.sh` (only required once)
-- Run `.\.docker\docker-network.ps1` **or** `.\.docker\docker-network.sh` (only required once)
-- Run `.\.docker\docker-run.ps1` **or** `.\.docker\docker-run.sh`
+- Run `docker-compose up`
 - The API is now available on your machine at `localhost:8080`
 - The Admin server is now available on your machine at `localhost:8000`
+- **Note** to get the Discord bot auth to work, you need to send a curl request
+  after the service is initialized: `curl -XPOST http://localhost:8080/_configure -d '{"DiscordBotCredentials": {"Username": "<username>", "Password": "<password>"}}'`
 
 ## Running locally
 
