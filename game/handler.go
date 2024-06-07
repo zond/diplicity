@@ -664,11 +664,8 @@ type configuration struct {
 
 func handleConfigure(w ResponseWriter, r Request) error {
 	ctx := appengine.NewContext(r.Req())
-	log.Infof(ctx, "handleConfigure called")
-	fmt.Printf("handleConfigure called")
 
 	conf := &configuration{}
-	log.Infof(ctx, "handleConfigure called with %+v", conf)
 	if err := json.NewDecoder(r.Req().Body).Decode(conf); err != nil {
 		return err
 	}
@@ -692,8 +689,6 @@ func handleConfigure(w ResponseWriter, r Request) error {
 			return err
 		}
 	}
-	fmt.Printf("DiscordBotCredentials: %+v", conf.DiscordBotCredentials)
-	log.Infof(ctx, "DiscordBotCredentials: %+v", conf.DiscordBotCredentials)
 	if conf.DiscordBotCredentials != nil {
 		if err := auth.SetDiscordBotCredentials(ctx, conf.DiscordBotCredentials); err != nil {
 			return err
