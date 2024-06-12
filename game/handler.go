@@ -655,10 +655,11 @@ func createAllocation(w ResponseWriter, r Request) (*Allocation, error) {
 }
 
 type configuration struct {
-	OAuth      *auth.OAuth
-	FCMConf    *FCMConf
-	SendGrid   *auth.SendGrid
-	Superusers *auth.Superusers
+	OAuth                 *auth.OAuth
+	FCMConf               *FCMConf
+	SendGrid              *auth.SendGrid
+	Superusers            *auth.Superusers
+	DiscordBotCredentials *auth.DiscordBotCredentials
 }
 
 func handleConfigure(w ResponseWriter, r Request) error {
@@ -685,6 +686,11 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	}
 	if conf.Superusers != nil {
 		if err := auth.SetSuperusers(ctx, conf.Superusers); err != nil {
+			return err
+		}
+	}
+	if conf.DiscordBotCredentials != nil {
+		if err := auth.SetDiscordBotCredentials(ctx, conf.DiscordBotCredentials); err != nil {
 			return err
 		}
 	}

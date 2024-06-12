@@ -15,24 +15,21 @@ RUN /usr/local/gcloud/google-cloud-sdk/bin/gcloud components install app-engine-
 # Add the gcloud command-line tool to your path.
 ENV PATH $PATH:/usr/local/gcloud/google-cloud-sdk/bin
 
-# # Run dev_appserver.py . from inside the repo
-# RUN dev_appserver.py .
-
 # Set the working directory in the container
 WORKDIR /go/src/app
 
 # Copy the current directory contents into the container at /go/src/app
-COPY . .
-
-# Remove Dockerfile to prevent issue with App Engine
-RUN rm Dockerfile
+COPY ../ .
 
 # Expose port 8080 to the outside world
 EXPOSE 8080
+
+# Expose port 80 for http traffic
+EXPOSE 80
 
 # Expose port 8000 to the outside world
 EXPOSE 8000
 
 # Start the process
-CMD ["python3", "../../../usr/local/gcloud/google-cloud-sdk/bin/dev_appserver.py", "--host=0.0.0.0", "--admin_host=0.0.0.0", "."]
+CMD ["python3", "../../../usr/local/gcloud/google-cloud-sdk/bin/dev_appserver.py", "--host=0.0.0.0", "--admin_host=0.0.0.0", "--enable_host_checking=False", "."]
 

@@ -35,3 +35,5 @@ game/game.debug
 
 # Diff tool files
 *.orig
+
+.env
