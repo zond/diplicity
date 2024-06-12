@@ -454,6 +454,8 @@ type Game struct {
 	ChatLanguageISO639_1          string           `methods:"POST,PUT"`
 	GameMasterEnabled             bool             `methods:"POST"`
 	RequireGameMasterInvitation   bool             `methods:"POST,PUT"`
+	DiscordStartGameWebhook       string           `json:",omitempty" methods:"POST"`
+	DiscordPhaseUpdateWebhook     string           `json:",omitempty" methods:"POST"`
 
 	GameMasterInvitations GameMasterInvitations
 	GameMaster            auth.User
