@@ -59,6 +59,7 @@ const (
 	redirectURLKind           = "RedirectURL"
 	superusersKind            = "Superusers"
 	discordBotCredentialsKind = "DiscordBotCredentials"
+	discordBotTokenKind       = "DiscordBotTokenKind"
 	prodKey                   = "prod"
 )
 
@@ -75,6 +76,8 @@ var (
 	prodSuperusersLock            = sync.RWMutex{}
 	prodDiscordBotCredentials     *DiscordBotCredentials
 	prodDiscordBotCredentialsLock = sync.RWMutex{}
+	prodDiscordBotToken           *DiscordBotToken
+	prodDiscordBotTokenLock       = sync.RWMutex{}
 	router                        *mux.Router
 
 	RedirectURLResource *Resource
@@ -83,6 +86,10 @@ var (
 type DiscordBotCredentials struct {
 	Username string
 	Password string
+}
+
+type DiscordBotToken struct {
+	Token string
 }
 
 func getDiscordBotCredentialsKey(ctx context.Context) *datastore.Key {
@@ -117,6 +124,40 @@ func getDiscordBotCredentials(ctx context.Context) (*DiscordBotCredentials, erro
 	}
 	prodDiscordBotCredentials = foundDiscordBotCredentials
 	return prodDiscordBotCredentials, nil
+}
+
+func getDiscordBotTokenKey(ctx context.Context) *datastore.Key {
+	return datastore.NewKey(ctx, discordBotTokenKind, prodKey, 0, nil)
+}
+
+func SetDiscordBotToken(ctx context.Context, discordBotToken *DiscordBotToken) error {
+	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		currentDiscordBotToken := &DiscordBotToken{}
+		if err := datastore.Get(ctx, getDiscordBotTokenKey(ctx), currentDiscordBotToken); err == nil {
+			return HTTPErr{"DiscordBotToken already configured", http.StatusBadRequest}
+		}
+		if _, err := datastore.Put(ctx, getDiscordBotTokenKey(ctx), discordBotToken); err != nil {
+			return err
+		}
+		return nil
+	}, &datastore.TransactionOptions{XG: false})
+}
+
+func GetDiscordBotToken(ctx context.Context) (*DiscordBotToken, error) {
+	prodDiscordBotTokenLock.RLock()
+	if prodDiscordBotToken != nil {
+		defer prodDiscordBotTokenLock.RUnlock()
+		return prodDiscordBotToken, nil
+	}
+	prodDiscordBotTokenLock.RUnlock()
+	prodDiscordBotTokenLock.Lock()
+	defer prodDiscordBotTokenLock.Unlock()
+	foundDiscordBotToken := &DiscordBotToken{}
+	if err := datastore.Get(ctx, getDiscordBotTokenKey(ctx), foundDiscordBotToken); err != nil {
+		return nil, err
+	}
+	prodDiscordBotToken = foundDiscordBotToken
+	return prodDiscordBotToken, nil
 }
 
 func init() {
