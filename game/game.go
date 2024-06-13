@@ -424,6 +424,16 @@ func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit 
 	return gamesItem
 }
 
+type DiscordWebhook struct {
+	Id    string
+	Token string
+}
+
+type DiscordWebhooks struct {
+	GameStarted  DiscordWebhook
+	PhaseStarted DiscordWebhook
+}
+
 type Game struct {
 	ID *datastore.Key `datastore:"-"`
 
@@ -454,6 +464,7 @@ type Game struct {
 	ChatLanguageISO639_1          string           `methods:"POST,PUT"`
 	GameMasterEnabled             bool             `methods:"POST"`
 	RequireGameMasterInvitation   bool             `methods:"POST,PUT"`
+	DiscordWebhooks               *DiscordWebhooks `methods:"POST" datastore:",noindex"`
 
 	GameMasterInvitations GameMasterInvitations
 	GameMaster            auth.User
