@@ -424,16 +424,6 @@ func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit 
 	return gamesItem
 }
 
-type DiscordWebhook struct {
-	Id    string
-	Token string
-}
-
-type DiscordWebhooks struct {
-	GameStarted  DiscordWebhook
-	PhaseStarted DiscordWebhook
-}
-
 type Game struct {
 	ID *datastore.Key `datastore:"-"`
 
@@ -442,29 +432,32 @@ type Game struct {
 	Closed   bool // Game is no longer joinable.
 	Finished bool // Game has reached its end.
 
-	Desc                          string           `methods:"POST,PUT" datastore:",noindex"`
-	Variant                       string           `methods:"POST"`
-	PhaseLengthMinutes            time.Duration    `methods:"POST,PUT"`
-	NonMovementPhaseLengthMinutes time.Duration    `methods:"POST,PUT"`
-	MaxHated                      float64          `methods:"POST"`
-	MaxHater                      float64          `methods:"POST"`
-	MinRating                     float64          `methods:"POST"`
-	MaxRating                     float64          `methods:"POST"`
-	MinReliability                float64          `methods:"POST"`
-	MinQuickness                  float64          `methods:"POST"`
-	Private                       bool             `methods:"POST"`
-	NoMerge                       bool             `methods:"POST"`
-	DisableConferenceChat         bool             `methods:"POST,PUT"`
-	DisableGroupChat              bool             `methods:"POST,PUT"`
-	DisablePrivateChat            bool             `methods:"POST,PUT"`
-	NationAllocation              AllocationMethod `methods:"POST"`
-	Anonymous                     bool             `methods:"POST"`
-	LastYear                      int              `methods:"POST,PUT"`
-	SkipMuster                    bool             `methods:"POST,PUT"`
-	ChatLanguageISO639_1          string           `methods:"POST,PUT"`
-	GameMasterEnabled             bool             `methods:"POST"`
-	RequireGameMasterInvitation   bool             `methods:"POST,PUT"`
-	DiscordWebhooks               *DiscordWebhooks `methods:"POST" datastore:",noindex"`
+	Desc                            string           `methods:"POST,PUT" datastore:",noindex"`
+	Variant                         string           `methods:"POST"`
+	PhaseLengthMinutes              time.Duration    `methods:"POST,PUT"`
+	NonMovementPhaseLengthMinutes   time.Duration    `methods:"POST,PUT"`
+	MaxHated                        float64          `methods:"POST"`
+	MaxHater                        float64          `methods:"POST"`
+	MinRating                       float64          `methods:"POST"`
+	MaxRating                       float64          `methods:"POST"`
+	MinReliability                  float64          `methods:"POST"`
+	MinQuickness                    float64          `methods:"POST"`
+	Private                         bool             `methods:"POST"`
+	NoMerge                         bool             `methods:"POST"`
+	DisableConferenceChat           bool             `methods:"POST,PUT"`
+	DisableGroupChat                bool             `methods:"POST,PUT"`
+	DisablePrivateChat              bool             `methods:"POST,PUT"`
+	NationAllocation                AllocationMethod `methods:"POST"`
+	Anonymous                       bool             `methods:"POST"`
+	LastYear                        int              `methods:"POST,PUT"`
+	SkipMuster                      bool             `methods:"POST,PUT"`
+	ChatLanguageISO639_1            string           `methods:"POST,PUT"`
+	GameMasterEnabled               bool             `methods:"POST"`
+	RequireGameMasterInvitation     bool             `methods:"POST,PUT"`
+	GameStartedDiscordWebhookId     string           `json:",omitempty" methods:"POST" datastore:",noindex"`
+	GameStartedDiscordWebhookToken  string           `json:",omitempty" methods:"POST" datastore:",noindex"`
+	PhaseStartedDiscordWebhookId    string           `json:",omitempty" methods:"POST" datastore:",noindex"`
+	PhaseStartedDiscordWebhookToken string           `json:",omitempty" methods:"POST" datastore:",noindex"`
 
 	GameMasterInvitations GameMasterInvitations
 	GameMaster            auth.User
