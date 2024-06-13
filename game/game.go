@@ -429,7 +429,10 @@ type DiscordWebhook struct {
 	Token string
 }
 
-type DiscordWebhooks map[string]DiscordWebhook
+type DiscordWebhooks struct {
+	GameStarted  DiscordWebhook
+	PhaseStarted DiscordWebhook
+}
 
 type Game struct {
 	ID *datastore.Key `datastore:"-"`
