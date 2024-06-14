@@ -1143,19 +1143,24 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 		}
 		g.ID = gameID
 
-		gameStartedWebhook := g.DiscordWebhooks.GameStarted
-		// Invoke webhook using discordgo
-		if gameStartedWebhook.Id != "" && gameStartedWebhook.Token != "" {
-			discordSession, err := discordgo.New("Bot " + host)
-			if err != nil {
-				log.Errorf(ctx, "discordgo.New(...): %v", err)
-				return err
-			}
-			if err := discordSession.WebhookExecute(gameStartedWebhook.Id, gameStartedWebhook.Token, false, &discordgo.WebhookParams{
-				Content: fmt.Sprintf("Game %v has started!", g.Desc),
-			}); err != nil {
-				log.Errorf(ctx, "discordSession.WebhookExecute(...): %v", err)
-				return err
+		discordBotToken, err := auth.GetDiscordBotToken(ctx)
+		if err != nil {
+			log.Warningf(ctx, "auth.GetDiscordBotToken(...): %v", err)
+		} else {
+			gameStartedWebhook := g.DiscordWebhooks.GameStarted
+			// Invoke webhook using discordgo
+			if gameStartedWebhook.Id != "" && gameStartedWebhook.Token != "" {
+				discordSession, err := discordgo.New("Bot " + discordBotToken.Token)
+				if err != nil {
+					log.Errorf(ctx, "discordgo.New(...): %v", err)
+					return err
+				}
+				if _, err := discordSession.WebhookExecute(gameStartedWebhook.Id, gameStartedWebhook.Token, false, &discordgo.WebhookParams{
+					Content: fmt.Sprintf("Game %v has started!", g.Desc),
+				}); err != nil {
+					log.Errorf(ctx, "discordSession.WebhookExecute(...): %v", err)
+					return err
+				}
 			}
 		}
 
