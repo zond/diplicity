@@ -28,6 +28,7 @@ require (
 
 require (
 	cloud.google.com/go v0.38.0 // indirect
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/gogs/chardet v0.0.0-20150115103509-2404f7772561 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
