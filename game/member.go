@@ -14,7 +14,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine/v2"
 	"google.golang.org/appengine/v2/datastore"
-	"google.golang.org/appengine/v2/log"
 
 	. "github.com/zond/goaeoas"
 )
@@ -453,22 +452,16 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 	if !ok {
 		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
-	log.Infof(ctx, "user %s", user.Id)
-	log.Infof(ctx, "r %s", r.Req().Body)
-	log.Infof(ctx, "r %s", r.Vars())
 
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
 	if err != nil {
 		return nil, err
 	}
-	log.Infof(ctx, "game %s", gameID)
 
 	game := &Game{}
 	if err := datastore.Get(ctx, gameID, game); err != nil {
 		return nil, err
 	}
-	log.Infof(ctx, "game %s", game)
-
 	filterList := Games{*game}
 	if _, err := filterList.RemoveBanned(ctx, user.Id, true); err != nil {
 		return nil, err
@@ -489,13 +482,10 @@ func createMember(w ResponseWriter, r Request) (*Member, error) {
 		return nil, HTTPErr{"filtered from this game", http.StatusPreconditionFailed}
 	}
 
-	log.Infof(ctx, "Copying member")
-	log.Infof(ctx, "r %s", r.Req().Body)
 	member := &Member{}
 	if err := Copy(member, r, "POST"); err != nil {
 		return nil, err
 	}
-	log.Infof(ctx, "member %s", member)
 
 	_, member, err = createMemberHelper(ctx, r, gameID, user, member)
 	if err != nil {
