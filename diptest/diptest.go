@@ -25,7 +25,7 @@ import (
 )
 
 func QueueEmpty(name string) (bool, error) {
-	resp, err := (&http.Client{}).Get(fmt.Sprintf("http://localhost:8000/taskqueue/queue/%s", name))
+	resp, err := (&http.Client{}).Get(fmt.Sprintf("http://diplicity-test-application:8001/taskqueue/queue/%s", name))
 	if err != nil {
 		return false, err
 	}
@@ -146,7 +146,7 @@ func init() {
 		}
 	} else {
 		T = &realTransport{
-			host:   "localhost:8080",
+			host:   "diplicity-test-application:8080",
 			scheme: "http",
 			client: &http.Client{},
 		}

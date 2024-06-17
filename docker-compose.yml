@@ -5,15 +5,6 @@ services:
       context: .
       dockerfile: .docker/Dockerfile
     container_name: diplicity-application
-    entrypoint:
-      [
-        "python3",
-        "../../../usr/local/gcloud/google-cloud-sdk/bin/dev_appserver.py",
-        "--host=0.0.0.0",
-        "--admin_host=0.0.0.0",
-        "--enable_host_checking=False",
-        ".",
-      ]
     volumes:
       - .:/go/src/app
     networks:
@@ -23,6 +14,49 @@ services:
     ports:
       - "8080:8080"
       - "8000:8000"
+  diplicity-test-application:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile
+    container_name: diplicity-test-application
+    volumes:
+      - .:/go/src/app
+    networks:
+      - diplicity-net
+    env_file:
+      - .env
+    depends_on:
+      - diplicity-application
+    entrypoint:
+      [
+        "python3",
+        "../../../usr/local/gcloud/google-cloud-sdk/bin/dev_appserver.py",
+        "--require_indexes",
+        "--skip_sdk_update_check=true",
+        "--clear_datastore=true",
+        "--datastore_consistency_policy=consistent",
+        "--host",
+        "0.0.0.0",
+        "--admin_host",
+        "0.0.0.0",
+        "--enable_host_checking=False",
+        ".",
+      ]
+  diplicity-tests:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile
+    container_name: diplicity-tests
+    volumes:
+      - .:/go/src/app
+    networks:
+      - diplicity-net
+    env_file:
+      - .env
+    depends_on:
+      - diplicity-test-application
+    working_dir: /go/src/app/diptest
+    command: sh -c "sleep 10 && go test -v -timeout 40m"
 networks:
   diplicity-net:
     name: diplicity-net

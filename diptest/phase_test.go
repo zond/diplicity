@@ -712,7 +712,7 @@ func TestBackwardsCompatiblePhaseStateAPI(t *testing.T) {
 			phaseOrdinal := game.
 				Follow("phases", "Links").Success().
 				Find(1.0, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).GetValue("Properties", "PhaseOrdinal").(float64)
-			env.PutURL("http://localhost:8080/Game/" + startedGameID + "/Phase/" + fmt.Sprint(phaseOrdinal) + "/PhaseState").Body(map[string]interface{}{
+			env.PutURL("http://diplicity-test-application:8080/Game/" + startedGameID + "/Phase/" + fmt.Sprint(phaseOrdinal) + "/PhaseState").Body(map[string]interface{}{
 				"ReadyToResolve": true,
 			}).Success()
 		}
@@ -723,7 +723,7 @@ func TestBackwardsCompatiblePhaseStateAPI(t *testing.T) {
 			phaseOrdinal := game.
 				Follow("phases", "Links").Success().
 				Find(3.0, []string{"Properties"}, []string{"Properties", "PhaseOrdinal"}).GetValue("Properties", "PhaseOrdinal").(float64)
-			env.PutURL("http://localhost:8080/Game/" + startedGameID + "/Phase/" + fmt.Sprint(phaseOrdinal) + "/PhaseState/" + startedGameNats[idx]).Body(map[string]interface{}{
+			env.PutURL("http://diplicity-test-application:8080/Game/" + startedGameID + "/Phase/" + fmt.Sprint(phaseOrdinal) + "/PhaseState/" + startedGameNats[idx]).Body(map[string]interface{}{
 				"ReadyToResolve": true,
 			}).Success()
 		}
