@@ -425,16 +425,6 @@ func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit 
 	return gamesItem
 }
 
-type DiscordWebhook struct {
-	Id    string
-	Token string
-}
-
-type DiscordWebhooks struct {
-	GameStarted  DiscordWebhook
-	PhaseStarted DiscordWebhook
-}
-
 type Game struct {
 	ID *datastore.Key `datastore:"-"`
 
@@ -497,6 +487,21 @@ func (g *Game) Load(props []datastore.Property) error {
 		err = nil
 	}
 	return err
+}
+
+func (g *Game) invokeWebhook(session *discordgo.Session, webhook DiscordWebhook, content string) error {
+	_, err := session.WebhookExecute(webhook.Id, webhook.Token, false, &discordgo.WebhookParams{
+		Content: content,
+	})
+	return err
+}
+
+func (g *Game) InvokePhaseStartedDiscordWebhook(session *discordgo.Session) error {
+	return g.invokeWebhook(session, g.DiscordWebhooks.PhaseStarted, "Phase has started!")
+}
+
+func (g *Game) InvokeGameStartedDiscordWebhook(session *discordgo.Session) error {
+	return g.invokeWebhook(session, g.DiscordWebhooks.GameStarted, "Game has started!")
 }
 
 func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
@@ -1143,24 +1148,13 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 		}
 		g.ID = gameID
 
-		discordBotToken, err := auth.GetDiscordBotToken(ctx)
+		discordSession, err := CreateDiscordSession(ctx)
 		if err != nil {
-			log.Warningf(ctx, "auth.GetDiscordBotToken(...): %v", err)
+			log.Warningf(ctx, "Error creating discord session", err)
 		} else {
-			gameStartedWebhook := g.DiscordWebhooks.GameStarted
-			// Invoke webhook using discordgo
-			if gameStartedWebhook.Id != "" && gameStartedWebhook.Token != "" {
-				discordSession, err := discordgo.New("Bot " + discordBotToken.Token)
-				if err != nil {
-					log.Errorf(ctx, "discordgo.New(...): %v", err)
-					return err
-				}
-				if _, err := discordSession.WebhookExecute(gameStartedWebhook.Id, gameStartedWebhook.Token, false, &discordgo.WebhookParams{
-					Content: fmt.Sprintf("Game %v has started!", g.Desc),
-				}); err != nil {
-					log.Errorf(ctx, "discordSession.WebhookExecute(...): %v", err)
-					return err
-				}
+			err = g.InvokeGameStartedDiscordWebhook(discordSession)
+			if err != nil {
+				log.Errorf(ctx, "Error invoking game started discord webhook", err)
 			}
 		}
 

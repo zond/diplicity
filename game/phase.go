@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/dustin/go-humanize/english"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip"
@@ -402,24 +401,13 @@ func sendPhaseNotificationsToUsers(ctx context.Context, host string, gameID *dat
 		return err
 	}
 
-	discordBotToken, err := auth.GetDiscordBotToken(ctx)
+	discordSession, err := CreateDiscordSession(ctx)
 	if err != nil {
-		log.Warningf(ctx, "auth.GetDiscordBotToken(...): %v", err)
+		log.Warningf(ctx, "Error creating discord session", err)
 	} else {
-		phaseStartedWebhook := g.DiscordWebhooks.PhaseStarted
-		// Invoke webhook using discordgo
-		if phaseStartedWebhook.Id != "" && phaseStartedWebhook.Token != "" {
-			discordSession, err := discordgo.New("Bot " + discordBotToken.Token)
-			if err != nil {
-				log.Errorf(ctx, "discordgo.New(...): %v", err)
-				return err
-			}
-			if _, err := discordSession.WebhookExecute(phaseStartedWebhook.Id, phaseStartedWebhook.Token, false, &discordgo.WebhookParams{
-				Content: fmt.Sprintf("Phase %v has started!", phaseOrdinal),
-			}); err != nil {
-				log.Errorf(ctx, "discordSession.WebhookExecute(...): %v", err)
-				return err
-			}
+		err = g.InvokePhaseStartedDiscordWebhook(discordSession)
+		if err != nil {
+			log.Errorf(ctx, "Error invoking phase started discord webhook", err)
 		}
 	}
 
