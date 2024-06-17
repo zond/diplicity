@@ -31,5 +31,5 @@ EXPOSE 80
 EXPOSE 8000
 
 # Start the process
-CMD ["python3", "../../../usr/local/gcloud/google-cloud-sdk/bin/dev_appserver.py", "--host=0.0.0.0", "--admin_host=0.0.0.0", "--enable_host_checking=False", "."]
+CMD ["python3", "../../../usr/local/gcloud/google-cloud-sdk/bin/dev_appserver.py", "--host=0.0.0.0", "--admin_host=0.0.0.0", "--enable_host_checking=False", "--runtime_python_path=/usr/bin/python3", "."]
 
