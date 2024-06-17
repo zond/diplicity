@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip"
@@ -424,16 +425,6 @@ func (g Games) Item(r Request, user *auth.User, cursor *datastore.Cursor, limit 
 	return gamesItem
 }
 
-type DiscordWebhook struct {
-	Id    string
-	Token string
-}
-
-type DiscordWebhooks struct {
-	GameStarted  DiscordWebhook
-	PhaseStarted DiscordWebhook
-}
-
 type Game struct {
 	ID *datastore.Key `datastore:"-"`
 
@@ -496,6 +487,21 @@ func (g *Game) Load(props []datastore.Property) error {
 		err = nil
 	}
 	return err
+}
+
+func (g *Game) invokeWebhook(session *discordgo.Session, webhook DiscordWebhook, content string) error {
+	_, err := session.WebhookExecute(webhook.Id, webhook.Token, false, &discordgo.WebhookParams{
+		Content: content,
+	})
+	return err
+}
+
+func (g *Game) InvokePhaseStartedDiscordWebhook(session *discordgo.Session) error {
+	return g.invokeWebhook(session, g.DiscordWebhooks.PhaseStarted, "Phase has started!")
+}
+
+func (g *Game) InvokeGameStartedDiscordWebhook(session *discordgo.Session) error {
+	return g.invokeWebhook(session, g.DiscordWebhooks.GameStarted, "Game has started!")
 }
 
 func (g *Game) canMergeInto(o *Game, avoid *auth.User) bool {
@@ -1141,6 +1147,16 @@ func asyncStartGame(ctx context.Context, gameID *datastore.Key, host string) err
 			return err
 		}
 		g.ID = gameID
+
+		discordSession, err := CreateDiscordSession(ctx)
+		if err != nil {
+			log.Warningf(ctx, "Error creating discord session", err)
+		} else {
+			err = g.InvokeGameStartedDiscordWebhook(discordSession)
+			if err != nil {
+				log.Errorf(ctx, "Error invoking game started discord webhook", err)
+			}
+		}
 
 		variant := variants.Variants[g.Variant]
 		if len(g.Members) != len(variant.Nations) {

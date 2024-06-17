@@ -395,6 +395,22 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datas
 func sendPhaseNotificationsToUsers(ctx context.Context, host string, gameID *datastore.Key, phaseOrdinal int64, origUids []string) error {
 	log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %v, %v, %+v)", host, gameID, phaseOrdinal, origUids)
 
+	g := &Game{}
+	if err := datastore.Get(ctx, gameID, g); err != nil {
+		log.Errorf(ctx, "datastore.Get(..., %v, %v): %v; hope datastore will get fixed", gameID, g, err)
+		return err
+	}
+
+	discordSession, err := CreateDiscordSession(ctx)
+	if err != nil {
+		log.Warningf(ctx, "Error creating discord session", err)
+	} else {
+		err = g.InvokePhaseStartedDiscordWebhook(discordSession)
+		if err != nil {
+			log.Errorf(ctx, "Error invoking phase started discord webhook", err)
+		}
+	}
+
 	if len(origUids) == 0 {
 		log.Infof(ctx, "sendPhaseNotificationsToUsers(..., %q, %v, %v, %+v) *** NO UIDS ***", host, gameID, phaseOrdinal, origUids)
 		return nil

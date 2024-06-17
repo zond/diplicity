@@ -660,6 +660,7 @@ type configuration struct {
 	SendGrid              *auth.SendGrid
 	Superusers            *auth.Superusers
 	DiscordBotCredentials *auth.DiscordBotCredentials
+	DiscordBotToken       *auth.DiscordBotToken
 }
 
 func handleConfigure(w ResponseWriter, r Request) error {
@@ -691,6 +692,11 @@ func handleConfigure(w ResponseWriter, r Request) error {
 	}
 	if conf.DiscordBotCredentials != nil {
 		if err := auth.SetDiscordBotCredentials(ctx, conf.DiscordBotCredentials); err != nil {
+			return err
+		}
+	}
+	if conf.DiscordBotToken != nil {
+		if err := auth.SetDiscordBotToken(ctx, conf.DiscordBotToken); err != nil {
 			return err
 		}
 	}
