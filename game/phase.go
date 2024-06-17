@@ -1740,11 +1740,6 @@ func devResolvePhaseTimeout(w ResponseWriter, r Request) error {
 func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 	ctx := appengine.NewContext(r.Req())
 
-	user, ok := r.Values()["user"].(*auth.User)
-	if !ok {
-		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
-	}
-
 	gameID, err := datastore.DecodeKey(r.Vars()["game_id"])
 	if err != nil {
 		return nil, err
@@ -1769,9 +1764,15 @@ func loadPhase(w ResponseWriter, r Request) (*Phase, error) {
 	phase.Refresh()
 	phase.Score(variants.Variants[game.Variant].Nations)
 
-	member, isMember := game.GetMemberByUserId(user.Id)
-	if isMember {
-		r.Values()[memberNationFlag] = member.Nation
+	user, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		log.Infof(appengine.NewContext(r.Req()), "Unauthenticated - not setting memberNationFlag")
+	} else {
+		log.Infof(appengine.NewContext(r.Req()), "Authenticated - trying to set memberNationFlag")
+		member, isMember := game.GetMemberByUserId(user.Id)
+		if isMember {
+			r.Values()[memberNationFlag] = member.Nation
+		}
 	}
 
 	return phase, nil
