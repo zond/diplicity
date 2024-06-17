@@ -986,6 +986,17 @@ func createGame(w ResponseWriter, r Request) (*Game, error) {
 	return game, nil
 }
 
+// Like `game.Redact`, but for use with unauthenticated requests.
+// Removes game master invitations and anonymizes all members.
+func (g *Game) RedactPublic(r Request) {
+	for index := range g.GameMasterInvitations {
+		g.GameMasterInvitations[index].Email = ""
+	}
+	for index := range g.Members {
+		g.Members[index].Anonymize(r)
+	}
+}
+
 func (g *Game) Redact(viewer *auth.User, r Request) {
 	if viewer.Id == g.GameMaster.Id {
 		return
@@ -1378,11 +1389,36 @@ func gameMasterUpdateGame(w ResponseWriter, r Request) (*Game, error) {
 	return game, nil
 }
 
-func loadGame(w ResponseWriter, r Request) (*Game, error) {
+func loadGamePublic(w ResponseWriter, r Request) (*Game, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	gameID, err := datastore.DecodeKey(r.Vars()["id"])
+	if err != nil {
+		return nil, err
+	}
+
+	game := &Game{}
+	if err := datastore.Get(ctx, gameID, game); err != nil {
+		return nil, err
+	}
+	game.ID = gameID
+	for i := range game.NewestPhaseMeta {
+		game.NewestPhaseMeta[i].Refresh()
+	}
+
+	game.Refresh()
+
+	game.RedactPublic(r)
+
+	return game, nil
+}
+
+func loadGameAuthenticated(w ResponseWriter, r Request) (*Game, error) {
 	ctx := appengine.NewContext(r.Req())
 
 	user, ok := r.Values()["user"].(*auth.User)
 	if !ok {
+		log.Errorf(ctx, "loadGameAuthenticated called without user - this should never happen")
 		return nil, HTTPErr{"unauthenticated", http.StatusUnauthorized}
 	}
 
@@ -1432,4 +1468,18 @@ func loadGame(w ResponseWriter, r Request) (*Game, error) {
 	game.Redact(user, r)
 
 	return &filtered[0], nil
+}
+
+func loadGame(w ResponseWriter, r Request) (*Game, error) {
+	ctx := appengine.NewContext(r.Req())
+
+	_, ok := r.Values()["user"].(*auth.User)
+	if !ok {
+		log.Infof(ctx, "Loading game without user - calling loadGamePublic")
+		return loadGamePublic(w, r)
+	} else {
+		log.Infof(ctx, "Loading game with user - calling loadGameAuthenticated")
+		return loadGameAuthenticated(w, r)
+	}
+
 }
