@@ -3,6 +3,7 @@ module github.com/zond/diplicity
 go 1.20
 
 require (
+	github.com/appleboy/go-fcm v1.2.2
 	github.com/aymerick/raymond v2.0.2+incompatible
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v1.0.0
