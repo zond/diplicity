@@ -1,6 +1,6 @@
 module github.com/zond/diplicity
 
-go 1.20
+go 1.23
 
 require (
 	github.com/appleboy/go-fcm v1.2.2

@@ -1,5 +1,5 @@
 # Start with a base image containing golang runtime
-FROM golang:1.20
+FROM golang:1.23
 
 # Downloading gcloud package
 RUN curl https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz > /tmp/google-cloud-sdk.tar.gz
