@@ -320,7 +320,7 @@ func (u *User) ID(ctx context.Context) *datastore.Key {
 	return UserID(ctx, u.Id)
 }
 
-func infoToUser(ui *oauth2service.Userinfoplus) *User {
+func infoToUser(ui *oauth2service.Userinfo) *User {
 	u := &User{
 		Email:      ui.Email,
 		FamilyName: ui.FamilyName,
