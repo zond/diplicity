@@ -21,6 +21,21 @@ services:
     ports:
       - "8080:8080"
       - "8000:8000"
+  diplicity-configurator:
+    image: curlimages/curl:latest
+    container_name: diplicity-configurator
+    depends_on:
+      - diplicity-application
+    entrypoint: >
+      sh -c "
+      sleep 20 &&
+      curl -XPOST http://diplicity-application:8080/_configure
+      -d '{\"OAuth\": { \"ClientID\": \"${OAUTH_CLIENT_ID}\", \"Secret\": \"${OAUTH_SECRET}\" }}'
+      "
+    env_file:
+      - .env
+    networks:
+      - diplicity-net
 networks:
   diplicity-net:
     name: diplicity-net
