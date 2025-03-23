@@ -40,7 +40,7 @@ To enable debugging the JSON output in a browser, adding the query parameter `ac
 - Run `docker-compose up`
 - The API is now available on your machine at `localhost:8080`
 - The Admin server is now available on your machine at `localhost:8000`
-- The `diplicity-configurator` container will automatically configure the application using the secrets from the `.env` file after a short delay.
+- The `diplicity-configuration` container will automatically configure the application using the secrets from the `.env` file after a short delay.
 
 ## Environment Variables
 
