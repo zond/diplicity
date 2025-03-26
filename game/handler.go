@@ -2001,5 +2001,4 @@ func SetupRouter(r *mux.Router) {
 		head.AddEl("link", "rel", "manifest", "href", "/js/manifest.json")
 		return nil
 	})
-	Handle(r, "/create-notification", []string{"POST"}, "CreateNotification", handleCreateNotification)
 }
