@@ -37,3 +37,4 @@ game/game.debug
 *.orig
 
 .env
+service-account-key.json

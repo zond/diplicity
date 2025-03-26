@@ -1,5 +1,5 @@
 # Start with a base image containing golang runtime
-FROM golang:1.20
+FROM golang:1.23
 
 # Downloading gcloud package
 RUN curl https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz > /tmp/google-cloud-sdk.tar.gz
@@ -17,6 +17,12 @@ ENV PATH $PATH:/usr/local/gcloud/google-cloud-sdk/bin
 
 # Set the working directory in the container
 WORKDIR /go/src/app
+
+# Copy the go.mod and go.sum files
+COPY go.mod go.sum ./
+
+# Download the dependencies
+RUN go mod download
 
 # Copy the current directory contents into the container at /go/src/app
 COPY ../ .

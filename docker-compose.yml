@@ -18,11 +18,24 @@ services:
       - .:/go/src/app
     networks:
       - diplicity-net
-    env_file:
-      - .env
     ports:
       - "8080:8080"
       - "8000:8000"
+  diplicity-configuration:
+    image: curlimages/curl:latest
+    container_name: diplicity-configuration
+    depends_on:
+      - diplicity-application
+    entrypoint: >
+      sh -c "
+      sleep 20 &&
+      curl -XPOST http://diplicity-application:8080/_configure
+      -d '{\"OAuth\": { \"ClientID\": \"${OAUTH_CLIENT_ID}\", \"Secret\": \"${OAUTH_SECRET}\" }, \"FCMConf\": { \"ServerKey\": \"${FCM_SERVER_KEY}\" }}'
+      "
+    env_file:
+      - .env
+    networks:
+      - diplicity-net
 networks:
   diplicity-net:
     name: diplicity-net

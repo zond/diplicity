@@ -36,11 +36,15 @@ To enable debugging the JSON output in a browser, adding the query parameter `ac
 
 - Download Docker
 - Navigate to the root directory of this project
+- Create a `.env` file based on `.env.example` and fill in the required secrets
 - Run `docker-compose up`
 - The API is now available on your machine at `localhost:8080`
 - The Admin server is now available on your machine at `localhost:8000`
-- **Note** to get the Discord bot auth to work, you need to send a curl request
-  after the service is initialized: `curl -XPOST http://localhost:8080/_configure -d '{"DiscordBotCredentials": {"Username": "<username>", "Password": "<password>"}}'`
+- The `diplicity-configuration` container will automatically configure the application using the secrets from the `.env` file after a short delay.
+
+## Environment Variables
+
+To configure the application, create a `.env` file in the root directory with the environment variables listed in `.env.example`.
 
 ## Running locally
 

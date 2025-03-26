@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"firebase.google.com/go/v4/messaging"
 	"github.com/dustin/go-humanize/english"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/godip"
@@ -24,7 +25,6 @@ import (
 	"google.golang.org/appengine/v2/log"
 
 	dvars "github.com/zond/diplicity/variants"
-	fcm "github.com/zond/go-fcm"
 	vrt "github.com/zond/godip/variants/common"
 
 	. "github.com/zond/goaeoas"
@@ -321,12 +321,6 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datas
 		return err
 	}
 
-	dataPayload, err := NewFCMData(msgContext.fcmData)
-	if err != nil {
-		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", msgContext.fcmData, err)
-		return err
-	}
-
 	for _, fcmToken := range msgContext.userConfig.FCMTokens {
 		if fcmToken.Disabled {
 			continue
@@ -335,7 +329,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datas
 			continue
 		}
 		finishedTokens[fcmToken.Value] = struct{}{}
-		notificationPayload := &fcm.NotificationPayload{
+		notificationPayload := &messaging.Notification{
 			Title: fmt.Sprintf(
 				"%s: %s %d, %s",
 				msgContext.game.DescFor(msgContext.member.Nation),
@@ -343,17 +337,7 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datas
 				msgContext.phase.Year,
 				msgContext.phase.Type,
 			),
-			Body:        fmt.Sprintf("%s has a new phase.", msgContext.game.Desc),
-			Tag:         "diplicity-engine-new-phase",
-			ClickAction: msgContext.mapURL.String(),
-		}
-
-		fcmToken.PhaseConfig.Customize(ctx, notificationPayload, msgContext.mailData)
-		if fcmToken.MessageConfig.DontSendData {
-			dataPayload = nil
-		}
-		if fcmToken.MessageConfig.DontSendNotification {
-			notificationPayload = nil
+			Body: fmt.Sprintf("%s has a new phase.", msgContext.game.Desc),
 		}
 
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
@@ -362,7 +346,6 @@ func sendPhaseNotificationsToFCM(ctx context.Context, host string, gameID *datas
 				0,
 				time.Duration(0),
 				notificationPayload,
-				dataPayload,
 				map[string][]string{
 					userId: []string{fcmToken.Value},
 				},
