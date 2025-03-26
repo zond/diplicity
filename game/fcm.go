@@ -1,21 +1,18 @@
 package game
 
 import (
-	"bytes"
-	"compress/zlib"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/zond/diplicity/auth"
-	"github.com/zond/go-fcm"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine/v2/datastore"
 	"google.golang.org/appengine/v2/log"
-	"google.golang.org/appengine/v2/urlfetch"
+
+	"firebase.google.com/go/v4/messaging"
+	newFcm "github.com/appleboy/go-fcm"
 
 	. "github.com/zond/goaeoas"
 )
@@ -162,35 +159,8 @@ func manageFCMTokens(ctx context.Context, tokensToRemove, tokensToUpdate map[str
 	return nil
 }
 
-type FCMData struct {
-	DiplicityJSON []byte
-}
-
-func NewFCMData(payload interface{}) (*FCMData, error) {
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	buf := &bytes.Buffer{}
-	w := zlib.NewWriter(buf)
-	w.Write(b)
-	w.Close()
-	return &FCMData{
-		DiplicityJSON: buf.Bytes(),
-	}, nil
-}
-
-func nestPut(m1 map[string]map[string]string, k1, k2, v string) {
-	m2, found := m1[k1]
-	if !found {
-		m2 = map[string]string{}
-	}
-	m2[k2] = v
-	m1[k1] = m2
-}
-
-func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.NotificationPayload, data *FCMData, tokens map[string][]string) error {
-	log.Infof(ctx, "fcmSendToTokens(..., %v, %v, %+v)", PP(notif), PP(data), tokens)
+func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notification *messaging.Notification, tokens map[string][]string) error {
+	log.Infof(ctx, "fcmSendToTokens called")
 
 	tokenStrings := []string{}
 	userByToken := map[string]string{}
@@ -210,138 +180,38 @@ func fcmSendToTokens(ctx context.Context, lastDelay time.Duration, notif *fcm.No
 		return nil
 	}
 
-	fcmConf, err := getFCMConf(ctx)
+	log.Infof(ctx, "Creating new FCM client...")
+	newClient, err := newFcm.NewClient(
+		ctx,
+		newFcm.WithCredentialsFile("service-account-key.json"),
+	)
 	if err != nil {
-		// Safe to retry, nothing got sent.
-		log.Errorf(ctx, "Unable to get FCMConf: %v; fix getFCMConf or hope datastore gets fixed", err)
-		return err
+		log.Errorf(ctx, "Unable to create FCM client: %v", err)
+	}
+	log.Infof(ctx, "New FCM client created!")
+
+	msg := &messaging.MulticastMessage{
+		Tokens:       tokenStrings,
+		Notification: notification,
 	}
 
-	client := fcm.NewFcmClient(fcmConf.ServerKey)
-	client.SetHTTPClient(urlfetch.Client(ctx))
-	client.AppendDevices(tokenStrings)
-	if notif != nil {
-		client.SetNotificationPayload(notif)
-	}
-	if data != nil {
-		client.SetMsgData(data)
-	}
-
-	resp, err := client.Send()
+	log.Infof(ctx, "Sending FCM message...")
+	newResp, err := newClient.SendMulticast(ctx, msg)
 	if err != nil {
-		// Safe to retry, nothing got sent probably.
-		log.Errorf(ctx, "%v unable to send: %v", PP(client), err)
-		return err
+		log.Errorf(ctx, "Unable to send FCM message: %v", err)
 	}
+	log.Infof(ctx, "%d messages were sent successfully", newResp.SuccessCount)
 
-	log.Infof(ctx, "Sent %v, received %v, %v in response", PP(client), PP(resp), err)
-
-	if resp.StatusCode == 401 {
-		// Safe to retry, we will just keep delaying incrementally until the auth gets fixed.
-		msg := fmt.Sprintf("%v unable to send due to 401: %v; fix your authentication", PP(client), PP(resp))
-		log.Errorf(ctx, msg)
-		return fmt.Errorf(msg)
-	}
-
-	if resp.StatusCode == 400 {
-		// Can't retry, our payload is fucked up.
-		log.Errorf(ctx, "%v unable to send due to 400: %v; unable to recover", PP(client), PP(resp))
-		return nil
-	}
-
-	idsToRetry := tokens
-	if resp.StatusCode > 199 && resp.StatusCode < 299 {
-		// Now we have to take care what we retry - retries might lead to duplicates.
-		idsToUpdate := map[string]map[string]string{}
-		idsToRemove := map[string]map[string]string{}
-		idsToRetry = map[string][]string{}
-
-		failures := 0
-		successes := 0
-		for i, result := range resp.Results {
-			token := tokenStrings[i]
-			uid := userByToken[token]
-			if newID, found := result["registration_id"]; found {
-				nestPut(idsToUpdate, uid, token, newID)
-			}
-			if errMsg, found := result["error"]; found {
-				switch errMsg {
-				case "InvalidRegistration":
-					fallthrough
-				case "NotRegistered":
-					fallthrough
-				case "MismatchSenderId":
-					log.Warningf(ctx, "Token %q got %q, will remove it.", token, errMsg)
-					nestPut(idsToRemove, uid, token, errMsg)
-				case "Unavailable":
-					// Can be retried, it's supposed to be.
-					fallthrough
-				case "InternalServerError":
-					// Can be retried, it's supposed to be.
-					log.Errorf(ctx, "Token %q got %q, will retry.", token, errMsg)
-					idsToRetry[uid] = append(idsToRetry[uid], token)
-				case "DeviceMessageRateExceeded":
-					fallthrough
-				case "TopicsMessageRateExceeded":
-					fallthrough
-				case "MissingRegistration":
-					fallthrough
-				case "InvalidTtl":
-					fallthrough
-				case "InvalidPackageName":
-					log.Errorf(ctx, "Token %q got %q, wtf?", token, errMsg)
-				case "InvalidParameters":
-					fallthrough
-				case "MessageTooBig":
-					log.Errorf(ctx, "Token %q got %q, SEND SMALLER MESSAGES DAMNIT!", token, errMsg)
-				case "InvalidDataKey":
-					log.Errorf(ctx, "Token %q got %q, SEND CORRECT MESSAGES DAMNIT!", token, errMsg)
-				default:
-					log.Errorf(ctx, "Token %q got %q, wtf?", token, errMsg)
-				}
-				failures++
-			} else {
-				successes++
+	if newResp.FailureCount > 0 {
+		var failedTokens []string
+		for i, resp := range newResp.Responses {
+			if !resp.Success {
+				failedTokens = append(failedTokens, tokenStrings[i])
+				log.Infof(ctx, "Failed to send message to token %s: %v", tokenStrings[i], resp.Error)
 			}
 		}
-		if successes != resp.Success {
-			log.Errorf(ctx, "Reported successes %v != nr of non failure results %v", resp.Success, successes)
-		}
-		if failures != resp.Fail {
-			log.Errorf(ctx, "Reported failures %v != nr of failure results %v", resp.Fail, failures)
-		}
-		if len(idsToRemove) > 0 || len(idsToUpdate) > 0 {
-			if err := manageFCMTokensFunc.EnqueueIn(ctx, 0, idsToRemove, idsToUpdate); err != nil {
-				log.Errorf(ctx, "Unable to schedule repair of FCM tokens (to remove: %v, to update: %v): %v; hope that datastore gets fixed", PP(idsToRemove), PP(idsToUpdate), err)
-			}
-		}
+		log.Infof(ctx, "Failed tokens: %v", failedTokens)
 	}
-
-	if len(idsToRetry) > 0 {
-		if lastDelay < time.Hour*8 {
-			// Right, we still have something to retry, but might also have a Retry-After header.
-			// First, assume we just double the old delay (or 1 sec).
-			delay := lastDelay * 2
-			if delay < time.Second {
-				delay = time.Second
-			}
-			// Then, try to honor the Retry-After header.
-			if n, err := strconv.ParseInt(resp.RetryAfter, 10, 64); err == nil {
-				delay = time.Duration(n) * time.Minute
-			} else if at, err := time.Parse(time.RFC1123, resp.RetryAfter); err == nil {
-				delay = at.Sub(time.Now())
-			}
-			// Finally, try to schedule again. If we can't then fuckall we'll try again with the entire payload.
-			if err := FCMSendToTokensFunc.EnqueueIn(ctx, delay, delay, notif, data, idsToRetry); err != nil {
-				log.Errorf(ctx, "Unable to schedule retry of %v, %v to %+v in %v: %v", PP(notif), PP(data), idsToRetry, delay, err)
-				return err
-			}
-		} else {
-			log.Errorf(ctx, "Still have %+v to retry, but last delay was %v, so I'm giving up", idsToRetry, lastDelay)
-		}
-	}
-
-	log.Infof(ctx, "fcmSendToTokens(..., %v, %v, %+v) *** SUCCESS ***", PP(notif), PP(data), tokens)
 
 	return nil
 }

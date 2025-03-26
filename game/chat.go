@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"firebase.google.com/go/v4/messaging"
 	"github.com/aymerick/raymond"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/kvannotten/mailstrip"
 	"github.com/zond/diplicity/auth"
 	"github.com/zond/enmime"
-	fcm "github.com/zond/go-fcm"
 	"github.com/zond/godip"
 	"github.com/zond/godip/variants"
 	"golang.org/x/net/context"
@@ -312,12 +312,6 @@ func sendMsgNotificationsToFCM(ctx context.Context, host string, gameID *datasto
 		return err
 	}
 
-	dataPayload, err := NewFCMData(msgContext.fcmData)
-	if err != nil {
-		log.Errorf(ctx, "Unable to encode FCM data payload %v: %v; fix NewFCMData", msgContext.fcmData, err)
-		return err
-	}
-
 	if len(msgContext.userConfig.FCMTokens) == 0 {
 		log.Infof(ctx, "%q hasn't registered any FCM tokens, will skip sending notifiations", userId)
 		return nil
@@ -336,24 +330,14 @@ func sendMsgNotificationsToFCM(ctx context.Context, host string, gameID *datasto
 		if runes := []rune(notificationBody); len(runes) > 512 {
 			notificationBody = string(runes[:512]) + "..."
 		}
-		notificationPayload := &fcm.NotificationPayload{
+		notificationPayload := &messaging.Notification{
 			Title: fmt.Sprintf(
 				"%s: %s => %s",
 				msgContext.game.DescFor(msgContext.member.Nation),
 				msgContext.game.AbbrNat(msgContext.message.Sender),
 				msgContext.game.AbbrNats(msgContext.message.ChannelMembers).String(),
 			),
-			Body:        notificationBody,
-			Tag:         "diplicity-engine-new-message",
-			ClickAction: fmt.Sprintf("%s://%s/Game/%s/Channel/%s/Messages", DefaultScheme, host, gameID.Encode(), channelMembers.String()),
-		}
-
-		fcmToken.MessageConfig.Customize(ctx, notificationPayload, msgContext.mailData)
-		if fcmToken.MessageConfig.DontSendData {
-			dataPayload = nil
-		}
-		if fcmToken.MessageConfig.DontSendNotification {
-			notificationPayload = nil
+			Body: notificationBody,
 		}
 
 		if err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
@@ -362,7 +346,6 @@ func sendMsgNotificationsToFCM(ctx context.Context, host string, gameID *datasto
 				0,
 				time.Duration(0),
 				notificationPayload,
-				dataPayload,
 				map[string][]string{
 					userId: []string{fcmToken.Value},
 				},
